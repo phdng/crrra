@@ -425,9 +425,8 @@ static IMP gOrigCreateLookupNoUpdate;
 
 static id CRMCMRedirectLegacyMetadata(id client,
                                       id identity,
-                                      id (^callOriginal)(void))
+                                      id result)
 {
-    id result = callOriginal();
     if (!identity || !result)
         return result;
 
@@ -466,19 +465,18 @@ static id CRMCMCreateLookupWithUpdate(id self, SEL _cmd,
                                       BOOL updateLinks,
                                       id *error)
 {
-    return CRMCMRedirectLegacyMetadata(self, identity, ^id {
-        id (*original)(id, SEL, id, BOOL, BOOL, BOOL, BOOL, id *) =
-            (id (*)(id, SEL, id, BOOL, BOOL, BOOL, BOOL, id *))
-                gOrigCreateLookupWithUpdate;
-        return original(self,
-                        _cmd,
-                        identity,
-                        createIfNecessary,
-                        transient,
-                        useLocking,
-                        updateLinks,
-                        error);
-    });
+    id (*original)(id, SEL, id, BOOL, BOOL, BOOL, BOOL, id *) =
+        (id (*)(id, SEL, id, BOOL, BOOL, BOOL, BOOL, id *))
+            gOrigCreateLookupWithUpdate;
+    id result = original(self,
+                         _cmd,
+                         identity,
+                         createIfNecessary,
+                         transient,
+                         useLocking,
+                         updateLinks,
+                         error);
+    return CRMCMRedirectLegacyMetadata(self, identity, result);
 }
 
 static id CRMCMCreateLookupNoUpdate(id self, SEL _cmd,
@@ -488,18 +486,17 @@ static id CRMCMCreateLookupNoUpdate(id self, SEL _cmd,
                                     BOOL useLocking,
                                     id *error)
 {
-    return CRMCMRedirectLegacyMetadata(self, identity, ^id {
-        id (*original)(id, SEL, id, BOOL, BOOL, BOOL, id *) =
-            (id (*)(id, SEL, id, BOOL, BOOL, BOOL, id *))
-                gOrigCreateLookupNoUpdate;
-        return original(self,
-                        _cmd,
-                        identity,
-                        createIfNecessary,
-                        transient,
-                        useLocking,
-                        error);
-    });
+    id (*original)(id, SEL, id, BOOL, BOOL, BOOL, id *) =
+        (id (*)(id, SEL, id, BOOL, BOOL, BOOL, id *))
+            gOrigCreateLookupNoUpdate;
+    id result = original(self,
+                         _cmd,
+                         identity,
+                         createIfNecessary,
+                         transient,
+                         useLocking,
+                         error);
+    return CRMCMRedirectLegacyMetadata(self, identity, result);
 }
 
 /* ------------------------------------------------------------------------- */
@@ -512,14 +509,26 @@ static pid_t gCRMCMCurrentPid;
 typedef void (^CRXPCEventHandler)(xpc_object_t event);
 typedef void (*CRXPCSetEventHandlerFn)(xpc_connection_t connection,
                                        CRXPCEventHandler handler);
+typedef pid_t (*CRXPCConnectionGetPidFn)(xpc_connection_t connection);
 static CRXPCSetEventHandlerFn gOrigXPCSetEventHandler;
+
+static pid_t CRMCMConnectionPid(xpc_connection_t connection)
+{
+    static CRXPCConnectionGetPidFn getPid;
+    static dispatch_once_t once;
+    dispatch_once(&once, ^{
+        getPid = (CRXPCConnectionGetPidFn)
+            dlsym(RTLD_DEFAULT, "xpc_connection_get_pid");
+    });
+    return getPid ? getPid(connection) : 0;
+}
 
 static void CRMCMXPCSetEventHandler(xpc_connection_t connection,
                                     CRXPCEventHandler handler)
 {
     CRXPCEventHandler wrapped = ^(xpc_object_t event) {
         if (event && xpc_get_type(event) == XPC_TYPE_CONNECTION) {
-            gCRMCMCurrentPid = xpc_connection_get_pid((xpc_connection_t)event);
+            gCRMCMCurrentPid = CRMCMConnectionPid((xpc_connection_t)event);
             char *description = xpc_copy_description(event);
             if (description)
                 free(description);
