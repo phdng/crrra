@@ -241,45 +241,126 @@ static id CRFBProcessContainerIdentifier(id self, SEL _cmd)
 /* Choicy integration                                                         */
 /* ------------------------------------------------------------------------- */
 
-/* CraneChoicyOverwriteProvider overrides Choicy's provider so that Crane is
- * never disabled for an application it manages. All six selector names are
- * CONFIRMED_STATIC; Choicy's own protocol declaration is not in this tree, so
- * the interface is declared structurally rather than by adopting Choicy's
- * protocol. */
+/* All six provider selectors and their exact return encodings are recovered:
+ * I24@0:8@16, four B24@0:8@16 methods, then @24@0:8@16. Choicy's protocol
+ * header is not shipped, so runtime registration is used exactly as in 0x1BBB8. */
+@interface NSObject (CraneChoicyRuntime)
++ (id)sharedManager;
+- (void)registerOverrideProvider:(id)provider;
+@end
+
+static BOOL CRChoicyParseNumberBool(id value, BOOL fallback)
+{
+    return [value isKindOfClass:NSNumber.class] ? [value boolValue] : fallback;
+}
+
+static NSInteger CRChoicyParseNumberInteger(id value, NSInteger fallback)
+{
+    return [value isKindOfClass:NSNumber.class] ? [value integerValue] : fallback;
+}
+
+static NSDictionary *CRChoicyContainerSettings(NSString *appID,
+                                                NSString **activeContainer)
+{
+    CraneManager *manager = CraneManager.sharedManager;
+    NSString *active =
+        [manager activeContainerIdentifierForApplicationWithIdentifier:appID];
+    if (activeContainer)
+        *activeContainer = active;
+    return [manager containerSettingsForContainerWithIdentifier:active
+                                    ofApplicationWithIdentifier:appID];
+}
+
+static NSDictionary *CRChoicyConfiguration(NSString *appID)
+{
+    NSDictionary *settings = CRChoicyContainerSettings(appID, NULL);
+    return settings[CRCContainer_ChoicyConfigurationOverwrite];
+}
+
 @interface CraneChoicyOverwriteProvider : NSObject
 @end
 
 @implementation CraneChoicyOverwriteProvider
-- (NSDictionary *)providedOverridesForApplication:(NSString *)appID
+
+- (unsigned int)providedOverridesForApplication:(NSString *)appID
 {
-    if (!CRPrefBool(CRPref_ChoicyConfigOverwrite))
-        return nil;
-    /* CUSTOM_TWEAK_CONFIGURATION_OVERWRITE keeps CraneSB/CraneSupport/Crane in
-     * Choicy's custom tweak configuration, and disables tweak injection
-     * overrides, so Choicy can only turn Crane off for unsupported apps. */
-    return @{
-        CRPref_CustomTweakConfiguration: @1,
-        @"tweakInjectionDisabled": @0,
-    };
+    NSString *active = nil;
+    NSDictionary *settings = CRChoicyContainerSettings(appID, &active);
+    if ([active isEqualToString:CR_DEFAULT_CONTAINER_IDENTIFIER])
+        return 0;
+
+    return CRChoicyParseNumberBool(
+               settings[CRCContainer_ChoicyConfigurationOverwriteEnabled], NO)
+               ? 7u
+               : 0u;
 }
-- (id)customTweakConfigurationEnabledOverrideForApplication:(NSString *)appID { return @1; }
-- (id)overwriteGlobalConfigurationOverrideForApplication:(NSString *)appID { return @1; }
-- (id)disableTweakInjectionOverrideForApplication:(NSString *)appID { return @0; }
-- (id)customTweakConfigurationAllowDenyModeOverrideForApplication:(NSString *)appID { return @0; }
-- (id)customTweakConfigurationAllowOrDenyListOverrideForApplication:(NSString *)appID { return @0; }
+
+- (BOOL)customTweakConfigurationEnabledOverrideForApplication:(NSString *)appID
+{
+    NSDictionary *configuration = CRChoicyConfiguration(appID);
+    BOOL tweakInjectionDisabled =
+        CRChoicyParseNumberBool(configuration[@"tweakInjectionDisabled"], NO);
+    BOOL customConfigurationEnabled =
+        CRChoicyParseNumberBool(configuration[@"customTweakConfigurationEnabled"], NO);
+    return customConfigurationEnabled || tweakInjectionDisabled;
+}
+
+- (BOOL)overwriteGlobalConfigurationOverrideForApplication:(NSString *)appID
+{
+    NSDictionary *configuration = CRChoicyConfiguration(appID);
+    return CRChoicyParseNumberBool(
+        configuration[@"overwriteGlobalTweakConfiguration"], NO);
+}
+
+- (BOOL)disableTweakInjectionOverrideForApplication:(NSString *)appID
+{
+    (void)appID;
+    return NO;
+}
+
+- (BOOL)customTweakConfigurationAllowDenyModeOverrideForApplication:(NSString *)appID
+{
+    NSDictionary *configuration = CRChoicyConfiguration(appID);
+    if (CRChoicyParseNumberBool(configuration[@"tweakInjectionDisabled"], NO))
+        return NO;
+
+    return CRChoicyParseNumberInteger(configuration[@"allowDenyMode"], 1) != 1;
+}
+
+- (id)customTweakConfigurationAllowOrDenyListOverrideForApplication:(NSString *)appID
+{
+    NSDictionary *configuration = CRChoicyConfiguration(appID);
+    NSArray *craneOnly = @[@" Crane"];
+
+    if (CRChoicyParseNumberBool(configuration[@"tweakInjectionDisabled"], NO))
+        return craneOnly;
+
+    if (CRChoicyParseNumberInteger(configuration[@"allowDenyMode"], 1) != 1)
+        return configuration[@"deniedTweaks"];
+
+    NSArray *allowedTweaks = configuration[@"allowedTweaks"];
+    return allowedTweaks
+        ? [allowedTweaks arrayByAddingObjectsFromArray:craneOnly]
+        : craneOnly;
+}
 @end
 
 static void CRInitChoicyIntegration(void)
 {
-    if (NSClassFromString(@"ChoicyOverrideManager") == nil)
+    NSString *choicyPath = CRJailbreakRootPath(CR_CHOICY_SB_DYLIB);
+    const char *fileSystemPath = choicyPath.fileSystemRepresentation;
+    if (!fileSystemPath || access(fileSystemPath, F_OK) != 0)
         return;
-    Class providerClass = NSClassFromString(@"CraneChoicyOverwriteProvider")
-                          ?: CraneChoicyOverwriteProvider.class;
-    if (![providerClass isSubclassOfClass:NSClassFromString(@"CRChoicyOverwriteProvider")]) {
-        NSLog(@"[Crane] Choicy integration skipped: Choicy's provider class was "
-               "not found. Install Choicy and reopen Settings (see "
-               @"LIBSANDY_CHOICY_NOTICE / INJECTION_ERROR_MESSAGE_CHOICY).");
-    }
+
+    dlopen(fileSystemPath, RTLD_NOW);
+
+    Class managerClass = NSClassFromString(@"ChoicyOverrideManager");
+    if (!managerClass)
+        return;
+
+    id manager = [managerClass sharedManager];
+    CraneChoicyOverwriteProvider *provider = [CraneChoicyOverwriteProvider new];
+    [manager registerOverrideProvider:provider];
 }
 
 /* ------------------------------------------------------------------------- */

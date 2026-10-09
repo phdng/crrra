@@ -192,8 +192,8 @@ the check.
 | Settings shows no Crane row | `CranePrefs` failed to link AltList, or `PreferenceLoader` did not pick up the plist | `Library/PreferenceLoader/Preferences/CranePrefs.plist` |
 | Settings crashes opening the pane | `Root.plist` references controllers this build does not implement (60-method `CRPContainerConfigurationListController`, the backup controllers, the 6 custom cells) | D-18 |
 | Daemon not running | `launchctl print system/com.opa334.cranehelperd`; confirm `/usr/local/libexec/cranehelperd` exists and is executable | `final/KNOWN_DIFFERENCES.md` D-19 of the alert path |
-| Everything works in the app but nothing is isolated | Expected on this build: keychain, notifications, prefs and plug-ins are all unimplemented | D-05, D-06, D-07 |
-| Choicy shows Crane as disabled | Choicy integration is structural only | D-09 |
+| App launches but isolation is incomplete | Keychain isolation is still absent; prefs/APNs/PlugInKit server-side chains are transcribed but remain limited by the documented U-01/U-10 runtime gaps | D-05, D-06, D-07, D-24, D-25 |
+| Choicy override does not apply | Provider/runtime core is reconstructed; verify the active container has `choicyConfigurationOverwriteEnabled` plus the nested Choicy payload. The rebuilt settings UI still lacks that per-container editor | D-09 |
 
 ## 8. What the documentation does *not* cover
 

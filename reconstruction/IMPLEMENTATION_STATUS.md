@@ -55,7 +55,7 @@ F-IDs refer to `analysis/behavior_specification.md`.
 | F-18 | Biometric gate | **Yes** — full transcription | none |
 | F-19 | cranehelperd XPC | Partial | Own protocol; incompatible with the original daemon (U-01) |
 | F-20 | Self-verification | Partial | `verifyCraneInsurance` implemented; alert UI not built |
-| F-21 | Choicy integration | Partial | Provider registered structurally; Choicy's protocol is not in the tree |
+| F-21 | Choicy integration | Partial — rootless-aware Choicy load/registration plus all 6 `CraneChoicyOverwriteProvider` methods are transcribed with exact return ABI, per-container gate, nested override parsing, bitmask `7`, and `" Crane"` allow-list preservation | Reconstructed CranePrefs still lacks the per-container Choicy configuration editor (`CRPContainerChoicyOverwriteListController`); no runtime test |
 | F-22 | Shortcuts / Siri | **Not implemented** | No source for `CraneIntentHandlerShared` (U-08) |
 | F-23 | Activator | Partial — dynamic load, listener/event registration, name parsing, switch/abort callbacks, metadata and app-icon generation are transcribed | `generateIconImageWithInfo:` is now recovered as a four-double HFA from both arm64 slices; remaining gap is the reconstructed `CraneManager` observer-dispatch semantics plus runtime testing |
 
@@ -66,8 +66,8 @@ F-IDs refer to `analysis/behavior_specification.md`.
 | Features with a complete, transcribed implementation | 5 of 23 (F-02, F-03, F-04, F-18, and F-01's contract) |
 | Features partially implemented | 13 |
 | Features not implemented | 5 |
-| Recovered functions transcribed | Initial 17-function core plus later main-dylib/libroot work, the 42-method `CraneActivatorManager` surface, cfprefsd preferences, accountsd/Core Data isolation, lsd/device-ID isolation, apsd token/topic isolation, containermanagerd/cache/proxy, and pkd/PlugInKit chains; no inflated aggregate 1:1 count is claimed |
-| Reconstruction source | 7380 lines across 15 `.m` and 4 `.h` files |
+| Recovered functions transcribed | Initial 17-function core plus later main-dylib/libroot work, the 42-method `CraneActivatorManager` surface, cfprefsd preferences, accountsd/Core Data isolation, lsd/device-ID isolation, apsd token/topic isolation, Choicy override provider, containermanagerd/cache/proxy, and pkd/PlugInKit chains; no inflated aggregate 1:1 count is claimed |
+| Reconstruction source | 7461 lines across 15 `.m` and 4 `.h` files |
 | Static consistency audit | 0 failed checks; identifier resolution and brace balance clean |
 | Install-path / configuration artefacts verified identical | 12 of 12 plists, 10 of 10 assets |
 | Binary architectures validated against the original rule | 11 of 11 |

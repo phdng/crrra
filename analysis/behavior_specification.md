@@ -730,19 +730,29 @@ shows `CRANEHELPERD_COMMUNICATION_WARNING`. **Status: NOT_TESTED.**
 ` Crane.dylib`, Crane's data model breaks (the `CHOICYLOADER_SUGGESTION_MESSAGE`
 string spells out exactly this failure mode).
 
-**Behaviour.** `crane_initChoicyIntegration` (0x1BBB8) registers
-`CraneChoicyOverwriteProvider` overriding Choicy's provider so that:
-`customTweakConfigurationEnabledOverrideForApplication:`,
-`overwriteGlobalConfigurationOverrideForApplication:`,
-`disableTweakInjectionOverrideForApplication:`,
-`customTweakConfigurationAllowDenyModeOverrideForApplication:`,
-`customTweakConfigurationAllowOrDenyListOverrideForApplication:`,
-`providedOverridesForApplication:`.
-Gate: the global key `choicyConfigurationOverwriteEnabled`.
-In `CranePrefs`, `CRPContainerChoicyOverwriteListController_init` adds
-`containerIdentifier` to `CHPProcessConfigurationListController` so the Choicy
-pane shows the active container. `OVERWRITE_CHOICY_CONFIGURATION` and
-`CHOICY_CONFIGURATION` are UI labels.
+**Behaviour.** `crane_initChoicyIntegration` (0x1BBB8) resolves the
+rootless-aware `ChoicySB.dylib` path, loads it dynamically, obtains
+`ChoicyOverrideManager.sharedManager`, and registers one
+`CraneChoicyOverwriteProvider`. The provider exposes six recovered methods with
+exact encodings (`I24@0:8@16`, four `B24@0:8@16`, and `@24@0:8@16`).
+`providedOverridesForApplication:` returns `0` for `DEFAULT`; otherwise it reads
+the active container's `choicyConfigurationOverwriteEnabled` and returns bitmask
+`7` when enabled, `0` when disabled/unset. The remaining methods read the same
+container's nested `choicyConfigurationOverwrite` dictionary: custom-tweak mode
+is enabled when either `customTweakConfigurationEnabled` or
+`tweakInjectionDisabled` is true; global-config overwrite mirrors
+`overwriteGlobalTweakConfiguration`; disable-tweak-injection override always
+returns false; allow/deny mode compares `allowDenyMode` against the recovered
+default value `1`. The allow/deny list always preserves Crane's main tweak name
+with its load-bearing leading space (`" Crane"`) when tweak injection is disabled
+or when the configuration is in allow-list mode; deny-list mode returns the
+stored `deniedTweaks` list unchanged.
+
+The gate is **per-container**, not global. `CranePrefs` 0x10E68 attaches both
+`applicationIdentifier` and `containerIdentifier` to the Choicy configuration
+specifier, while 0x3F44C/0x3F5C read/write the nested
+`choicyConfigurationOverwrite` dictionary. `OVERWRITE_CHOICY_CONFIGURATION` and
+`CHOICY_CONFIGURATION` are the corresponding UI labels.
 
 **Version interaction.** `crane_initChoicyIntegration` runs only in the
 `else` branch of `kCFCoreFoundationVersionNumber >= 1665.15` in
@@ -863,7 +873,7 @@ Invariants observed statically:
 | F-18 | Biometrics | set active container | — | LAContext gate | Crane 0x6E08 | CONFIRMED_STATIC |
 | F-19 | cranehelperd | always | — | privileged ops work | launchd plist, class list | CONFIRMED_STATIC (registration) / UNKNOWN (protocol) |
 | F-20 | Self-verification | every launch | — | alert on missing component | SB 0x17620 + strings | CONFIRMED_STATIC |
-| F-21 | Choicy | Choicy installed | `choicyConfigurationOverwriteEnabled` | Crane cannot be disabled | SB 0x1BBB8 | CONFIRMED_STATIC |
+| F-21 | Choicy | Choicy installed + non-default active container | per-container `choicyConfigurationOverwriteEnabled` | registered provider applies the container's nested Choicy overrides while preserving `" Crane"` in the allow-list path | SB 0x1BBB8, 0x1E3A4..0x1E920; Prefs 0x10E68 | CONFIRMED_STATIC |
 | F-22 | Shortcuts | Siri/Shortcuts | — | 5 intents | app `Info.plist` | CONFIRMED_STATIC (declaration) / UNKNOWN (bodies) |
 | F-23 | Activator | Activator installed | — | activator actions | SB `CraneActivatorManager` | CONFIRMED_STATIC |
 

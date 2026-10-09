@@ -50,8 +50,6 @@
 #define CRPref_SeparateNotificationRegistrations @"separateNotificationRegistrationsEnabled" /* per-app */
 #define CRPref_SeparateSystemAccounts            @"separateSystemAccountsEnabled"            /* per-app */
 #define CRPref_GameCenterSupport                 @"gameCenterSupportEnabled"                 /* per-app */
-#define CRPref_ChoicyConfigOverwrite             @"choicyConfigurationOverwriteEnabled"      /* global */
-#define CRPref_CustomTweakConfiguration          @"customTweakConfigurationEnabled"          /* Choicy-side */
 #define CRPref_UseContainerIdentifierAsDeviceID  @"useContainerIdentifierAsDeviceIdentifier" /* per-container */
 
 /* ---- per-application settings dictionary keys -------------------------- */
@@ -78,6 +76,8 @@
 #define CRCContainer_AssociatedGameCenterAccount   @"associatedGameCenterAccount"
 #define CRCContainer_IncludeKeychain               @"includeKeychain"
 #define CRCContainer_EncryptBackup                 @"encryptBackupEnabled"
+#define CRCContainer_ChoicyConfigurationOverwriteEnabled @"choicyConfigurationOverwriteEnabled"
+#define CRCContainer_ChoicyConfigurationOverwrite        @"choicyConfigurationOverwrite"
 
 /* ---- helpers ----------------------------------------------------------- */
 

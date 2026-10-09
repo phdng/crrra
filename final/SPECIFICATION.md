@@ -79,7 +79,6 @@ Every row posts `com.opa334.craneprefs/ReloadPrefs` on change.
 | `showContainerNotificationBadgesEnabled` | YES | CONFIRMED_STATIC |
 | `notificationsSupportEnabled` | YES (bespoke setter) | CONFIRMED_STATIC |
 | `showContainerInNotificationTitleEnabled` | YES | CONFIRMED_STATIC |
-| `choicyConfigurationOverwriteEnabled` | unset → NO | CONFIRMED_STATIC |
 
 ### 4.2 Per-application settings — not a preference plist
 
@@ -101,7 +100,9 @@ remove-observer / write / add-observer sandwich (CONFIRMED_STATIC, CranePrefs
 
 `identifier`, `name`, `activeContainer`, `associatedGameCenterAccount`,
 `useContainerIdentifierAsDeviceIdentifier`, `includeKeychain`,
-`encryptBackupEnabled`. CONFIRMED_STATIC (CranePrefs 0x8D00, 0x8400, 0x86A8).
+`encryptBackupEnabled`, `choicyConfigurationOverwriteEnabled` (unset → NO), and
+the nested `choicyConfigurationOverwrite` dictionary. CONFIRMED_STATIC
+(CranePrefs 0x8D00, 0x8400, 0x86A8, 0x10E68, 0x3F44C/0x3F5C).
 
 ### 4.4 Notifications
 
@@ -162,7 +163,7 @@ Summary:
 | F-18 | Biometric gate | `LAContext`; **handler runs even when biometrics are unavailable** | CONFIRMED_STATIC |
 | F-19 | cranehelperd XPC | 2 Mach services; ~30 client selectors | registration CONFIRMED_STATIC, protocol UNKNOWN |
 | F-20 | Self-verification | 5 runtime `SBAlertItem` subclasses | CONFIRMED_STATIC |
-| F-21 | Choicy integration | `CraneChoicyOverwriteProvider`, 6 overrides | CONFIRMED_STATIC |
+| F-21 | Choicy integration | rootless-aware dynamic registration + `CraneChoicyOverwriteProvider` 6-method per-container override contract; `providedOverrides` bitmask is 0/7 and allow-list mode preserves `" Crane"` | CONFIRMED_STATIC |
 | F-22 | Shortcuts | 5 intents (modern) / 1 (legacy) | declaration CONFIRMED_STATIC, bodies UNKNOWN |
 | F-23 | Activator | listener `%@.SetActiveContainer\|%@\|%@\|`, event `%@.ChangedToContainer\|%@\|%@\|` | CONFIRMED_STATIC |
 

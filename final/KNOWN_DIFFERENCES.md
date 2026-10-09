@@ -43,8 +43,9 @@ exported functions still remain at selector/call-graph/string-constant coverage
 rather than full control-flow transcription.
 
 **Consequence:** F-14, F-15 (partially),
-F-16 (partially), F-19, F-20, F-21 remain declarations/dispatch or incomplete
-implementations. F-08 now has its recovered apsd-side token/topic hook chain
+F-16 (partially), F-19 and F-20 remain declarations/dispatch or incomplete
+implementations. F-21 now has its recovered Choicy provider/runtime core
+transcribed, but the reconstructed settings bundle still lacks its per-container Choicy editor. F-08 now has its recovered apsd-side token/topic hook chain
 transcribed but still lacks the SpringBoard notification-routing half and U-01 health proxy. F-11 now has its recovered lsd/device-identifier hook chain
 transcribed but still depends on U-01 helperd/PID plumbing. F-09 now has its recovered accountsd/Core Data hook chain
 transcribed but still depends on U-01/U-06 runtime plumbing. F-05 now has its recovered cfprefsd hook/ABI chain transcribed
@@ -163,13 +164,31 @@ separators) is U-05 — it is only knowable from the `_configureCell:forElement:
 hook bodies or from a screenshot, and neither was available. Guessing a layout
 would have produced something that *looks* right and cannot be checked.
 
-### D-09 — Choicy integration is structural only
+### D-09 — Choicy provider/runtime core is reconstructed; the per-container editor is absent
 
-`CraneChoicyOverwriteProvider` is declared and its six selector names are
-correct, but Choicy's own provider protocol header is not in this tree, so the
-conformance relationship cannot be established. The `libSandy`/Choicy
-integration also runs only in the older-CF branch of `crane_initSpringBoard`,
-reproducing the original's (unexplained) branch inversion (U-07).
+**Original:** `crane_initChoicyIntegration` resolves the jailbreak-root-aware
+`ChoicySB.dylib` path, loads it dynamically, obtains
+`ChoicyOverrideManager.sharedManager`, and registers
+`CraneChoicyOverwriteProvider`. The provider has six methods with recovered
+encodings (`I24@0:8@16`, four `B24@0:8@16`, `@24@0:8@16`). For a non-default
+active container, `choicyConfigurationOverwriteEnabled` gates bitmask `7`; the
+remaining values come from the per-container nested
+`choicyConfigurationOverwrite` dictionary. The allow-list path preserves the
+main tweak's load-bearing name `" Crane"`.
+
+**Reconstruction:** `CRSpringBoard.m` now transcribes that dynamic registration
+and all six provider bodies, including NSNumber-only fallback parsing,
+`tweakInjectionDisabled`, `customTweakConfigurationEnabled`,
+`overwriteGlobalTweakConfiguration`, `allowDenyMode`, `allowedTweaks` and
+`deniedTweaks` semantics. The previous inferred global preference contract was
+corrected: the gate and nested payload are per-container, as corroborated by
+CranePrefs 0x10E68 and 0x3F44C/0x3F5C.
+
+**Remaining difference:** the reconstruction still does not implement
+`CRPContainerChoicyOverwriteListController`, so users cannot edit the nested
+Choicy configuration through the rebuilt settings UI. Runtime registration
+against a real Choicy build has not been tested. The older-CF SpringBoard branch
+interaction remains recorded under U-07 rather than normalized.
 
 ### D-10 — The backup/restore engine is absent
 
@@ -442,7 +461,7 @@ No runtime testing was possible, so these are untested rather than known-good:
 | Partially implemented | 13 |
 | Fully implemented | 5 (F-02, F-03, F-04, F-18, and F-01's contract) |
 | Whole binaries not reconstructed | 6 of 11 |
-| Function coverage | Initial 17-function core plus later main-dylib/libroot/Activator, cfprefsd, accountsd/Core Data, lsd/device-ID, apsd token/topic isolation, containermanagerd/cache/proxy and pkd/PlugInKit transcriptions; no inflated single 1:1 count is claimed |
+| Function coverage | Initial 17-function core plus later main-dylib/libroot/Activator, cfprefsd, accountsd/Core Data, lsd/device-ID, apsd token/topic isolation, Choicy override provider, containermanagerd/cache/proxy and pkd/PlugInKit transcriptions; no inflated single 1:1 count is claimed |
 | Runtime tests executed | 0 |
 | Visual comparisons performed | 0 |
 

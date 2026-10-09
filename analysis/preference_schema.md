@@ -42,9 +42,10 @@ inside `CraneManager` is **UNKNOWN**.
 `set = "setNotificationsSupportEnabled:specifier:"` in `Root.plist`, i.e. it
 has a bespoke setter (`nestedEntryCount = 1`).
 
-Two more switches are consumed by `CraneSB`/`CraneSupport` but are **not**
-declared in `Root.plist`; they are per-application settings (see 1b) or set
-elsewhere. Recorded from `objc_msgSend` selector literals and `CFSTR` uses:
+Additional keys are consumed by `CraneSB`/`CraneSupport` but are **not**
+declared in `Root.plist`; most are per-application settings (see 1b), while the
+Choicy overwrite keys are per-container. Recorded from `objc_msgSend` selector
+literals, `CFSTR` uses and the CranePrefs container controller:
 
 | Key | Where read |
 |---|---|
@@ -61,9 +62,12 @@ elsewhere. Recorded from `objc_msgSend` selector literals and `CFSTR` uses:
 `alwaysAskBeforeLaunchEnabled`, `gameCenterSupportEnabled`,
 `separateNotificationRegistrationsEnabled` and `separateSystemAccountsEnabled`
 are read from `applicationSettingsForApplicationWithIdentifier:` — i.e. they
-are **per-app** values, while their siblings in `Root.plist` are global. Both
-sets use the same key names in the same process; which store wins is decided by
-the accessor, not by the key.
+are **per-app** values, while their siblings in `Root.plist` are global. By
+contrast, `choicyConfigurationOverwriteEnabled` and the nested
+`choicyConfigurationOverwrite` dictionary are read from
+`containerSettingsForContainerWithIdentifier:ofApplicationWithIdentifier:` and
+are **per-container** (CraneSB 0x1E3A4..0x1E920; CranePrefs 0x10E68,
+0x3F44C/0x3F5C). Which store wins is decided by the accessor, not by the key.
 
 ### 1b. Per-application settings — `CraneManager` API
 
