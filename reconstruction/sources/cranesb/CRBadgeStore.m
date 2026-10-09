@@ -150,17 +150,22 @@ static BOOL CRBadgeRedirectionEnabled(NSString *appID)
     return !perApp || [perApp boolValue];
 }
 
+/* 0xAA00/0xAB44: preserve the negative-only fallback when positive
+ * badge counts sum to zero (e.g. special system badge sentinel values). */
 static NSInteger CRBadgeAggregateCount(NSString *appID)
 {
     NSArray *containers = [CraneManager.sharedManager
         containerIdentifiersOfApplicationWithIdentifier:appID];
-    NSInteger total = 0;
+    NSInteger positive = 0;
+    NSInteger negative = 0;
     for (NSString *identifier in containers) {
         NSInteger count = CRBadgeStoreContainerCount(appID, identifier, NO);
-        if (count > 0)
-            total += count;
+        if (count >= 0)
+            positive += count;
+        else
+            negative += count;
     }
-    return total;
+    return positive != 0 ? positive : (negative < 0 ? negative : 0);
 }
 
 /* 0xBD98/0xBE80: remove only records belonging to the container whose
