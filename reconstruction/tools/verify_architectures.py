@@ -15,8 +15,14 @@ import sys
 FAT_MAGIC = 0xCAFEBABE
 FAT_CIGAM = 0xBEBAFECA
 CPU_ARM64 = 0x0100000C
+CPU_SUBTYPE_MASK = 0xFF000000
 SUBTYPE_ARM64_ALL = 0
 SUBTYPE_ARM64E = 2
+
+
+def base_cpu_subtype(cpusubtype):
+    """Strip Mach-O CPU subtype capability bits and return the base subtype."""
+    return (cpusubtype & 0xFFFFFFFF) & ~CPU_SUBTYPE_MASK
 
 
 def slices(path):
@@ -83,14 +89,21 @@ def main(root):
         for cputype, cpusubtype in sl:
             if cputype != CPU_ARM64:
                 ok = False
-                names.append("cputype=0x%X" % cputype)
-            elif cpusubtype == SUBTYPE_ARM64_ALL:
+                names.append("cputype=0x%X" % (cputype & 0xFFFFFFFF))
+                continue
+
+            # cpusubtype is a signed int in mach_header/fat_arch, but the high
+            # byte is reserved for CPU_SUBTYPE_* capability bits. Modern arm64e
+            # slices commonly encode 0x80000002, which unpacking as a signed int
+            # yields -2147483646. The base subtype is still ARM64E (2).
+            subtype = base_cpu_subtype(cpusubtype)
+            if subtype == SUBTYPE_ARM64_ALL:
                 names.append("arm64")
-            elif cpusubtype == SUBTYPE_ARM64E:
+            elif subtype == SUBTYPE_ARM64E:
                 names.append("arm64e")
             else:
                 ok = False
-                names.append("arm64(0x%X)" % cpusubtype)
+                names.append("arm64(0x%X)" % subtype)
         if wants_fat:
             have = sorted(names)
             if have != ["arm64", "arm64e"]:
