@@ -42,9 +42,10 @@ and the core `CraneActivatorManager` listener/event flow. Most of the 2651
 exported functions still remain at selector/call-graph/string-constant coverage
 rather than full control-flow transcription.
 
-**Consequence:** F-08, F-11, F-14, F-15 (partially),
+**Consequence:** F-08, F-14, F-15 (partially),
 F-16 (partially), F-19, F-20, F-21 remain declarations/dispatch or incomplete
-implementations. F-09 now has its recovered accountsd/Core Data hook chain
+implementations. F-11 now has its recovered lsd/device-identifier hook chain
+transcribed but still depends on U-01 helperd/PID plumbing. F-09 now has its recovered accountsd/Core Data hook chain
 transcribed but still depends on U-01/U-06 runtime plumbing. F-05 now has its recovered cfprefsd hook/ABI chain transcribed
 but still depends on U-01 PID transport. F-06 now has its recovered containermanagerd hook/cache/proxy
 chain transcribed but still depends on missing libcrane/helperd transport. F-12
@@ -364,6 +365,32 @@ original Game Center storage model (U-06); it therefore fails closed when the
 reconstructed manager does not expose `gameCenter_enabledApplicationIdentifiers`.
 No device/runtime account-switch test has been performed.
 
+### D-27 — LSD/device-identifier hook chain is reconstructed; helperd integration still differs
+
+**Original:** `initLsd` dynamically extends `_LSDDeviceIdentifierProtocol`,
+substitutes the extended protocol on `NSXPCInterface`, and hooks
+`_LSDDeviceIdentifierClient getIdentifierOfType:completionHandler:`. For type 0
+and a non-default Crane container, lsd derives the caller signing identifier from
+the XPC audit token and returns either `customDeviceIdentifier` or the container
+identifier as an `NSUUID` (with `useContainerIdentifierAsDeviceIdentifier`
+defaulting to true). Two Crane-only protocol methods let the original
+`cranehelperd` read/write `_LSDeviceIdentifierCache` on its private queue; those
+methods authorize the caller by comparing its executable path to the resolved
+`/usr/local/libexec/cranehelperd` path.
+
+**Reconstruction:** `CRLsd.m` transcribes that protocol extension, type-0 hook,
+container-setting selection, vendor-key derivation, helper-only authorization,
+`_LSDeviceIdentifierCache` / persona-cache fallback, and queued cache read/write.
+The reconstructed `CraneManager` was also corrected to use the confirmed
+`customDeviceIdentifier` setting key rather than the earlier inferred
+`deviceIdentifier` key.
+
+**Remaining difference:** app-side spoofing still needs a working PID→container
+mapping from U-01. Separately, the reconstructed helperd currently persists its
+`getIdentifierOfType` / `setIdentifier` values in `NSUserDefaults`; the original
+helperd body is unavailable, so it is not yet wired to call these recovered lsd
+protocol extensions. No device/runtime identifier isolation test has been run.
+
 ## 7. Untested edge cases
 
 No runtime testing was possible, so these are untested rather than known-good:
@@ -401,7 +428,7 @@ No runtime testing was possible, so these are untested rather than known-good:
 | Partially implemented | 12 |
 | Fully implemented | 5 (F-02, F-03, F-04, F-18, and F-01's contract) |
 | Whole binaries not reconstructed | 6 of 11 |
-| Function coverage | Initial 17-function core plus later main-dylib/libroot/Activator, cfprefsd, accountsd/Core Data, containermanagerd/cache/proxy and pkd/PlugInKit transcriptions; no inflated single 1:1 count is claimed |
+| Function coverage | Initial 17-function core plus later main-dylib/libroot/Activator, cfprefsd, accountsd/Core Data, lsd/device-ID, containermanagerd/cache/proxy and pkd/PlugInKit transcriptions; no inflated single 1:1 count is claimed |
 | Runtime tests executed | 0 |
 | Visual comparisons performed | 0 |
 

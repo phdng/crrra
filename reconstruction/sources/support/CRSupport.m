@@ -14,9 +14,9 @@
  *     would silently weaken the keychain isolation, so it is left out and
  *     called out in final/KNOWN_DIFFERENCES.md;
  *   * initApsd's eight APSCourierConnection hooks - selectors are exact but
- *     the bodies were not read line by line. initAccountsd, initPkd and
- *     initContainermanagerd have since been transcribed into CRAccountsd.m,
- *     CRPkd.m and CRMCM.m;
+ *     the bodies were not read line by line. initAccountsd, initLsd, initPkd
+ *     and initContainermanagerd have since been transcribed into
+ *     CRAccountsd.m, CRLsd.m, CRPkd.m and CRMCM.m;
  *   * initNotificationSupport in CraneSB, which depends on CraneSupport's
  *     notification-topic rewriting.
  *
@@ -112,16 +112,7 @@ static void CRInitApsd(void)
     (void)connection;
 }
 
-static void CRInitLsd(void)
-{
-    Class client = NSClassFromString(@"_LSDDeviceIdentifierClient");
-    if (!client)
-        return;
-    /* _LSDDeviceIdentifierClient setProtocol: and getIdentifierOfType:
-     * completionHandler: are hooked, and crane_getIdentifier:… /
-     * crane_setIdentifier:… added, forwarding to cranehelperd. The forwarding
-     * target is unavailable (U-01). */
-}
+extern void CRInitLsd(void);
 
 static void CRInitSecurityd(void)
 {

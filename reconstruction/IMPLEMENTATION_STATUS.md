@@ -26,7 +26,7 @@ Statuses use the required vocabulary. Note the distinction the prompt draws:
 | `cranehelperd` | partial | Registration and class names CONFIRMED_STATIC; **XPC protocol is this project's own** | SOURCE_IMPLEMENTED |
 | `cranehelperd_start` | partial | Only the path is recovered | SOURCE_IMPLEMENTED |
 | `CraneSB.dylib` | partial | Entry dispatch + F-01 environment contract and the core `CraneActivatorManager` listener/event integration are transcribed; menus/notification hooks remain incomplete | SOURCE_IMPLEMENTED (F-01, F-23 core) |
-| `CraneSupport.dylib` | partial | Per-daemon dispatch plus recovered cfprefsd, containermanagerd, accountsd and pkd/PlugInKit hook chains are transcribed; APNs/keychain hooks remain incomplete | SOURCE_IMPLEMENTED (dispatch, F-05/F-06/F-09 hook cores, F-12 server-side core) |
+| `CraneSupport.dylib` | partial | Per-daemon dispatch plus recovered cfprefsd, containermanagerd, accountsd, lsd/device-ID and pkd/PlugInKit hook chains are transcribed; APNs/keychain hooks remain incomplete | SOURCE_IMPLEMENTED (dispatch, F-05/F-06/F-09/F-11 hook cores, F-12 server-side core) |
 | `CranePrefs` | partial | Root controller + two panes; specifier construction mirrors recovered `0x8D00` | SOURCE_IMPLEMENTED (structure) |
 
 ## 2. Feature status against the specification
@@ -45,7 +45,7 @@ F-IDs refer to `analysis/behavior_specification.md`.
 | F-08 | Per-container APNs | **Not implemented** | Depends on F-07-class work plus CraneSB's 40 hooks whose target class is aliased (U-10) |
 | F-09 | System accounts | Partial — client routing, modern coordinator-per-container, legacy database-per-container, legacy shared-coordinator reset/cache and Start-Using-iCloud suppression are transcribed in `CRAccountsd.m` | PID→container transport remains U-01; `gamed` path remains limited by reconstructed Game Center model U-06; no runtime test |
 | F-10 | Game Center | Structure only | Account storage model unknown (U-06) |
-| F-11 | Device identifier | Partial | `crane_getIdentifier:`/`crane_setIdentifier:` forwarding not wired (U-01) |
+| F-11 | Device identifier | Partial — LSD protocol extension, type-0 per-container UUID spoofing, helperd-only cache getter/setter, vendor-key derivation and `_LSDeviceIdentifierCache`/persona fallback are transcribed in `CRLsd.m`; reconstructed manager now uses the confirmed `customDeviceIdentifier` key | App-side PID→container routing remains U-01; reconstructed helperd still stores identifiers in `NSUserDefaults` instead of invoking the recovered lsd extension; no runtime test |
 | F-12 | Plug-in enumeration | Partial — `PKDPlugIn` active-container state, four enable hooks, Transaction rule consumption, PKDatabase query wrappers, plug-in termination and reload handling are transcribed | SpringBoard notification-support hooks that append `extension_containerIDToAppend` as `crane_containerID` are still part of unresolved F-08/U-10; no runtime test |
 | F-13 | Container selection UI | **Not implemented** | Cell layout needs a screenshot or the `_configureCell` hooks (U-05) |
 | F-14 | Badges | **Not implemented** | Depends on F-08 |
@@ -66,8 +66,8 @@ F-IDs refer to `analysis/behavior_specification.md`.
 | Features with a complete, transcribed implementation | 5 of 23 (F-02, F-03, F-04, F-18, and F-01's contract) |
 | Features partially implemented | 12 |
 | Features not implemented | 6 |
-| Recovered functions transcribed | Initial 17-function core plus later main-dylib/libroot work, the 42-method `CraneActivatorManager` surface, cfprefsd preferences, accountsd/Core Data isolation, containermanagerd/cache/proxy, and pkd/PlugInKit chains; no inflated aggregate 1:1 count is claimed |
-| Reconstruction source | 6085 lines across 13 `.m` and 4 `.h` files |
+| Recovered functions transcribed | Initial 17-function core plus later main-dylib/libroot work, the 42-method `CraneActivatorManager` surface, cfprefsd preferences, accountsd/Core Data isolation, lsd/device-ID isolation, containermanagerd/cache/proxy, and pkd/PlugInKit chains; no inflated aggregate 1:1 count is claimed |
+| Reconstruction source | 6496 lines across 14 `.m` and 4 `.h` files |
 | Static consistency audit | 0 failed checks; identifier resolution and brace balance clean |
 | Install-path / configuration artefacts verified identical | 12 of 12 plists, 10 of 10 assets |
 | Binary architectures validated against the original rule | 11 of 11 |

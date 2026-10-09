@@ -459,7 +459,7 @@ usingBiometricsIfNeededWithSuccessHandler:(dispatch_block_t)handler
     id custom = settings[CRPref_UseContainerIdentifierAsDeviceID];
     if (custom && [custom boolValue])
         return containerID; /* CONFIRMED_STATIC default from DEVICE_IDENTIFIER_DESCRIPTION */
-    NSString *customValue = settings[@"deviceIdentifier"];
+    NSString *customValue = settings[@"customDeviceIdentifier"];
     if (customValue.length)
         return customValue;
     return nil;
@@ -472,7 +472,7 @@ usingBiometricsIfNeededWithSuccessHandler:(dispatch_block_t)handler
     NSDictionary *existing = [self containerSettingsForContainerWithIdentifier:containerID
                                                    ofApplicationWithIdentifier:appID];
     NSMutableDictionary *settings = [existing mutableCopy];
-    settings[@"deviceIdentifier"] = identifier;
+    settings[@"customDeviceIdentifier"] = identifier;
     [self setContainerSettings:settings forContainerWithIdentifier:containerID
                            ofApplicationWithIdentifier:appID];
     [self setPreferenceValue:identifier
