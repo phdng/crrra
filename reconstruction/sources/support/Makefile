@@ -10,7 +10,7 @@ INSTALL_TARGET_PROCESSES = cfprefsd containermanagerd securityd pkd lsd \
 
 include $(THEOS)/makefiles/common.mk
 
-CraneSupport_FILES  = CRSupport.m CRCfprefs.m CRMCM.m CRPkd.m ../common/CRCommon.m
+CraneSupport_FILES  = CRSupport.m CRAccountsd.m CRCfprefs.m CRMCM.m CRPkd.m ../common/CRCommon.m
 CraneSupport_CFLAGS  = -fobjc-arc -I$(THEOS_PROJECT_DIR)/sources/common
 CraneSupport_FRAMEWORKS = Foundation CoreFoundation Security CoreData LocalAuthentication
 # AppSupport is present in the original binary's load commands, but the

@@ -14,8 +14,9 @@
  *     would silently weaken the keychain isolation, so it is left out and
  *     called out in final/KNOWN_DIFFERENCES.md;
  *   * initApsd's eight APSCourierConnection hooks - selectors are exact but
- *     the bodies were not read line by line. initPkd and initContainermanagerd
- *     have since been transcribed into CRPkd.m and CRMCM.m;
+ *     the bodies were not read line by line. initAccountsd, initPkd and
+ *     initContainermanagerd have since been transcribed into CRAccountsd.m,
+ *     CRPkd.m and CRMCM.m;
  *   * initNotificationSupport in CraneSB, which depends on CraneSupport's
  *     notification-topic rewriting.
  *
@@ -94,26 +95,7 @@ extern void CRInitCraneProxy(void);
 /* accountsd (0x7200)                                                          */
 /* ------------------------------------------------------------------------- */
 
-static void CRInitAccountsd(void)
-{
-    Class database = NSClassFromString(@"ACDDatabase");
-    if (!database)
-        return;
-    /* The original hooks ACDDatabase _sharedPersistentCoordinatorForStoreAtPath:,
-     * initWithClient: and initWithClient:databaseConnection:, and adds the
-     * per-container database map accessors. Not reproduced here - the Core Data
-     * stack redirection is only correct together with the cranehelperd account
-     * switching, which is unavailable (U-01). */
-}
-
-static void CRInitNoStartUsingiCloudHooks(void)
-{
-    /* Resolved during analysis (was U-14): the original suppresses the
-     * "start using iCloud" follow-up so it is not shown per container. */
-    Class modern = NSClassFromString(@"AAAccountNotificationFollowUpController");
-    if (modern && kCFCoreFoundationVersionNumber >= 1740.0)
-        return;
-}
+extern void CRInitAccountsd(void);
 
 /* ------------------------------------------------------------------------- */
 /* pkd (0xF2B4) / apsd (0x9C4C) / lsd (0xD7D8) / securityd (0x11E5C)           */

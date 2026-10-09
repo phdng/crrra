@@ -42,9 +42,10 @@ and the core `CraneActivatorManager` listener/event flow. Most of the 2651
 exported functions still remain at selector/call-graph/string-constant coverage
 rather than full control-flow transcription.
 
-**Consequence:** F-08, F-09, F-11, F-14, F-15 (partially),
+**Consequence:** F-08, F-11, F-14, F-15 (partially),
 F-16 (partially), F-19, F-20, F-21 remain declarations/dispatch or incomplete
-implementations. F-05 now has its recovered cfprefsd hook/ABI chain transcribed
+implementations. F-09 now has its recovered accountsd/Core Data hook chain
+transcribed but still depends on U-01/U-06 runtime plumbing. F-05 now has its recovered cfprefsd hook/ABI chain transcribed
 but still depends on U-01 PID transport. F-06 now has its recovered containermanagerd hook/cache/proxy
 chain transcribed but still depends on missing libcrane/helperd transport. F-12
 now has its recovered pkd/PlugInKit server-side hook chain
@@ -339,6 +340,30 @@ is still U-01 and currently answers `DEFAULT`, and libcrane's private
 therefore source-complete at the recovered CraneSupport layer but not claimed
 end-to-end behaviourally equivalent.
 
+### D-26 — System-account database redirection is transcribed; client/container plumbing remains partial
+
+**Original:** `initAccountsd` adds active-container state to `ACDAccountStore` and
+selects a target container from the AccountsDaemon client. App Store family
+clients map to `com.apple.AppStore`, `itunescloudd` maps to `com.apple.Music`,
+normal clients use `ClientContainerCache(pid)`, and `gamed` uses Crane's Game
+Center state. On newer systems each normalized container gets its own Core Data
+`NSPersistentStoreCoordinator` and `Crane/<container>.sqlite`; older systems
+cache an `ACDDatabase` per container and reset AccountsDaemon's global shared-
+coordinator once-token between store paths. The tweak also suppresses the Start
+Using iCloud follow-up while a redirected account store is active.
+
+**Reconstruction:** `CRAccountsd.m` transcribes those two OS generations, the
+associated-object properties/cache maps, client routing, Core Data store setup,
+legacy shared-coordinator reset/cache, and both iCloud follow-up suppression
+variants without hard-linking AccountsDaemon private headers.
+
+**Remaining difference:** ordinary PID-based routing still depends on U-01
+because reconstructed `ClientContainerCache` receives `DEFAULT` from the missing
+helperd/libcrane transport. The `gamed` branch additionally depends on the
+original Game Center storage model (U-06); it therefore fails closed when the
+reconstructed manager does not expose `gameCenter_enabledApplicationIdentifiers`.
+No device/runtime account-switch test has been performed.
+
 ## 7. Untested edge cases
 
 No runtime testing was possible, so these are untested rather than known-good:
@@ -373,10 +398,10 @@ No runtime testing was possible, so these are untested rather than known-good:
 | Category | Count |
 |---|---:|
 | Whole subsystems absent (F-07, F-08, F-13, F-17, F-22, F-14) | 6 |
-| Partially implemented | 10 |
+| Partially implemented | 12 |
 | Fully implemented | 5 (F-02, F-03, F-04, F-18, and F-01's contract) |
 | Whole binaries not reconstructed | 6 of 11 |
-| Function coverage | Initial 17-function core plus later main-dylib/libroot/Activator, cfprefsd, containermanagerd/cache/proxy and pkd/PlugInKit transcriptions; no inflated single 1:1 count is claimed |
+| Function coverage | Initial 17-function core plus later main-dylib/libroot/Activator, cfprefsd, accountsd/Core Data, containermanagerd/cache/proxy and pkd/PlugInKit transcriptions; no inflated single 1:1 count is claimed |
 | Runtime tests executed | 0 |
 | Visual comparisons performed | 0 |
 
