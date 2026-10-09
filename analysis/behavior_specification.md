@@ -298,25 +298,28 @@ visible in B. `T-F07-2` items in the ignore-list access groups are shared.
 **Purpose.** APNs tokens are registered per bundle id, not per container, so
 pushes for one container wake the wrong one.
 
-**Behaviour.** `initApsd` (0x9C4C) hooks eight `APSCourierConnection`
-selectors around token generation and message handling, adds
-`crane_topicStorage`/`setCrane_topicStorage:` (an
-`apsd_notificationSupportEnabled`-gated store keyed by
-`<topic>.c_r_a_n_e.<identifier>.plist` via `topicStorage_*`), and rewrites
-topics with `craneContainerStringForString` /
-`dotCraneStringForContainerIdentifier`.
-`isCraneTopic`/`buildCraneTopic`/`decodeCraneTopic` identify Crane's own topics.
-`getSecurityAccessGroupsToIgnore`, `fetchTopicHash` and
-`handleAppTokenGenerateResponseHook` (0x96C8) complete the flow.
+**Behaviour.** `initApsd` (0x9C4C) installs ten method hooks total: two on
+`APSCourierConnection` for outbound token-generation messages and eight on
+`APSCourier`/`APSUserCourier` for registration requests, token responses and
+incoming-message handling. It adds `crane_topicStorage` /
+`setCrane_topicStorage:` and uses an `apsd_notificationSupportEnabled`-gated
+mapping from `(uncraned topic hash, app id)` to the corresponding craned hash.
+Crane topic names use the literal format `<topic>.c_r_a_n_e.<identifier>`;
+`isCraneTopic` / `buildCraneTopic` / `decodeCraneTopic` identify and split that
+format. Outbound token-generation calls substitute the uncraned hash, response
+hooks restore the craned hash, and incoming-message hooks recover the actual
+topic hash from apsd's per-app token keychain records via `fetchTopicHash`.
+`APSCopyHashForString` / `APSCopyStringRepresentationOfData` are resolved from
+ApplePushService with recovered SHA-1/string fallbacks.
 
 **Gate.** `notificationsSupportEnabled` (global) **and**
 `separateNotificationRegistrationsEnabled` (per app) — read by
 `apsd_notificationSupportEnabled` (0x8D90) and
 `notificationRedirectionEnabledForApp` (0x1EB9C).
 
-**Original-method interaction.** Hooks have `_orig` storage
-(`withSourceForDomainHook`, `withSourceForDomainHook_v3`,
-`handleSourceMessageHook_v2`). CONFIRMED_STATIC.
+**Original-method interaction.** All ten apsd method hooks have `_orig`
+storage and call through after the topic/hash transformation. The four incoming
+message wrappers preserve every non-message argument verbatim. CONFIRMED_STATIC.
 
 **Acceptance tests.** `T-F08-1` with support off, tokens are shared.
 `T-F08-2` with support on, each container gets its own token.

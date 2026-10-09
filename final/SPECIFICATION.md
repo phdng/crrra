@@ -149,7 +149,7 @@ Summary:
 | F-05 | Per-container prefs | cfprefsd tracks host bundle + PID, resolves the active container, and rewrites the plist basename to `<domain>.c_r_a_n_e.<id>.plist` | CONFIRMED_STATIC |
 | F-06 | Container resolution | `MCMContainerFactory` V2/V3 identity variants hooked with `_orig` | CORROBORATED |
 | F-07 | Per-container keychain | 4 `SecItem*` hooks with `_orig` + a securityd code-signature patch | CORROBORATED |
-| F-08 | Per-container APNs | 8 `APSCourierConnection` + 40 CraneSB hooks; topic rewrite to `<topic>.c_r_a_n_e.<id>.plist` | CORROBORATED |
+| F-08 | Per-container APNs | 2 `APSCourierConnection` + 8 `APSCourier`/`APSUserCourier` hooks in CraneSupport, plus 40 CraneSB hooks; Crane topic format `<topic>.c_r_a_n_e.<id>` | CORROBORATED |
 | F-09 | System accounts | 3 `ACDDatabase` hooks + per-container Core Data map | CONFIRMED_STATIC |
 | F-10 | Game Center | per-container `associatedGameCenterAccount`; the switch is appended only when F-09 is on | CONFIRMED_STATIC |
 | F-11 | Device identifier | non-default containers spoof to the container ID by default; the default container's change persists system-wide | CORROBORATED |

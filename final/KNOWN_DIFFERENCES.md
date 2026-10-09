@@ -42,9 +42,10 @@ and the core `CraneActivatorManager` listener/event flow. Most of the 2651
 exported functions still remain at selector/call-graph/string-constant coverage
 rather than full control-flow transcription.
 
-**Consequence:** F-08, F-14, F-15 (partially),
+**Consequence:** F-14, F-15 (partially),
 F-16 (partially), F-19, F-20, F-21 remain declarations/dispatch or incomplete
-implementations. F-11 now has its recovered lsd/device-identifier hook chain
+implementations. F-08 now has its recovered apsd-side token/topic hook chain
+transcribed but still lacks the SpringBoard notification-routing half and U-01 health proxy. F-11 now has its recovered lsd/device-identifier hook chain
 transcribed but still depends on U-01 helperd/PID plumbing. F-09 now has its recovered accountsd/Core Data hook chain
 transcribed but still depends on U-01/U-06 runtime plumbing. F-05 now has its recovered cfprefsd hook/ABI chain transcribed
 but still depends on U-01 PID transport. F-06 now has its recovered containermanagerd hook/cache/proxy
@@ -113,19 +114,32 @@ container A will find them in container B.
 some access groups would break credentials *without* isolating them, which is
 strictly worse than not touching the keychain at all.
 
-### D-07 — Notification redirection is absent
+### D-07 — apsd-side notification isolation is reconstructed; SpringBoard routing remains absent
 
-**Original:** 8 `APSCourierConnection` hooks in `CraneSupport` plus 40 in
-`CraneSB`'s `initNotificationSupport`, gated by `notificationsSupportEnabled`
-and `separateNotificationRegistrationsEnabled`, with per-container topic
-rewriting to `<topic>.c_r_a_n_e.<identifier>.plist`.
+**Original:** `initApsd` installs ten method hooks total — two on
+`APSCourierConnection` and eight on `APSCourier`/`APSUserCourier` — while
+`CraneSB`'s `initNotificationSupport` contributes roughly 40 producer/routing,
+title and badge hooks. The apsd side uses Crane topics of the form
+`<topic>.c_r_a_n_e.<container>`, maps uncraned/craned topic hashes during token
+registration, restores the craned hash on token responses, and can recover an
+incoming message's actual topic hash from apsd's per-app token keychain record.
+The feature is gated globally by `notificationsSupportEnabled` and per-app by
+`separateNotificationRegistrationsEnabled` on the SpringBoard side.
 
-**Reconstruction:** both `initApsd()` and `initNotificationSupport()` are absent
-or no-ops.
+**Reconstruction:** `CRApsd.m` now transcribes the complete recovered
+CraneSupport/apsd chain, including the `crane_topicStorage` associated state,
+ApplePushService `dlopen`/`dlsym` helper lookup with SHA-1/string fallbacks,
+keychain topic lookup, all ten method wrappers, token request/response hash
+translation, and the incoming-message transform. The latter retains the
+original `verifyCraneSBLoadedAndReply:` safety gate; because reconstructed
+`CraneManager.cranehelperdGlobalSyncRemoteObjectProxy` still returns `nil`, it
+currently fails open and leaves incoming messages unchanged.
 
-**Consequence:** all containers share one APNs token, so a push notification
-wakes the container the user is not currently in. `showContainerInNotificationTitleEnabled`
-and `showContainerNotificationBadgesEnabled` have no effect.
+**Remaining difference:** the CraneSB notification-support hooks that create
+craned registrations, select the target container, alter notification titles,
+and maintain per-container badges are still unported because their target
+classes remain U-10. Therefore F-08 is not end-to-end equivalent even though
+its apsd/server half is source-transcribed.
 
 **Compounding uncertainty:** even with the hook bodies read, the target class of
 each of the 40 `CraneSB` hooks is aliased in the decompilation (U-10), so they
@@ -424,11 +438,11 @@ No runtime testing was possible, so these are untested rather than known-good:
 
 | Category | Count |
 |---|---:|
-| Whole subsystems absent (F-07, F-08, F-13, F-17, F-22, F-14) | 6 |
-| Partially implemented | 12 |
+| Whole subsystems absent (F-07, F-13, F-17, F-22, F-14) | 5 |
+| Partially implemented | 13 |
 | Fully implemented | 5 (F-02, F-03, F-04, F-18, and F-01's contract) |
 | Whole binaries not reconstructed | 6 of 11 |
-| Function coverage | Initial 17-function core plus later main-dylib/libroot/Activator, cfprefsd, accountsd/Core Data, lsd/device-ID, containermanagerd/cache/proxy and pkd/PlugInKit transcriptions; no inflated single 1:1 count is claimed |
+| Function coverage | Initial 17-function core plus later main-dylib/libroot/Activator, cfprefsd, accountsd/Core Data, lsd/device-ID, apsd token/topic isolation, containermanagerd/cache/proxy and pkd/PlugInKit transcriptions; no inflated single 1:1 count is claimed |
 | Runtime tests executed | 0 |
 | Visual comparisons performed | 0 |
 

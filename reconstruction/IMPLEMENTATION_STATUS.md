@@ -42,7 +42,7 @@ F-IDs refer to `analysis/behavior_specification.md`.
 | F-05 | Per-container preferences | Partial — `handleSourceMessage`, both `withSourceForDomain` ABI families, `__CFPrefsGetPathForTriplet`, version guards and libundirect fallback are transcribed in `CRCfprefs.m` | PID→container helper transport is still U-01, so runtime redirection cannot be claimed end-to-end; no device test |
 | F-06 | Container resolution | Partial — `ClientContainerCache`, modern `MCMContainerFactory`, legacy `MCMClientConnection`, group-path rewrite, corrupt suppression, PID capture and guarded Crane proxy are transcribed | Reconstructed helperd/libcrane PID→container transport still returns `DEFAULT`; `_populateContainerDirectory:ofType:` body is unavailable; no runtime test |
 | F-07 | Per-container keychain | **Not implemented** | Needs the ~180-function code-signature/Mach-O toolkit; a stub would silently weaken isolation |
-| F-08 | Per-container APNs | **Not implemented** | Depends on F-07-class work plus CraneSB's 40 hooks whose target class is aliased (U-10) |
+| F-08 | Per-container APNs | Partial — apsd-side topic/hash translation, `crane_topicStorage`, ApplePushService helper fallbacks, keychain topic lookup, token response restoration and all 10 recovered method hooks are transcribed in `CRApsd.m` | SpringBoard's ~40 notification producer/routing/title/badge hooks remain U-10; incoming apsd message rewrite also depends on U-01 `verifyCraneSBLoadedAndReply:` health proxy; no runtime test |
 | F-09 | System accounts | Partial — client routing, modern coordinator-per-container, legacy database-per-container, legacy shared-coordinator reset/cache and Start-Using-iCloud suppression are transcribed in `CRAccountsd.m` | PID→container transport remains U-01; `gamed` path remains limited by reconstructed Game Center model U-06; no runtime test |
 | F-10 | Game Center | Structure only | Account storage model unknown (U-06) |
 | F-11 | Device identifier | Partial — LSD protocol extension, type-0 per-container UUID spoofing, helperd-only cache getter/setter, vendor-key derivation and `_LSDeviceIdentifierCache`/persona fallback are transcribed in `CRLsd.m`; reconstructed manager now uses the confirmed `customDeviceIdentifier` key | App-side PID→container routing remains U-01; reconstructed helperd still stores identifiers in `NSUserDefaults` instead of invoking the recovered lsd extension; no runtime test |
@@ -64,10 +64,10 @@ F-IDs refer to `analysis/behavior_specification.md`.
 | Measure | Value |
 |---|---|
 | Features with a complete, transcribed implementation | 5 of 23 (F-02, F-03, F-04, F-18, and F-01's contract) |
-| Features partially implemented | 12 |
-| Features not implemented | 6 |
-| Recovered functions transcribed | Initial 17-function core plus later main-dylib/libroot work, the 42-method `CraneActivatorManager` surface, cfprefsd preferences, accountsd/Core Data isolation, lsd/device-ID isolation, containermanagerd/cache/proxy, and pkd/PlugInKit chains; no inflated aggregate 1:1 count is claimed |
-| Reconstruction source | 6496 lines across 14 `.m` and 4 `.h` files |
+| Features partially implemented | 13 |
+| Features not implemented | 5 |
+| Recovered functions transcribed | Initial 17-function core plus later main-dylib/libroot work, the 42-method `CraneActivatorManager` surface, cfprefsd preferences, accountsd/Core Data isolation, lsd/device-ID isolation, apsd token/topic isolation, containermanagerd/cache/proxy, and pkd/PlugInKit chains; no inflated aggregate 1:1 count is claimed |
+| Reconstruction source | 7380 lines across 15 `.m` and 4 `.h` files |
 | Static consistency audit | 0 failed checks; identifier resolution and brace balance clean |
 | Install-path / configuration artefacts verified identical | 12 of 12 plists, 10 of 10 assets |
 | Binary architectures validated against the original rule | 11 of 11 |
@@ -103,7 +103,7 @@ one. The line drawn here is: **transcribe what was read, declare what was not.**
 | F-06 containermanagerd | Recover/replace the missing libcrane/helperd PID→container transport and `_populateContainerDirectory:ofType:` semantics; hook/control-flow transcription is now present | U-01 / missing libcrane body |
 | F-12 PlugInKit | Complete the SpringBoard-side `extension_containerIDToAppend` query-tagging path together with notification support | U-10 / F-08 coupling |
 | F-07 keychain | Port or reimplement the embedded `csd_*`/`macho_*`/`pfsec_*` toolkit from the ~180 exported functions | U-03 |
-| F-08 notifications | Read `CraneSupport/decompile/9C4C.c` and resolve `CraneSB/decompile/CBEC.c`'s aliased classes | U-10 |
+| F-08 notifications | Resolve/port CraneSB `initNotificationSupport` producer/routing/title/badge hooks; CraneSupport/apsd side is now transcribed | U-10, plus U-01 for the apsd CraneSB-loaded health gate |
 | F-13 menu | Read `CraneSB` `_configureCell:` hooks, or take one screenshot | U-05 |
 | F-15 settings UI | Read the remaining `CRP*` classes in the existing `CranePrefs` export | — |
 | F-16/F-17 storage and backup | Export `libcrane.dylib`; read `CRPBackupOperation`/`CRPKeychainManager` | U-04, U-06 |

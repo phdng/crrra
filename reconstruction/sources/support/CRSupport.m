@@ -13,10 +13,9 @@
  *     own right and its exact behaviour is only partially recoverable; a stub
  *     would silently weaken the keychain isolation, so it is left out and
  *     called out in final/KNOWN_DIFFERENCES.md;
- *   * initApsd's eight APSCourierConnection hooks - selectors are exact but
- *     the bodies were not read line by line. initAccountsd, initLsd, initPkd
- *     and initContainermanagerd have since been transcribed into
- *     CRAccountsd.m, CRLsd.m, CRPkd.m and CRMCM.m;
+ *   * initAccountsd, initApsd, initLsd, initPkd and initContainermanagerd
+ *     have since been transcribed into CRAccountsd.m, CRApsd.m, CRLsd.m,
+ *     CRPkd.m and CRMCM.m;
  *   * initNotificationSupport in CraneSB, which depends on CraneSupport's
  *     notification-topic rewriting.
  *
@@ -103,14 +102,7 @@ extern void CRInitAccountsd(void);
 
 extern void CRInitPkd(void);
 
-static void CRInitApsd(void)
-{
-    Class connection = NSClassFromString(@"APSCourierConnection");
-    if (!connection)
-        return;
-    /* Eight APSCourierConnection selectors are hooked by the original. */
-    (void)connection;
-}
+extern void CRInitApsd(void);
 
 extern void CRInitLsd(void);
 
