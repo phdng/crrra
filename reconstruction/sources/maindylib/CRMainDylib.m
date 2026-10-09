@@ -35,6 +35,7 @@
 #import <string.h>
 #import <unistd.h>
 #import <dirent.h>
+#import <stdint.h>
 
 #import "../common/CRPaths.h"
 #import "../common/CRCommon.h"
@@ -53,6 +54,8 @@ struct CRHookEntry {
 
 static struct CRHookEntry _crHookTable[16];
 static unsigned _crHookCount = 0;
+
+extern int sandbox_container_path_for_pid(int pid, char *buffer, size_t size);
 
 static void *org_sandbox_container_path_for_pid;
 static void *org_unlink;
@@ -108,24 +111,27 @@ static int CRNewReaddirR(DIR *dirp, struct dirent *entry, struct dirent **result
  * `_URLEnumeratorGetNextURL` in CoreServicesInternal and invoked as
  * org_URLEnumeratorGetNextURL(self, &currentURL, urlEnumerator). The third
  * argument's meaning is not recoverable; it is forwarded opaquely. */
-typedef CFURLRef (*CRURLEnumeratorGetNextURLFn)(void *self, CFURLRef *current, void *enumerator);
+typedef int64_t (*CRURLEnumeratorGetNextURLFn)(void *self, CFURLRef *current, void *enumerator);
 
-static CFURLRef CRNewURLEnumeratorGetNextURL(void *self, CFURLRef *current, void *enumerator)
+static int64_t CRNewURLEnumeratorGetNextURL(void *self, CFURLRef *current, void *enumerator)
 {
-    CFURLRef next;
+    int64_t status;
+    CFStringRef currentString = NULL;
     do {
-        next = ((CRURLEnumeratorGetNextURLFn)org_URLEnumeratorGetNextURL)(self, current, enumerator);
+        status = ((CRURLEnumeratorGetNextURLFn)org_URLEnumeratorGetNextURL)(self, current, enumerator);
         if (!current)
             break;
-        if (next != NULL)
+        if (status != 1)
             break;
         if (!*current)
             break;
-        CFStringRef s = CFURLGetString(*current);
-        if (!s)
+        currentString = CFURLGetString(*current);
+        if (!currentString)
             break;
-    } while (CFStringFind(s, CFSTR(CR_CONTAINERS_DIR_TRAILER), 0).location != kCFNotFound);
-    return next;
+    } while (CFStringFind(currentString,
+                          (__bridge CFStringRef)CR_CONTAINERS_DIR_TRAILER,
+                          0).location != kCFNotFound);
+    return status;
 }
 
 /* initProtection (0x7268): registers unlink/readdir/readdir_r unconditionally

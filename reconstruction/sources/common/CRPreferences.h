@@ -87,7 +87,7 @@ static inline BOOL CRPrefBool(NSString *key)
      * key, and [nil boolValue] is 0, i.e. every unset per-app switch reads NO.
      * The one exception is separateNotificationRegistrationsEnabled, which
      * carries an explicit `default = 1` on its specifier (CranePrefs 0x8D00). */
-    return [[CraneManager sharedManager] preferenceValueForKey:key] boolValue];
+    return [[[CraneManager sharedManager] preferenceValueForKey:key] boolValue];
 }
 
 #endif /* CR_PREFERENCES_H */

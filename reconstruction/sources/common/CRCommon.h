@@ -56,14 +56,18 @@ static inline NSBundle *CRIconBundle(void)
 
 static inline UIImage *CRIcon(NSString *name)
 {
-    UIImage *image = [CRIconBundle() imageForResource:name];
-    if (!image) {
-        /* Fall back to the bundle itself; upstream tries the Icons sub-bundle
-         * and then the parent bundle. */
-        image = [NSBundle bundleWithPath:CR_UI_BUNDLE_PATH];
-        image = [image imageForResource:name];
+    if (name.length == 0)
+        return nil;
+
+    NSString *path = [CRIconBundle() pathForResource:name ofType:@"png"];
+    if (!path) {
+        /* Icons is a plain directory in the recovered bundle, not an NSBundle
+         * exposing a private imageForResource: selector. Resolve the PNG path
+         * explicitly so this compiles against the public iOS SDK. */
+        NSBundle *bundle = [NSBundle bundleWithPath:CR_UI_BUNDLE_PATH];
+        path = [bundle pathForResource:name ofType:@"png" inDirectory:@"Icons"];
     }
-    return image;
+    return path ? [UIImage imageWithContentsOfFile:path] : nil;
 }
 
 /* ---- helpers transcribed from " Crane.dylib" --------------------------- */
