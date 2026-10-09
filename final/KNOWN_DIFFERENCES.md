@@ -42,9 +42,12 @@ and the core `CraneActivatorManager` listener/event flow. Most of the 2651
 exported functions still remain at selector/call-graph/string-constant coverage
 rather than full control-flow transcription.
 
-**Consequence:** F-05, F-06, F-08, F-09, F-11, F-12, F-14, F-15 (partially),
-F-16 (partially), F-19, F-20, F-21 are declarations and dispatch, not working
-implementations. See `reconstruction/IMPLEMENTATION_STATUS.md` §2.
+**Consequence:** F-05, F-06, F-08, F-09, F-11, F-14, F-15 (partially),
+F-16 (partially), F-19, F-20, F-21 remain declarations/dispatch or incomplete
+implementations. F-12 now has its recovered pkd/PlugInKit server-side hook chain
+transcribed, but still depends on the SpringBoard notification-support query-tag
+path for the container-specific notification-extension case. See
+`reconstruction/IMPLEMENTATION_STATUS.md` §2.
 
 ## 2. Behavioural differences in what *is* implemented
 
@@ -265,7 +268,7 @@ run in address order, i.e. `CRErrorAlert` and `CRNewContainerAlert` are created
 before `crane_initSpringBoard`. The reconstruction has one constructor, so any
 hook that depended on those alert classes already existing is not reproduced.
 
-### D-23 — Activator core is reconstructed, but icon/observer edges remain partial
+### D-23 — Activator core and icon ABI are reconstructed; observer refresh remains partial
 
 **Original:** `CraneActivatorManager` dynamically loads Activator, registers one
 set-active listener and one changed-container event per app/container pair,
@@ -274,14 +277,32 @@ localized metadata plus app icons generated through the private SpringBoard
 `generateIconImageWithInfo:` ABI.
 
 **Reconstruction:** dynamic loading, listener/event registration, naming/parsing,
-switch/abort behaviour and non-icon metadata are transcribed from the recovered
-methods. The private icon-info struct ABI is not sufficiently recovered, so icon
-callbacks return `nil`. Also, `CraneManager` observer membership is implemented
-but the original manager's notification-dispatch body is unavailable, so cache
-refresh after an in-process container-list change is not claimed equivalent.
-Activator absence still degrades to a no-op as in the original.
+switch/abort behaviour, metadata and app-icon generation are transcribed from
+the recovered methods. Machine-code inspection of both arm64 slices confirms
+`generateIconImageWithInfo:` receives a four-double homogeneous aggregate
+`{29, 29, scale, 5}` in `d0..d3`; that exact ABI is now used. `CraneManager`
+observer membership is implemented, but the original manager's notification-
+dispatch body is unavailable, so cache refresh after an in-process container-
+list change is not claimed equivalent. Activator absence still degrades to a
+no-op as in the original.
 
 **Test impact:** F-23 is source-implemented only and remains runtime NOT_TESTED.
+
+### D-24 — PlugInKit isolation is server-side complete but notification query tagging is still coupled to F-08
+
+**Original:** `initPkd` stores `crane_activeContainerID` on each `PKDPlugIn`,
+consumes a private `crane_containerID` rule from Transaction XPC requests,
+propagates it through all `PKDatabase` query variants, terminates stale plug-ins
+when their active container changes, and injects `CRANE_CONTAINER_IDENTIFIER`
+into extension launch environments. SpringBoard's notification-support hooks
+supply that private rule via thread-local `extension_containerIDToAppend`.
+
+**Reconstruction:** the recovered pkd/PlugInKit server-side chain is transcribed
+in `CRPkd.m`, including the four enable variants, query wrappers, termination,
+reload notification and older-PKD server capture. The SpringBoard-side tagging
+hooks live inside the still-unported notification-support group whose target
+classes are U-10, so container-specific notification-service extension queries
+are not yet end-to-end equivalent.
 
 ## 7. Untested edge cases
 
@@ -320,7 +341,7 @@ No runtime testing was possible, so these are untested rather than known-good:
 | Partially implemented | 10 |
 | Fully implemented | 5 (F-02, F-03, F-04, F-18, and F-01's contract) |
 | Whole binaries not reconstructed | 6 of 11 |
-| Function coverage | Initial 17-function core plus later main-dylib/libroot/Activator transcriptions; no inflated single 1:1 count while three Activator icon callbacks remain partial |
+| Function coverage | Initial 17-function core plus later main-dylib/libroot/Activator and pkd/PlugInKit transcriptions; no inflated single 1:1 count is claimed |
 | Runtime tests executed | 0 |
 | Visual comparisons performed | 0 |
 

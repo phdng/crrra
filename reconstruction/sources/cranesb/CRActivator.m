@@ -17,11 +17,21 @@
 
 /* Runtime-only surfaces. Declaring the selectors avoids a hard framework or
  * libactivator link while preserving the recovered objc_msgSend contract. */
+typedef struct {
+    double width;
+    double height;
+    double scale;
+    double unknownFourthField;
+} CRSBIconImageInfoABI;
+_Static_assert(sizeof(CRSBIconImageInfoABI) == 32, "SBIcon image-info ABI must remain four doubles");
+
 @interface NSObject (CraneActivatorRuntime)
 + (id)sharedInstance;
 + (id)applicationProxyForIdentifier:(NSString *)identifier;
 + (id)defaultWorkspace;
 - (BOOL)isInstalled;
+- (id)model;
+- (id)expectedIconForDisplayIdentifier:(NSString *)identifier;
 - (void)addObserver:(id)observer;
 - (void)removeObserver:(id)observer;
 
@@ -362,16 +372,30 @@ requiresInfoDictionaryValueOfKey:(NSString *)key
     return NO;
 }
 
-/* The original uses SBIcon.generateIconImageWithInfo: with a private struct
- * containing {29,29,scale,5}. The selector is recovered, but its struct ABI is
- * not available in the export. Keep the selector surface without fabricating
- * an ABI; Activator treats a nil icon as optional. */
+/* CONFIRMED_STATIC from both original arm64 slices: immediately before
+ * generateIconImageWithInfo:, the compiler places 29, 29, scale and 5 in
+ * d0..d3. On arm64 that is the homogeneous-aggregate ABI for four doubles.
+ * Field names beyond width/height/scale are not recovered, so the fourth field
+ * deliberately remains semantically unnamed while preserving the exact ABI. */
 - (UIImage *)imageForApplicationWithIdentifier:(NSString *)applicationIdentifier
                                          scale:(double)scale
 {
-    (void)applicationIdentifier;
-    (void)scale;
-    return nil;
+    Class controllerClass = NSClassFromString(@"SBIconController");
+    if (!controllerClass)
+        return nil;
+
+    id controller = [(id)controllerClass sharedInstance];
+    id model = [controller model];
+    id icon = [model expectedIconForDisplayIdentifier:applicationIdentifier];
+    SEL selector = NSSelectorFromString(@"generateIconImageWithInfo:");
+    if (!icon || ![icon respondsToSelector:selector])
+        return nil;
+
+    CRSBIconImageInfoABI info = { 29.0, 29.0, scale, 5.0 };
+    IMP implementation = [icon methodForSelector:selector];
+    UIImage *(*generateImage)(id, SEL, CRSBIconImageInfoABI) =
+        (UIImage *(*)(id, SEL, CRSBIconImageInfoABI))implementation;
+    return generateImage(icon, selector, info);
 }
 
 - (UIImage *)activator:(id)activator

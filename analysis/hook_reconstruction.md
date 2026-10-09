@@ -320,11 +320,13 @@ the previous container. App install/uninstall and CraneManager container-change
 observer callbacks rebuild both caches.
 
 The reconstruction now transcribes this core flow and the recovered metadata
-callbacks in `sources/cranesb/CRActivator.m` without a hard Activator link. The
-only intentionally partial method family is icon generation: the original calls
-SpringBoard's private `generateIconImageWithInfo:` with a four-field struct whose
-ABI is not recovered strongly enough to fabricate, so reconstructed icon
-callbacks return `nil`. Runtime behaviour remains NOT_TESTED.
+callbacks in `sources/cranesb/CRActivator.m` without a hard Activator link. Icon
+generation is also recovered statically: in both arm64 and arm64e slices, the
+call to `generateIconImageWithInfo:` loads `d0=29`, `d1=29`, `d2=scale`, and
+`d3=5` immediately before `objc_msgSend`, proving a four-double homogeneous
+aggregate passed by value. The reconstruction preserves exactly that ABI while
+leaving the semantic name of the fourth field unknown. Runtime behaviour remains
+NOT_TESTED.
 
 ### Choicy integration — `crane_initChoicyIntegration` (0x1BBB8)
 
@@ -374,7 +376,7 @@ globals resolved by `dlsym`). Their trigger conditions are UNKNOWN.
 | `initContainermanagerd` | 0xCC88 | `MCMContainerFactory.containerForContainerIdentity:createIfNecessary:…` (2 variants), `groupContainerPathsForUser:clientConnection:…`, `containerForContainerIdentityHook`, `createOrLookupContainerWithContainerIdentityV2V3Hook` |
 | `initCraneProxy` | 0x6C40 | `MSHookFunction(&xpc_connection_set_event_handler, …)` + `__xpc_connection_set_event_handler` shim (used to intercept unsandboxed XPC setup) |
 | `initAccountsd` | 0x7200 | `ACDDatabase._sharedPersistentCoordinatorForStoreAtPath:`, `initWithClient:`, `initWithClient:databaseConnection:`; adds `crane_activeContainer`, `setCrane_activeContainer:`, `crane_databasesByContainerIdentifiers`, `setCrane_databasesByContainerIdentifiers:`, `crane_storeCoordinatorsByContainerIdentifiers`, `setCrane_storeCoordinatorsByContainerIdentifiers:` |
-| `initPkd` | 0xF2B4 | `PKDServer`: `pluginsMatchingQuery:applyFilter:`, `findPlugInsForQuery:discoveryInstanceUUID:all…` (3), `findPlugIns:`, `matchPlugIns`, `initWithConnection:queue:database:externalPro…`, `enableForClient:environment:` (3 variants), `terminatePlugIns`, `reloadApplication`; adds `crane_activeContainerID`, `setCrane_activeContainerID:` |
+| `initPkd` | 0xF2B4 | `PKDPlugIn` active-container property/update method; four `enableForClient:environment:…` variants; `Transaction.matchPlugIns`; four `PKDatabase findPlugIns…` variants; `LSApplicationWorkspace.pluginsMatchingQuery:applyFilter:`; PKDServer capture/termination; distributed `ReloadApplication` handling. Server-side flow is transcribed in `reconstruction/sources/support/CRPkd.m`; SpringBoard-side query tagging remains coupled to notification support. |
 | `initApsd` | 0x9C4C | `APSCourierConnection`: `_handleMessageMessage:onInterface:withGenerated…` (2), `_handleMessageMessage:onProtocolConnection:wi…`, `_handleAppTokenGenerateResponse:onProtocolCon…`, `_handleAppTokenGenerateResponse:onInterface:`, `sendTokenGenerateMessageWithTopicHash:baseToken…` (2), `connection:didRequestTokenForInfo:`, `connection:didRequestPerAppTokenForTopic:identifier:`; adds `crane_topicStorage`, `setCrane_topicStorage:` |
 | `initLsd` | 0xD7D8 | `_LSDDeviceIdentifierClient.setProtocol:`, `getIdentifierOfType:completionHandler:`; adds `crane_getIdentifier:ofType:forVendorName:andBundleIdentifier:`, `crane_setIdentifier:ofType:forVendorName:andBundleIdentifier:` |
 | `initSecurityd` | 0x11E5C | `SecItemAdd`, `SecItemCopyMatching`, `SecItemDelete`, `SecItemUpdate` (all four via `MSHookFunction` with `_hook`/`_orig` pairs) plus `securityd_xpc_dictionary_handler` and `patchfindSecurityd` |

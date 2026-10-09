@@ -13,8 +13,9 @@
  *     own right and its exact behaviour is only partially recoverable; a stub
  *     would silently weaken the keychain isolation, so it is left out and
  *     called out in final/KNOWN_DIFFERENCES.md;
- *   * initApsd's eight APSCourierConnection hooks and initPkd's ten PKDServer
- *     hooks - selectors are exact but the bodies were not read line by line;
+ *   * initApsd's eight APSCourierConnection hooks - selectors are exact but
+ *     the bodies were not read line by line. initPkd has since been transcribed
+ *     into CRPkd.m;
  *   * initNotificationSupport in CraneSB, which depends on CraneSupport's
  *     notification-topic rewriting.
  *
@@ -160,14 +161,7 @@ static void CRInitNoStartUsingiCloudHooks(void)
 /* pkd (0xF2B4) / apsd (0x9C4C) / lsd (0xD7D8) / securityd (0x11E5C)           */
 /* ------------------------------------------------------------------------- */
 
-static void CRInitPkd(void)
-{
-    Class server = NSClassFromString(@"PKDServer");
-    if (!server)
-        return;
-    /* Ten PKDServer selectors are hooked by the original; see the file header. */
-    (void)server;
-}
+extern void CRInitPkd(void);
 
 static void CRInitApsd(void)
 {

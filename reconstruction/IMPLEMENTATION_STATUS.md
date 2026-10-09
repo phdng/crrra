@@ -26,7 +26,7 @@ Statuses use the required vocabulary. Note the distinction the prompt draws:
 | `cranehelperd` | partial | Registration and class names CONFIRMED_STATIC; **XPC protocol is this project's own** | SOURCE_IMPLEMENTED |
 | `cranehelperd_start` | partial | Only the path is recovered | SOURCE_IMPLEMENTED |
 | `CraneSB.dylib` | partial | Entry dispatch + F-01 environment contract and the core `CraneActivatorManager` listener/event integration are transcribed; menus/notification hooks remain incomplete | SOURCE_IMPLEMENTED (F-01, F-23 core) |
-| `CraneSupport.dylib` | partial | Per-daemon dispatch transcribed; hook bodies not implemented | SOURCE_IMPLEMENTED (dispatch) |
+| `CraneSupport.dylib` | partial | Per-daemon dispatch plus the recovered pkd/PlugInKit server-side isolation flow are transcribed; cfprefsd/APNs/keychain/account hooks remain incomplete | SOURCE_IMPLEMENTED (dispatch, F-12 server-side core) |
 | `CranePrefs` | partial | Root controller + two panes; specifier construction mirrors recovered `0x8D00` | SOURCE_IMPLEMENTED (structure) |
 
 ## 2. Feature status against the specification
@@ -46,7 +46,7 @@ F-IDs refer to `analysis/behavior_specification.md`.
 | F-09 | System accounts | Dispatch only | Needs the Core Data stack and cranehelperd (U-01) |
 | F-10 | Game Center | Structure only | Account storage model unknown (U-06) |
 | F-11 | Device identifier | Partial | `crane_getIdentifier:`/`crane_setIdentifier:` forwarding not wired (U-01) |
-| F-12 | Plug-in enumeration | Dispatch only | 10 `PKDServer` hooks not implemented |
+| F-12 | Plug-in enumeration | Partial — `PKDPlugIn` active-container state, four enable hooks, Transaction rule consumption, PKDatabase query wrappers, plug-in termination and reload handling are transcribed | SpringBoard notification-support hooks that append `extension_containerIDToAppend` as `crane_containerID` are still part of unresolved F-08/U-10; no runtime test |
 | F-13 | Container selection UI | **Not implemented** | Cell layout needs a screenshot or the `_configureCell` hooks (U-05) |
 | F-14 | Badges | **Not implemented** | Depends on F-08 |
 | F-15 | Settings UI | Partial | Plists reproduced exactly; 2 of 3 panes implemented; backup/restore, Choicy pane and suggestions absent |
@@ -57,7 +57,7 @@ F-IDs refer to `analysis/behavior_specification.md`.
 | F-20 | Self-verification | Partial | `verifyCraneInsurance` implemented; alert UI not built |
 | F-21 | Choicy integration | Partial | Provider registered structurally; Choicy's protocol is not in the tree |
 | F-22 | Shortcuts / Siri | **Not implemented** | No source for `CraneIntentHandlerShared` (U-08) |
-| F-23 | Activator | Partial — dynamic load, listener/event registration, name parsing, switch/abort callbacks and metadata are transcribed | Private `SBIcon.generateIconImageWithInfo:` struct ABI is unresolved so icons return nil; reconstructed `CraneManager` still lacks confirmed observer-dispatch semantics; no runtime test |
+| F-23 | Activator | Partial — dynamic load, listener/event registration, name parsing, switch/abort callbacks, metadata and app-icon generation are transcribed | `generateIconImageWithInfo:` is now recovered as a four-double HFA from both arm64 slices; remaining gap is the reconstructed `CraneManager` observer-dispatch semantics plus runtime testing |
 
 ## 3. Coverage summary
 
@@ -66,8 +66,8 @@ F-IDs refer to `analysis/behavior_specification.md`.
 | Features with a complete, transcribed implementation | 5 of 23 (F-02, F-03, F-04, F-18, and F-01's contract) |
 | Features partially implemented | 10 |
 | Features not implemented | 8 |
-| Recovered functions transcribed | Initial 17-function core plus the 42-method `CraneActivatorManager` surface; three icon callbacks remain intentionally partial, so no inflated aggregate 1:1 count is claimed |
-| Reconstruction source | 3593 lines across 9 `.m` and 4 `.h` files |
+| Recovered functions transcribed | Initial 17-function core plus later main-dylib/libroot work, the 42-method `CraneActivatorManager` surface (including recovered icon ABI), and the pkd/PlugInKit server-side hook chain; no inflated aggregate 1:1 count is claimed |
+| Reconstruction source | 4123 lines across 10 `.m` and 4 `.h` files |
 | Static consistency audit | 0 failed checks; identifier resolution and brace balance clean |
 | Install-path / configuration artefacts verified identical | 12 of 12 plists, 10 of 10 assets |
 | Binary architectures validated against the original rule | 11 of 11 |
@@ -100,7 +100,8 @@ one. The line drawn here is: **transcribe what was read, declare what was not.**
 | To implement | First step | Uncertainty |
 |---|---|---|
 | F-05 prefs redirect | Port `handleSourceMessage`, `withSourceForDomain`, `__CFPrefsGetPathForTriplet` and `ClientContainerCache` with the recovered version/libundirect ABI guards | U-02 resolved; ABI port remains |
-| F-06/F-12 daemon hooks | Read `CC88.c`, `F2B4.c` and their callees | — |
+| F-06 containermanagerd hooks | Read/port `CC88.c` and its V2/V3 container-identity callees | — |
+| F-12 PlugInKit | Complete the SpringBoard-side `extension_containerIDToAppend` query-tagging path together with notification support | U-10 / F-08 coupling |
 | F-07 keychain | Port or reimplement the embedded `csd_*`/`macho_*`/`pfsec_*` toolkit from the ~180 exported functions | U-03 |
 | F-08 notifications | Read `CraneSupport/decompile/9C4C.c` and resolve `CraneSB/decompile/CBEC.c`'s aliased classes | U-10 |
 | F-13 menu | Read `CraneSB` `_configureCell:` hooks, or take one screenshot | U-05 |
@@ -108,7 +109,7 @@ one. The line drawn here is: **transcribe what was read, declare what was not.**
 | F-16/F-17 storage and backup | Export `libcrane.dylib`; read `CRPBackupOperation`/`CRPKeychainManager` | U-04, U-06 |
 | F-19 XPC | Export `cranehelperd` | U-01 |
 | F-22 Shortcuts | Export both `CraneShortcuts.appex` binaries | U-08 |
-| F-23 Activator | Recover the private `SBIcon.generateIconImageWithInfo:` struct ABI and, if possible, the original `CraneManager` observer dispatch from a `libcrane.dylib` export | U-01-class missing-binary evidence |
+| F-23 Activator | Recover the original `CraneManager` observer-dispatch body from a `libcrane.dylib` export; icon ABI is now statically recovered | U-01-class missing-binary evidence |
 
 None of these require a device. All of them require more decompilation passes
 over exports that are already in this repository, or new exports for the six

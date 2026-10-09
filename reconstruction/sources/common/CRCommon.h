@@ -24,7 +24,7 @@ extern "C" {
 
 typedef void (*MSHookFunctionPointer)(void);
 extern void MSHookFunction(void *symbol, void *replacement, void **result);
-extern void *MSHookMessageEx(void *target, SEL selector, void *replacement, void *result);
+extern void MSHookMessageEx(Class target, SEL selector, IMP replacement, IMP *result);
 
 typedef void (*LHHookFunctionPointer)(void);
 extern void *dlsym(void *handle, const char *symbol);
