@@ -12,6 +12,7 @@
  *   the eight preference predicates             -> CR*Enabled accessors
  *   crane_initChoicyIntegration (0x1BBB8)       -> CRInitChoicyIntegration
  *   CRBadgeAction / CRSubtitleMenu               -> declared
+ *   CraneActivatorManager (0x1C4D4..0x1E284)     -> CRActivator.m
  *
  * NOT implemented here, with the reason recorded rather than guessed:
  *   * the 40 notification-support hooks (initNotificationSupport, 0xCBEC) -
@@ -36,6 +37,10 @@
 #import "CRPaths.h"
 #import "CRPreferences.h"
 #import "CRCommon.h"
+
+@interface CraneActivatorManager : NSObject
++ (void)startIfPossible;
+@end
 
 /* ------------------------------------------------------------------------- */
 /* Globals recovered from the export                                          */
@@ -296,11 +301,9 @@ static void CRInitSpringBoard(void)
 {
     hasFinishedLaunching = NO;
 
-    /* +[CraneActivatorManager startIfPossible] - the whole class is a no-op when
-     * /usr/lib/libactivator.dylib is absent, which is the documented graceful
-     * degradation (ACTIVATOR_INFO_SUGGESTION_MESSAGE). */
-    if (CRIsDylibLoaded(CR_ACTIVATOR_LIB))
-        NSLog(@"[Crane] Activator integration active");
+    /* +[CraneActivatorManager startIfPossible] dynamically loads Activator and
+     * remains a no-op when it is absent, matching the recovered 0x1C580 path. */
+    [CraneActivatorManager startIfPossible];
 
     Class fbProcess = NSClassFromString(@"FBProcess");
     Class fbProcessManager = NSClassFromString(@"FBProcessManager");

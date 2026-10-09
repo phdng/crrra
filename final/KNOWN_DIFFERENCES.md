@@ -34,11 +34,13 @@ this project. The original daemon will reject these messages.
 
 **Test impact:** `T-F19-1`, `T-F19-2` cannot pass against the original daemon.
 
-### D-03 — Read subsystems were indexed, not read line by line
+### D-03 — Read subsystems were indexed, not all read line by line
 
-2651 functions were exported; 17 were transcribed. The remaining coverage is
-selector lists, call graphs, initialization order and string constants — real
-evidence, but not a control-flow transcription.
+The initial pass transcribed 17 recovered functions. Subsequent fidelity passes
+also transcribed the main-dylib hook-table details, libroot path shim behaviour
+and the core `CraneActivatorManager` listener/event flow. Most of the 2651
+exported functions still remain at selector/call-graph/string-constant coverage
+rather than full control-flow transcription.
 
 **Consequence:** F-05, F-06, F-08, F-09, F-11, F-12, F-14, F-15 (partially),
 F-16 (partially), F-19, F-20, F-21 are declarations and dispatch, not working
@@ -263,6 +265,24 @@ run in address order, i.e. `CRErrorAlert` and `CRNewContainerAlert` are created
 before `crane_initSpringBoard`. The reconstruction has one constructor, so any
 hook that depended on those alert classes already existing is not reproduced.
 
+### D-23 — Activator core is reconstructed, but icon/observer edges remain partial
+
+**Original:** `CraneActivatorManager` dynamically loads Activator, registers one
+set-active listener and one changed-container event per app/container pair,
+handles receive/abort by switching/restoring the active container, and supplies
+localized metadata plus app icons generated through the private SpringBoard
+`generateIconImageWithInfo:` ABI.
+
+**Reconstruction:** dynamic loading, listener/event registration, naming/parsing,
+switch/abort behaviour and non-icon metadata are transcribed from the recovered
+methods. The private icon-info struct ABI is not sufficiently recovered, so icon
+callbacks return `nil`. Also, `CraneManager` observer membership is implemented
+but the original manager's notification-dispatch body is unavailable, so cache
+refresh after an in-process container-list change is not claimed equivalent.
+Activator absence still degrades to a no-op as in the original.
+
+**Test impact:** F-23 is source-implemented only and remains runtime NOT_TESTED.
+
 ## 7. Untested edge cases
 
 No runtime testing was possible, so these are untested rather than known-good:
@@ -296,11 +316,11 @@ No runtime testing was possible, so these are untested rather than known-good:
 
 | Category | Count |
 |---|---:|
-| Whole subsystems absent (F-07, F-08, F-13, F-17, F-22, F-23, F-14) | 7 |
-| Partially implemented | 9 |
+| Whole subsystems absent (F-07, F-08, F-13, F-17, F-22, F-14) | 6 |
+| Partially implemented | 10 |
 | Fully implemented | 5 (F-02, F-03, F-04, F-18, and F-01's contract) |
 | Whole binaries not reconstructed | 6 of 11 |
-| Functions transcribed 1:1 | 17 of 2651 |
+| Function coverage | Initial 17-function core plus later main-dylib/libroot/Activator transcriptions; no inflated single 1:1 count while three Activator icon callbacks remain partial |
 | Runtime tests executed | 0 |
 | Visual comparisons performed | 0 |
 

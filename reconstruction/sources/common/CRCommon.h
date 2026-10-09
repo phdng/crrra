@@ -8,6 +8,8 @@
 #import <Foundation/Foundation.h>
 #import <UIKit/UIKit.h>
 #import <dlfcn.h>
+#import <string.h>
+#import <unistd.h>
 
 #import "CRPaths.h"
 #import "CRManager.h"
@@ -31,12 +33,60 @@ extern void *dlsym(void *handle, const char *symbol);
 }
 #endif
 
+/* libroot path shim recovered independently in Crane, CraneSB, CraneSupport
+ * and CranePrefs. Upstream resolves libroot_jbrootpath from @rpath/libroot.dylib
+ * once. Its built-in fallback only prefixes /var/jb when /var/LIY exists,
+ * leaves /var/mobile paths untouched, and otherwise returns the input path. */
+typedef char *(*CRLibrootJbrootPathFn)(const char *path, char *buffer);
+
+static inline NSString *CRJailbreakRootPath(NSString *path)
+{
+    if (!path)
+        return nil;
+
+    static CRLibrootJbrootPathFn jbrootPath;
+    static void *librootHandle;
+    static dispatch_once_t once;
+    dispatch_once(&once, ^{
+        librootHandle = dlopen("@rpath/libroot.dylib", RTLD_NOW);
+        if (librootHandle)
+            jbrootPath = (CRLibrootJbrootPathFn)dlsym(librootHandle, "libroot_jbrootpath");
+    });
+
+    const char *input = path.fileSystemRepresentation;
+    if (!input)
+        return nil;
+
+    char buffer[1024];
+    const char *resolved = NULL;
+    if (jbrootPath) {
+        resolved = jbrootPath(input, buffer);
+    } else {
+        /* Equivalent result to the recovered fallback at Crane 0x631C. */
+        BOOL rootlessMarkerPresent = (access("/var/LIY", F_OK) == 0);
+        BOOL isAbsolute = (input[0] == '/');
+        BOOL isVarMobile = (strncmp(input, "/var/mobile", 11) == 0);
+        if (rootlessMarkerPresent && isAbsolute && !isVarMobile) {
+            strlcpy(buffer, "/var/jb", sizeof(buffer));
+            strlcat(buffer, input, sizeof(buffer));
+        } else {
+            strlcpy(buffer, input, sizeof(buffer));
+        }
+        resolved = buffer;
+    }
+
+    return resolved ? [NSString stringWithUTF8String:resolved] : nil;
+}
+
 /* Presence check for an optional tweak. Upstream calls this
  * `getInjectionPlatform` / `isDylibLoaded`; the recovered implementation
- * dlopen()s the candidate path and dlcloses it. */
+ * translates the jailbreak path, dlopen()s it and dlcloses it. */
 static inline BOOL CRIsDylibLoaded(NSString *path)
 {
-    void *handle = dlopen(path.fileSystemRepresentation, RTLD_NOW);
+    NSString *resolvedPath = CRJailbreakRootPath(path);
+    if (!resolvedPath)
+        return NO;
+    void *handle = dlopen(resolvedPath.fileSystemRepresentation, RTLD_NOW);
     if (!handle)
         return NO;
     dlclose(handle);
@@ -49,7 +99,7 @@ static inline NSBundle *CRIconBundle(void)
     static NSBundle *bundle;
     static dispatch_once_t once;
     dispatch_once(&once, ^{
-        bundle = [NSBundle bundleWithPath:CR_ICON_BUNDLE_PATH];
+        bundle = [NSBundle bundleWithPath:CRJailbreakRootPath(CR_ICON_BUNDLE_PATH)];
     });
     return bundle;
 }
@@ -64,7 +114,7 @@ static inline UIImage *CRIcon(NSString *name)
         /* Icons is a plain directory in the recovered bundle, not an NSBundle
          * exposing a private imageForResource: selector. Resolve the PNG path
          * explicitly so this compiles against the public iOS SDK. */
-        NSBundle *bundle = [NSBundle bundleWithPath:CR_UI_BUNDLE_PATH];
+        NSBundle *bundle = [NSBundle bundleWithPath:CRJailbreakRootPath(CR_UI_BUNDLE_PATH)];
         path = [bundle pathForResource:name ofType:@"png" inDirectory:@"Icons"];
     }
     return path ? [UIImage imageWithContentsOfFile:path] : nil;

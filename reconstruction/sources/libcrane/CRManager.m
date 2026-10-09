@@ -35,42 +35,6 @@
 #include <notify.h>
 
 /* ------------------------------------------------------------------------- */
-/* libroot $JBROOT resolution                                                 */
-/* ------------------------------------------------------------------------- */
-
-/* CONFIRMED_STATIC: CraneSB sub_7A74 is a dispatch_once-guarded resolver for
- * libroot_get_jbroot_prefix / libroot_jbrootpath, and "/var/jb" is in its
- * string table. It is called with kCFCoreFoundationVersionNumber passed
- * through, which is the libroot convention, not a version selector. */
-NSString *CRJBRootPrefix(void)
-{
-    static NSString *prefix;
-    static dispatch_once_t once;
-    dispatch_once(&once, ^{
-        const char *(*getPrefix)(void) = dlsym(RTLD_DEFAULT, "libroot_get_jbroot_prefix");
-        const char *(*getPath)(const char *) = dlsym(RTLD_DEFAULT, "libroot_jbrootpath");
-        const char *p = NULL;
-        if (getPath)
-            p = getPath("");
-        else if (getPrefix)
-            p = getPrefix();
-        prefix = p ? @(p) : @"";
-    });
-    return prefix;
-}
-
-/* Combine a rootful path with the rootless prefix, as libroot would. */
-static NSString *CRRootfulPath(NSString *path)
-{
-    NSString *jb = CRJBRootPrefix();
-    if (!jb.length)
-        return path;
-    if ([path hasPrefix:@"/var/"] && ![path hasPrefix:@"/var/jb/"])
-        return [jb stringByAppendingString:path];
-    return path;
-}
-
-/* ------------------------------------------------------------------------- */
 /* CraneManager                                                               */
 /* ------------------------------------------------------------------------- */
 
@@ -326,7 +290,7 @@ usingBiometricsIfNeededWithSuccessHandler:(dispatch_block_t)handler
      * This build uses the shared Crane data dir, which is observationally
      * equivalent for a single-device test but will not match containers written
      * by Crane 6.0. */
-    NSString *base = CRRootfulPath(CR_DATA_DIR);
+    NSString *base = CRJailbreakRootPath(CR_DATA_DIR);
     NSString *path = CRContainerPathForContainer(containerID, base);
     self.containerPaths[key] = path;
     return path;
@@ -448,7 +412,7 @@ usingBiometricsIfNeededWithSuccessHandler:(dispatch_block_t)handler
     /* [INFERRED] U-04. Directories under the containers root with no entry in
      * the registry. */
     NSMutableArray *unknown = [NSMutableArray new];
-    NSString *base = CRRootfulPath(CR_DATA_DIR);
+    NSString *base = CRJailbreakRootPath(CR_DATA_DIR);
     NSString *root = CRContainerPathForContainer(CR_DEFAULT_CONTAINER_IDENTIFIER, base);
     root = [root stringByAppendingPathComponent:CR_CONTAINERS_DIR_TRAILER];
     for (NSString *entry in [NSFileManager.defaultManager contentsOfDirectoryAtPath:root error:NULL]) {

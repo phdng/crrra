@@ -133,9 +133,11 @@ containers' data.
 
 ### HK-4 Localization lookup (CONFIRMED_STATIC, complete)
 
-`localize(key)` at 0x6924: loads `NSBundle` at
-`/Library/Application Support/Crane.bundle`, then
-`localizedStringForKey:value:table:` with `value = key` and **`table = 0`**
+`localize(key)` at 0x6924: passes
+`/Library/Application Support/Crane.bundle` through the dispatch-once libroot
+`libroot_jbrootpath` wrapper (`sub_6138`; fallback `sub_631C`) before loading
+that path as an `NSBundle`, then calls `localizedStringForKey:value:table:`
+with `value = key` and **`table = 0`**
 (i.e. `nil` → `Localizable.strings`). If the result equals the key, it falls
 back to `[NSDictionary dictionaryWithContentsOfFile:` of
 `<bundle>/en.lproj/Localizable.strings`] objectForKey:key`, else the key.
@@ -303,6 +305,26 @@ adds `crane_presentMainDylibNotLoadedErrorForAppName:`,
 `crane_presentApsdRegistrationErrorForAppId:`, `crane_presentPkdRegistrationErrorForAppId:`,
 `crane_presentLibSandyNotWorkingError`,
 `crane_presentDaemonErrorWithBrokenDaemons:error:connectionWorks:`.
+
+### Activator integration — `CraneActivatorManager` (0x1C4D4–0x1E284)
+
+`+[CraneActivatorManager startIfPossible]` resolves the Activator dylib through
+the libroot path shim, opens it lazily, obtains `LAActivator.sharedInstance`,
+and instantiates a singleton manager only when Activator is present. The manager
+registers one `SetActiveContainer|app|container|` listener and one
+`ChangedToContainer|container|app|` event data source for every container of
+every installed app that has non-default containers. Listener receive stores the
+previous container in the Activator event's `userInfo` and calls
+`CraneManager.setActiveContainerIdentifier:...usingBiometrics...`; abort restores
+the previous container. App install/uninstall and CraneManager container-change
+observer callbacks rebuild both caches.
+
+The reconstruction now transcribes this core flow and the recovered metadata
+callbacks in `sources/cranesb/CRActivator.m` without a hard Activator link. The
+only intentionally partial method family is icon generation: the original calls
+SpringBoard's private `generateIconImageWithInfo:` with a four-field struct whose
+ABI is not recovered strongly enough to fabricate, so reconstructed icon
+callbacks return `nil`. Runtime behaviour remains NOT_TESTED.
 
 ### Choicy integration — `crane_initChoicyIntegration` (0x1BBB8)
 

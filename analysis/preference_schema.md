@@ -157,7 +157,9 @@ Both are user-visible errors, so failing open here is deliberate.
 
 ## 5. Localization keys used as UI labels
 
-`localize(key)` in all four dylibs falls back to
-`/Library/Application Support/Crane.bundle/en.lproj/Localizable.strings`.
+`localize(key)` in all four dylibs first resolves
+`/Library/Application Support/Crane.bundle` through the shared libroot
+`jbrootpath` shim, then falls back to that bundle's
+`en.lproj/Localizable.strings`.
 204 keys exist. The ones that are behaviour-bearing (i.e. their presence/absence
 changes what the user can do) are listed in `ui_specification.md`.

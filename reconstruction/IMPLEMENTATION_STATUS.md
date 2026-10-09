@@ -25,7 +25,7 @@ Statuses use the required vocabulary. Note the distinction the prompt draws:
 | `libcrane.dylib` / `CraneManager` | partial | **Selector surface CONFIRMED_STATIC; implementation INFERRED** | SOURCE_IMPLEMENTED (API) |
 | `cranehelperd` | partial | Registration and class names CONFIRMED_STATIC; **XPC protocol is this project's own** | SOURCE_IMPLEMENTED |
 | `cranehelperd_start` | partial | Only the path is recovered | SOURCE_IMPLEMENTED |
-| `CraneSB.dylib` | partial | Entry dispatch + F-01 environment contract transcribed; menus/hooks not implemented | SOURCE_IMPLEMENTED (F-01) |
+| `CraneSB.dylib` | partial | Entry dispatch + F-01 environment contract and the core `CraneActivatorManager` listener/event integration are transcribed; menus/notification hooks remain incomplete | SOURCE_IMPLEMENTED (F-01, F-23 core) |
 | `CraneSupport.dylib` | partial | Per-daemon dispatch transcribed; hook bodies not implemented | SOURCE_IMPLEMENTED (dispatch) |
 | `CranePrefs` | partial | Root controller + two panes; specifier construction mirrors recovered `0x8D00` | SOURCE_IMPLEMENTED (structure) |
 
@@ -57,18 +57,18 @@ F-IDs refer to `analysis/behavior_specification.md`.
 | F-20 | Self-verification | Partial | `verifyCraneInsurance` implemented; alert UI not built |
 | F-21 | Choicy integration | Partial | Provider registered structurally; Choicy's protocol is not in the tree |
 | F-22 | Shortcuts / Siri | **Not implemented** | No source for `CraneIntentHandlerShared` (U-08) |
-| F-23 | Activator | **Not implemented** | Only probed for presence |
+| F-23 | Activator | Partial — dynamic load, listener/event registration, name parsing, switch/abort callbacks and metadata are transcribed | Private `SBIcon.generateIconImageWithInfo:` struct ABI is unresolved so icons return nil; reconstructed `CraneManager` still lacks confirmed observer-dispatch semantics; no runtime test |
 
 ## 3. Coverage summary
 
 | Measure | Value |
 |---|---|
 | Features with a complete, transcribed implementation | 5 of 23 (F-02, F-03, F-04, F-18, and F-01's contract) |
-| Features partially implemented | 9 |
-| Features not implemented | 9 |
-| Recovered functions transcribed 1:1 | 17 of 2651 exported functions |
-| Reconstruction source | 3041 lines across 8 `.m` and 4 `.h` files |
-| Automated checks passing | 84 cross-document + identifier resolution + brace balance |
+| Features partially implemented | 10 |
+| Features not implemented | 8 |
+| Recovered functions transcribed | Initial 17-function core plus the 42-method `CraneActivatorManager` surface; three icon callbacks remain intentionally partial, so no inflated aggregate 1:1 count is claimed |
+| Reconstruction source | 3593 lines across 9 `.m` and 4 `.h` files |
+| Static consistency audit | 0 failed checks; identifier resolution and brace balance clean |
 | Install-path / configuration artefacts verified identical | 12 of 12 plists, 10 of 10 assets |
 | Binary architectures validated against the original rule | 11 of 11 |
 | Runtime tests executed | **0** |
@@ -78,9 +78,11 @@ F-IDs refer to `analysis/behavior_specification.md`.
 This is not a build of what was understood and then abandoned. It is the
 honest ceiling given the evidence:
 
-- **17 of 2651** recovered functions live in binaries that **have** a decompiler
-  export. Those are transcribed.
-- The remaining 2634 include the largest subsystems — the notification hook set,
+- The initial pass transcribed a 17-function core. Incremental fidelity passes
+  have since added the recovered main-dylib details, libroot path semantics and
+  the 42-method `CraneActivatorManager` surface (with three icon callbacks
+  explicitly partial rather than guessed).
+- The remaining export set still includes the largest subsystems — the notification hook set,
   the 40 CraneSB hooks, the settings UI, the backup engine — whose *bodies* are
   available but which this pass indexed rather than read line by line.
 - The remaining **whole binaries** with no export at all (`libcrane.dylib`,
@@ -106,7 +108,7 @@ one. The line drawn here is: **transcribe what was read, declare what was not.**
 | F-16/F-17 storage and backup | Export `libcrane.dylib`; read `CRPBackupOperation`/`CRPKeychainManager` | U-04, U-06 |
 | F-19 XPC | Export `cranehelperd` | U-01 |
 | F-22 Shortcuts | Export both `CraneShortcuts.appex` binaries | U-08 |
-| F-23 Activator | Export `CraneActivatorManager` bodies — already present; read them | — |
+| F-23 Activator | Recover the private `SBIcon.generateIconImageWithInfo:` struct ABI and, if possible, the original `CraneManager` observer dispatch from a `libcrane.dylib` export | U-01-class missing-binary evidence |
 
 None of these require a device. All of them require more decompilation passes
 over exports that are already in this repository, or new exports for the six

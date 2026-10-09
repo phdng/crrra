@@ -21,7 +21,7 @@ static NSBundle *CRUIBundle(void)
     static NSBundle *bundle;
     static dispatch_once_t once;
     dispatch_once(&once, ^{
-        bundle = [NSBundle bundleWithPath:CR_UI_BUNDLE_PATH];
+        bundle = [NSBundle bundleWithPath:CRJailbreakRootPath(CR_UI_BUNDLE_PATH)];
     });
     return bundle;
 }
