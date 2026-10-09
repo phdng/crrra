@@ -72,7 +72,18 @@ jobs:
 
           rm -rf pkg
           mkdir pkg
-          dpkg-deb -x "$DEB" pkg
+
+          # A .deb is an ar archive containing data.tar.*. macOS runners do not
+          # ship dpkg-deb, but Xcode provides ar and the system bsdtar detects
+          # the data member's compression format automatically.
+          DATA_MEMBER="$(ar -t "$DEB" | awk '/^data\.tar\./ { print; exit }')"
+          if [ -z "$DATA_MEMBER" ]; then
+            echo "::error::No data.tar.* member found in $DEB"
+            ar -t "$DEB" || true
+            exit 1
+          fi
+          echo "DATA_MEMBER=$DATA_MEMBER"
+          ar -p "$DEB" "$DATA_MEMBER" | tar -xf - -C pkg
 
           find pkg -type f -print | LC_ALL=C sort | while IFS= read -r file; do
             shasum -a 256 "$file"
