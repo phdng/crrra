@@ -79,46 +79,32 @@ static NSSet<NSString *> *CRSecurityAccessGroupsToIgnore(void)
 /* cfprefsd (0xBBFC)                                                           */
 /* ------------------------------------------------------------------------- */
 
-/* The real CFPreferences signature is
- *   CFStringRef CFPrefsGetPathForTriplet(CFStringRef user, CFStringRef appID,
- *                                        Boolean key_is_strict, Boolean *key_cached);
- * The recovered hook passes five arguments, so an extra trailing argument is
- * forwarded opaquely; its meaning is UNKNOWN (U-02) and it is not read. */
-typedef CFStringRef (*CRCFPrefsGetPathForTripletFn)(CFStringRef, CFStringRef,
-                                                    Boolean, Boolean *, void *);
-
-static void CRNewCFPrefsGetPathForTriplet(CFStringRef currentUser, CFStringRef bundleID,
-                                          Boolean shouldCache, Boolean *outCached, void *unused)
+/* U-02 is resolved from BBFC/AB1C/ADF0/B4D0. cfprefsd records the calling
+ * bundle identifier + pid, asks ClientContainerCache for that pid's active
+ * container, and temporarily stores that container in the thread dictionary
+ * while the original source lookup executes. The final triplet hook rewrites
+ * only the plist basename to <domain>.c_r_a_n_e.<container>.plist.
+ *
+ * The private CoreFoundation method/function ABIs vary by OS version and the
+ * original also uses libundirect fallbacks. Those hooks are intentionally not
+ * installed until that ABI layer is transcribed; installing an approximate
+ * function pointer here would be less faithful than leaving F-05 partial. */
+static NSString *CRPreferenceFilenameForDomain(NSString *domain,
+                                                NSString *containerIdentifier)
 {
-    /* Original contract: call the original, then rewrite the returned path to
-     * the active container. `_orig_CFPrefsGetPathForTriplet` exists in the
-     * original's exports, so the original IS invoked. */
-    static CRCFPrefsGetPathForTripletFn orig;
-    static dispatch_once_t once;
-    dispatch_once(&once, ^{
-        orig = (CRCFPrefsGetPathForTripletFn)
-            dlsym(RTLD_DEFAULT, "CFPrefsGetPathForTriplet");
-    });
-    if (!orig)
-        return;
-    CFStringRef path = orig(currentUser, bundleID, shouldCache, outCached, unused);
-    if (!path || bundleID == NULL)
-        return;
-
-    NSString *result = (__bridge NSString *)path;
-    NSString *stripped = CRStripCraneContainerFromPath(result);
-    if (![stripped isEqualToString:result]) {
-        /* Already inside a container: leave it alone. */
-        return;
-    }
-    /* [INFERRED] U-02: which domains are redirected is not recoverable. This
-     * build redirects nothing unless a container is active for the app, which
-     * is the conservative choice. */
+    if (domain.length == 0 || containerIdentifier.length == 0)
+        return nil;
+    return [NSString stringWithFormat:@"%@.c_r_a_n_e.%@.plist",
+                                      domain, containerIdentifier];
 }
 
 static void CRInitCfprefsd(void)
 {
-    NSLog(@"[Crane] cfprefsd hooks installed");
+    /* Keep the confirmed pure transformation compiled while the three private
+     * hook entry points (handleSourceMessage, withSourceForDomain and
+     * __CFPrefsGetPathForTriplet) remain an explicit reconstruction gap. */
+    (void)CRPreferenceFilenameForDomain;
+    NSLog(@"[Crane] cfprefsd redirect ABI hooks pending");
 }
 
 /* ------------------------------------------------------------------------- */

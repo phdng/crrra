@@ -10,7 +10,7 @@ not executed, it says so.
 | Requirement | Why | Where it comes from |
 |---|---|---|
 | GitHub Actions runner `macos-14` | Xcode + Theos toolchain | `.github/workflows/build.yml` |
-| `theos/theos-action@v1` | installs Theos | same |
+| `waruhachi/theos-action@v2.6.3` | installs Theos, SDKs and AltList for the workflow | same |
 | An iOS SDK with `arm64` and `arm64e` | the original dylibs are fat arm64+arm64e | `analysis/binary_inventory.md` §1 |
 | An iOS SDK providing `AltList.framework`, `Preferences.framework`, `BackBoardServices`, `MobileCoreServices`, `CoreData` | linked by the originals | `analysis/binary_inventory.md` §3 |
 
@@ -34,10 +34,10 @@ anyway — a deliberate simplification recorded as D-14.
 ## 2. Repository setup
 
 ```
+.github/workflows/build.yml        authoritative GitHub Actions build
 reconstruction/
-  Makefile                     master: 6 subprojects, package-stage, layout
+  Makefile                     master: 7 subprojects + after-stage filename fix
   control                      Debian metadata
-  .github/workflows/build.yml  the authoritative build
   sources/
     common/                    CRPaths.h CRPreferences.h CRManager.h CRCommon.{h,m}
     maindylib/                 " Crane.dylib"   (Makefile, CRMainDylib.m)
@@ -48,7 +48,8 @@ reconstruction/
     support/                   CraneSupport.dylib (Makefile, CRSupport.m)
     prefs/                     CranePrefs      (Makefile) + ../prefs/CRPreferences.m
   layout/                      12 plists + 10 assets, verified identical to the original
-  tools/verify_architectures.py  fat-slice rule check (runs in CI)
+  tools/verify_architectures.py  Mach-O slice rule check (runs in CI)
+  tools/verify_package_layout.py recovered layout + compiled-artifact check
 ```
 
 ## 3. Building
@@ -57,10 +58,11 @@ reconstruction/
 
 1. Push the repository to a GitHub remote. **No push has been made from this
    environment and no remote exists**, so no run ID exists.
-2. The `build` job runs: checkout → record toolchain → install Theos →
-   `make package` → inspect the `.deb` → verify 19 install paths → verify
-   architectures → upload artifacts.
-3. Artifacts: `build-log` (always) and `crane-package` (`.deb` +
+2. The `build` job runs: checkout → install/record the toolchain →
+   `make clean package FINALPACKAGE=1` → unpack the `.deb` → verify all 23
+   recovered layout files plus 7 compiled artifacts → verify architectures →
+   upload artifacts.
+3. Artifacts: `build-log` (always) and `crane-reconstruction-package` (`.deb` +
    `pkg.manifest.sha256` + `deb.sha256`).
 
 Record the results in `tests/ci_build_results.md` §5, which has a blank form for
@@ -72,7 +74,7 @@ run ID, commit SHA, Xcode version, `.deb` SHA-256 and the verification counts.
 git clone <remote> crane
 cd crane/reconstruction
 export THEOS=/opt/theos
-make package            # builds the 6 components and stages the layout
+make package            # builds 7 targets and stages the recovered layout
 make stage              # prints the staged file list
 ```
 
@@ -84,25 +86,25 @@ confirm the layout without unpacking a `.deb`.
 Stated in `tests/ci_build_results.md` §4. The three most likely first-run
 failures, in order of likelihood:
 
-1. **`AltList` header mismatch.** `sources/prefs/CRPreferences.m` declares
-   `PSSpecifier` / `PSListController` / `PSViewController` structurally rather
-   than importing the real headers. If the real `AltList.framework` headers
-   declare them differently, the file will not compile. Fix: import the real
-   headers instead of the stand-ins.
-2. **`TWEAK_NAME =  Crane` (leading space).** Theos may reject or normalise a
-   name with a leading space. The `package-stage` rule in the master Makefile
-   exists to place the file correctly regardless.
-3. **`libcrane.dylib` link path.** `CraneSB`, `CraneSupport` and `CranePrefs`
-   declare `LIBRARIES = objc libcrane.dylib`; Theos resolves that to the staged
-   output. Confirm the resulting `LC_LOAD_DYLIB` is `/usr/lib/libcrane.dylib`.
+1. **Private framework / SDK availability.** `CraneSB`, `CraneSupport` and
+   `CranePrefs` use private Apple frameworks. The selected Theos SDK set must
+   provide link stubs for the versions used by the source.
+2. **Preference bundle declarations.** `sources/prefs/CRPreferences.m` declares
+   `PSSpecifier` / `PSListController` / `PSViewController` minimally rather than
+   importing complete private headers. A compiler/API mismatch may require
+   replacing those stand-ins with the matching SDK headers.
+3. **Cross-subproject library ordering.** `libcrane` is listed before its
+   dependents in the aggregate build; `CraneSB`, `CraneSupport` and `CranePrefs`
+   link `-lcrane` from `$(THEOS_OBJ_DIR)`. CI is the first real validation that
+   this aggregate ordering matches the current Theos build rules.
 
 ## 4. Artifact inspection
 
 After a real build, before installing:
 
 ```sh
-ar p packages/*.deb data.tar.gz | tar xz -C /tmp/crane-pkg
-shasum -a 256 /tmp/crane-pkg/**/*                # compare against pkg.manifest.sha256
+dpkg-deb -x packages/*.deb /tmp/crane-pkg
+python3 tools/verify_package_layout.py /tmp/crane-pkg
 python3 tools/verify_architectures.py /tmp/crane-pkg
 ```
 
@@ -123,7 +125,8 @@ Then confirm against the original package (`analysis/package_inventory.md`):
 | `usr/local/libexec/cranehelperd`, `usr/local/bin/cranehelperd_start` | yes |
 | Not present: `Applications/*.app` | the original ships two app bundles; this reconstruction ships none (D-11) |
 
-The CI layout step already asserts the first 19 paths exist.
+The CI layout verifier asserts all 23 static layout files plus the 7 compiled
+artifacts (30 required package files total).
 
 ## 5. Installation
 

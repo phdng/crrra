@@ -30,6 +30,7 @@
 #import "CRManager.h"
 #import "CRPaths.h"
 #import "CRPreferences.h"
+#import "CRCommon.h"
 
 #include <notify.h>
 

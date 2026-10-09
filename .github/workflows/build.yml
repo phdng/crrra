@@ -1,0 +1,111 @@
+name: Build reconstruction
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    name: Theos package
+    runs-on: macos-14
+    timeout-minutes: 45
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Theos
+        uses: waruhachi/theos-action@v2.6.3
+        with:
+          theos-src: theos/theos
+          theos-branch: master
+          sdks-src: theos/sdks
+          sdks-branch: master
+          altlist: "true"
+          altlist-src: opa334/AltList
+          altlist-branch: main
+          remotelog: "false"
+          libgcuniversal: "false"
+          comet: "false"
+          orion: "false"
+
+      - name: Record toolchain
+        run: |
+          {
+            echo "### Toolchain"
+            echo '~~~text'
+            sw_vers
+            xcodebuild -version
+            clang --version | head -n 1
+            make --version | head -n 1
+            echo "THEOS=${THEOS:-unset}"
+            echo '~~~'
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Build package
+        working-directory: reconstruction
+        run: |
+          set -o pipefail
+          make clean package FINALPACKAGE=1 2>&1 | tee build.log
+
+      - name: Inspect package
+        working-directory: reconstruction
+        run: |
+          set -euo pipefail
+
+          DEB="$(find packages -maxdepth 1 -type f -name '*.deb' -print | sort | head -n 1)"
+          if [ -z "$DEB" ]; then
+            echo "::error::No .deb was produced"
+            exit 1
+          fi
+
+          echo "DEB=$DEB"
+          shasum -a 256 "$DEB" | tee deb.sha256
+
+          rm -rf pkg
+          mkdir pkg
+          dpkg-deb -x "$DEB" pkg
+
+          find pkg -type f -print | LC_ALL=C sort | while IFS= read -r file; do
+            shasum -a 256 "$file"
+          done > pkg.manifest.sha256
+
+          python3 tools/verify_package_layout.py pkg
+          python3 tools/verify_architectures.py pkg
+
+          {
+            echo "### Package"
+            echo '~~~text'
+            cat deb.sha256
+            tail -n 2 pkg.manifest.sha256 || true
+            echo '~~~'
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Upload build diagnostics
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: build-log
+          if-no-files-found: warn
+          path: |
+            reconstruction/build.log
+            reconstruction/deb.sha256
+
+      - name: Upload package
+        if: success()
+        uses: actions/upload-artifact@v4
+        with:
+          name: crane-reconstruction-package
+          if-no-files-found: error
+          path: |
+            reconstruction/packages/*.deb
+            reconstruction/deb.sha256
+            reconstruction/pkg.manifest.sha256

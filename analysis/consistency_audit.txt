@@ -40,9 +40,9 @@ all 23 feature test counts appear in SPECIFICATION   PASS  []
 behavior_specification defines F-01..F-23            PASS  23 features
 ACCEPTANCE_MATRIX covers all 23 features             PASS  matrix=23 spec=23
 SPECIFICATION covers all 23 features                 PASS  spec=23
-uncertainty register: RESOLVED rollup matches rows   PASS  resolved=3
-uncertainty register: OPEN rollup matches open rows  PASS  table rows=17 blocked=1 open=16 stated=16
-uncertainty register: every U-nn accounted for       PASS  open=16 resolved=3
+uncertainty register: RESOLVED rollup matches rows   PASS  resolved=4
+uncertainty register: OPEN rollup matches open rows  PASS  table rows=16 blocked=1 open=15 stated=15
+uncertainty register: every U-nn accounted for       PASS  open=15 resolved=4
 uncertainty register: main + resolved tables cover U-01..U-20 PASS
 uncertainty register: BLOCKED rollup matches rows    PASS  blocked=1
 no unnegated passed-status claim in analysis/environment_report.md PASS
@@ -72,7 +72,7 @@ no unnegated passed-status claim in final/ACCEPTANCE_MATRIX.md PASS
 no unnegated passed-status claim in reconstruction/IMPLEMENTATION_STATUS.md PASS
 no unnegated passed-status claim in reconstruction/Makefile PASS
 no unnegated passed-status claim in reconstruction/control PASS
-no unnegated passed-status claim in reconstruction/.github/workflows/build.yml PASS
+no unnegated passed-status claim in .github/workflows/build.yml PASS
 ACCEPTANCE_MATRIX overall status is PARTIAL - BUILD ONLY PASS
 KNOWN_DIFFERENCES states it is not a behavioural equivalent PASS
 KNOWN_DIFFERENCES documents 0 runtime tests          PASS

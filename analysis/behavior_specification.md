@@ -219,11 +219,17 @@ redirecting, all containers share one prefs file.
 the path it produces, rather than fabricating one. Confirmed for the triplet
 hook by the presence of `_orig_CFPrefsGetPathForTriplet` in `exports.txt`.
 
-**Uncertainty.** The exact conditional that decides whether a given domain is
-redirected (per-app `separateSystemAccountsEnabled`? per-container?) is
-**UNKNOWN**; `initCfprefsd`'s body was not read line-by-line in this pass. This
-is recorded in `uncertainty_register.md` as U-02 and is a required next
-investigation.
+**Redirect condition (confirmed).** Reading `BBFC.c`, `ADF0.c`, `AB1C.c` and
+`B4D0.c` line-by-line resolves U-02. `handleSourceMessage:replyHandler:` stores
+the client host bundle identifier and PID in the current thread dictionary.
+`withSourceForDomainHook` ignores the protected processes (`watchdogd` and
+`com.apple.springboard`) and redirects only when `ClientContainerCache` returns
+a non-default active container for that PID. `com.apple.Preferences` has a
+special case that queries the active container for the preference domain's app
+identifier directly. For the null-container path variant, the active container
+ID is placed in thread-local state while the original source lookup runs; then
+`new_CFPrefsGetPathForTriplet` rewrites the generated filename to
+`<domain>.c_r_a_n_e.<container>.plist`. This behavior is CONFIRMED_STATIC.
 
 **Acceptance tests.** `T-F05-1` prefs written in container A are invisible in
 container B. `T-F05-2` the default container's prefs path is unchanged.

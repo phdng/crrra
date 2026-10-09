@@ -6,7 +6,6 @@ smallest investigation that would settle the question.
 | ID | Question | Why it matters | Current hypothesis | Confidence | Resolution method | Status |
 |---|---|---|---|---|---|---|
 | U-01 | What is the XPC interface vendored by `cranehelperd` (protocol name, selectors, argument types, reply block shape)? | Every privileged operation (F-19) depends on it. Without it a reconstruction must invent its own protocol, and the original daemon cannot be spoken to. | NSXPCInterface with an ObjC protocol on `CRHGlobalService`; two interfaces (`CRHGlobalServiceProtocol`, `CRHPreferencesServiceProtocol`). Selector names are those called from `CraneManager`. | INFERRED | Re-run a decompiler on `usr/local/libexec/cranehelperd` and export `__objc_methname` plus the `NSXPCInterface` construction site. | OPEN — no export exists for this binary |
-| U-02 | In `initCfprefsd`, what condition decides whether a given preference domain is redirected to a container? | Determines F-05 correctness. Getting this wrong leaks or breaks preferences. | Per-app `separateSystemAccountsEnabled` gates the redirect; domains belonging to unsupported apps pass through. | INFERRED | Read `CraneSupport_export_for_ai/decompile/BBFC.c` (`initCfprefsd`) and `B4D0.c` (`new_CFPrefsGetPathForTriplet`) line by line. The export exists and has simply not been read line by line in this pass. | OPEN — read those two files |
 | U-03 | Is the `securityd` code-signature patch mandatory or best-effort? What happens on failure? | A crash in `securityd` breaks keychain system-wide, and this is the most version-fragile part of the tweak. | Best-effort: `patchfindSecurityd` returns a failure that surfaces as `FIXUP_ERROR_DESCRIPTION` / `INSURANCE_FAILED_ERROR_MESSAGE` rather than aborting. | INFERRED | Read `decompile/11C08.c` (`patchfindSecurityd`) and its callees `update_load_commands_for_coretrust_bypass`, `macho_replace_code_signature`. | OPEN |
 | U-04 | On-disk container layout, container-identifier generation, and the "unknown containers" reconciliation rule. | F-16 and F-17 depend on it, and it determines whether a reconstruction can read containers written by this build. | Containers are directories under `<app container>/Library/___Crane_Containers/<id>` (path CONFIRMED_STATIC); identifiers are opaque generated strings; unknown containers are directories with data but no prefs entry, offered for adoption or deletion. | INFERRED | Read `CranePrefs` `getSpecifiersForContainers` (0x8B4C), `newSpecifierForContainerWithIdentifier:` (0x8920), `checkForUnknownContainers` (0xB638), plus `libcrane.dylib`'s `CraneManager` container methods. | OPEN |
 | U-05 | Exact visual layout of the container-selection menu (row order, subtitle text, checkmark placement, separators). | F-13's user-visible surface. Static evidence gives the icons and the UIMenu identifiers but not the arrangement. | Rows: one per container with its name and a checkmark on the active one, then a separator, then "New Container", then a Settings entry. | INFERRED | Read the `_configureCell:forElement:section:` hooks in `CraneSB` (`sub_14D18` callees) and `CRBadgeAction`; or obtain a device screenshot. | OPEN |
@@ -27,6 +26,7 @@ smallest investigation that would settle the question.
 
 | ID | Resolution | Evidence |
 |---|---|---|
+| U-02 | cfprefsd records the client host bundle ID + PID, skips ignored processes, resolves a non-default active container via `ClientContainerCache` (with a Preferences.app per-domain special case), and rewrites the plist basename to `<domain>.c_r_a_n_e.<container>.plist`. | CONFIRMED_STATIC — `BBFC.c`, `AB1C.c`, `ADF0.c`, `B4D0.c`, `12604.c`, `12A4C.c` |
 | U-12 | Rootless support is explicit, via libroot. `sub_7A74` in `CraneSB` is a `dispatch_once`-guarded resolver for the libroot symbols `libroot_get_jbroot_prefix` and `libroot_jbrootpath`; `/var/jb` is in the string table at 0x21A3C. It is called at 10 sites, always with `kCFCoreFoundationVersionNumber` passed through (that argument is the "jbroot-style" root, not a version selector). `CraneSupport`'s `getInjectionPlatform` (0x60C8) does the same for `TweakInject.dylib` / `substitute-inserter.dylib` / `substrate/SubstrateInserter.dylib`. | CONFIRMED_STATIC — `CraneSB/decompile/7A74.c`, `strings.txt` 0x21A3C / 0x219DD / 0x21A0D |
 | U-14 | `initNoStartUsingiCloudHooks` is reachable, from `sub_76B8` ← `initAccountsd`. `sub_76B8` hooks `AAFollowUpController`; when `kCFCoreFoundationVersionNumber >= 1740.0` it checks the bundle identifier against `com.apple.AAAccountNotificationPlugin` and then calls `initNoStartUsingiCloudHooks()`, which hooks `_updateStartUsingiCloudFollowupForAccountStore:account:oldAccount:` (CF >= 1740) or `postFollowUpWithIdentifier:userInfo:completion:` (older). Purpose: suppress the "start using iCloud" follow-up prompt per container. | CONFIRMED_STATIC — `CraneSupport/decompile/76B8.c`, `7024.c`, `callers_index.csv` |
 | U-16 | Deployment target resolved. All seven non-app binaries carry `LC_VERSION_MIN_IPHONEOS` with **min = 11.0, SDK = 14.5.0** in both slices. The two apps carry `LC_BUILD_VERSION`: iOS 14.0 / SDK 18.0 (build 16A242d, Xcode 16A242d) and iOS 12.0 / SDK 17.4 (build 15E204a, Xcode 15E204a). | CONFIRMED_STATIC — `tools/macho_inspect.py` LC parsing |
@@ -35,16 +35,17 @@ smallest investigation that would settle the question.
 
 20 uncertainties were raised. All 20 are accounted for:
 
-- **RESOLVED: 3** — U-12 (rootless via libroot), U-14 (iCloud follow-up hooks),
-  U-16 (deployment target iOS 11.0 / SDK 14.5). All three were resolved from
-  evidence already in this repository.
+- **RESOLVED: 4** — U-02 (cfprefsd redirect condition), U-12 (rootless via
+  libroot), U-14 (iCloud follow-up hooks), and U-16 (deployment target iOS
+  11.0 / SDK 14.5). All four were resolved from evidence already in this
+  repository.
 - **BLOCKED: 1** — U-19 (the app-bundle selection `postinst`), which needs the
   original `.deb` and a `dpkg-deb`/`ar` tool, neither of which is available here.
-- **OPEN: 16** — the 16 rows of the main table above.
+- **OPEN: 15** — the remaining unresolved rows of the main table above.
 - **Resolved by runtime observation: 0** — no device access exists in this
   environment, so no uncertainty can be closed by execution here.
 
-Highest-impact items to close first, in order: **U-01** (XPC protocol, blocks
-F-19), **U-02** (prefs redirect condition), **U-06** (backup format),
-**U-04** (container layout), **U-05** (menu layout, the only item that needs a
+Highest-impact open items to close first, in order: **U-01** (XPC protocol, blocks
+F-19), **U-06** (backup format), **U-04** (container layout), **U-05** (menu
+layout, the only item that needs a
 screenshot rather than code reading).

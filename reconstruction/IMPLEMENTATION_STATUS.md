@@ -39,7 +39,7 @@ F-IDs refer to `analysis/behavior_specification.md`.
 | F-02 | In-app env + dirs | **Yes** — full transcription | none |
 | F-03 | Container isolation | **Yes** — all four hooks, including the `dlopen`/`dlsym` of `CoreServicesInternal` | `new_unlink`'s missing NULL check is preserved (upstream behaviour) |
 | F-04 | Sandbox-lookup spoofing | **Yes** — full transcription | none |
-| F-05 | Per-container preferences | Stub | Redirect condition unknown (U-02) |
+| F-05 | Per-container preferences | Partial — redirect condition + filename rewrite CONFIRMED_STATIC | Private cfprefsd method/function ABI, libundirect fallback and ClientContainerCache hook path are not ported |
 | F-06 | Container resolution | Dispatch only | Hook bodies not recovered |
 | F-07 | Per-container keychain | **Not implemented** | Needs the ~180-function code-signature/Mach-O toolkit; a stub would silently weaken isolation |
 | F-08 | Per-container APNs | **Not implemented** | Depends on F-07-class work plus CraneSB's 40 hooks whose target class is aliased (U-10) |
@@ -97,7 +97,7 @@ one. The line drawn here is: **transcribe what was read, declare what was not.**
 
 | To implement | First step | Uncertainty |
 |---|---|---|
-| F-05 prefs redirect | Read `CraneSupport/decompile/BBFC.c` and `B4D0.c` line by line | U-02 |
+| F-05 prefs redirect | Port `handleSourceMessage`, `withSourceForDomain`, `__CFPrefsGetPathForTriplet` and `ClientContainerCache` with the recovered version/libundirect ABI guards | U-02 resolved; ABI port remains |
 | F-06/F-12 daemon hooks | Read `CC88.c`, `F2B4.c` and their callees | — |
 | F-07 keychain | Port or reimplement the embedded `csd_*`/`macho_*`/`pfsec_*` toolkit from the ~180 exported functions | U-03 |
 | F-08 notifications | Read `CraneSupport/decompile/9C4C.c` and resolve `CraneSB/decompile/CBEC.c`'s aliased classes | U-10 |

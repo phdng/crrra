@@ -15,7 +15,7 @@ This project established, from that evidence alone:
 - a complete inventory of all 11 binaries, 77 files, 162 hook registrations,
   44 Objective-C classes and the preference/notification/path contracts;
 - a source-independent specification of **23 features** with 76 acceptance tests;
-- a **Theos reconstruction** of six components, a byte-verified package layout,
+- a **Theos reconstruction** of seven build targets, a byte-verified package layout,
   and a GitHub Actions workflow.
 
 Five features are transcribed from the recovered pseudocode, nine are partial,
@@ -141,15 +141,16 @@ layer (`CRPaths.h`, `CRPreferences.h`, `CRManager.h`, `CRCommon.{h,m}`).
 filters, the launchd job, the five libSandy profiles, the PreferenceLoader entry,
 `Root.plist`, `Credits.plist`, the settings `Info.plist`, and every artwork asset.
 
-**Enforced by the CI workflow:** 19 required install paths, and the architecture
-rule (dylibs `arm64+arm64e`, executables thin `arm64`) — which 11 of 11 original
+**Enforced by the CI workflow:** all 23 recovered static layout files plus 7
+compiled artifacts, and the architecture rule (dylibs/bundles `arm64+arm64e`,
+executables thin `arm64`) — which 11 of 11 original
 binaries already satisfy.
 
 ## 7. Build, package, device status
 
 | Stage | Status |
 |---|---|
-| Source written | **YES** — 6 components, 172 consistency checks pass |
+| Source written | **YES** — 7 build targets; static consistency checks are re-run before claiming a pass |
 | Layout verified against the original | **YES** — 12/12 plists, 10/10 assets |
 | CI workflow authored | **YES** |
 | CI build run | **NOT_TESTED** — no remote, no `gh`, no run ID |
@@ -173,7 +174,7 @@ binaries already satisfy.
 | Recovered functions transcribed 1:1 | 17 / 2651 |
 | Hook registrations catalogued | 162 / 162 |
 | Preference keys documented | 15 global/per-app + 10 per-container + 7 notifications |
-| Uncertainties | 3 resolved, 14 open, 1 blocked |
+| Uncertainties | 4 resolved, 15 open, 1 blocked |
 | Runtime verification | **0%** |
 
 ## 9. Critical limitations
@@ -227,14 +228,14 @@ The rows below are **required actions**, not results. None has been performed.
 | To reach this status | Required action |
 |---|---|
 | `CI_BUILD_PASSED` | Push to a remote and complete a `make package` run; record the run ID and `.deb` hash in `tests/ci_build_results.md` |
-| `ARTIFACT_INSPECTED` | Unpack that `.deb` and confirm the 19 paths, the architectures and the plist equivalence |
+| `ARTIFACT_INSPECTED` | Unpack that `.deb` and confirm all 30 required package files, the architectures and the plist equivalence |
 | `RUNTIME_TEST_PASSED` (any feature) | Install on the user's authorised device and run that feature's tests in `tests/functional_tests.md` |
 | `DIFFERENTIAL_TEST_PASSED` (any feature) | Also install the original `.deb` — which requires recovering the `.deb` first (U-19) |
 | PARTIAL — FUNCTIONAL | Implement the 9 absent subsystems; the highest-value first steps are listed per-feature in `reconstruction/IMPLEMENTATION_STATUS.md` §5 |
 
-Most of the implementation work does **not** need a device or a new export. Four
-of the five highest-impact uncertainties (U-02, U-03, U-05, and most of U-06) can
-be closed by reading decompiled functions that are already in this repository.
+Most of the implementation work does **not** need a device or a new export.
+U-02 is now resolved by reading the existing cfprefsd decompilation. U-03, U-05
+and most of U-06 can likewise be closed from exports already in this repository.
 Only U-01 (the cranehelperd XPC interface) genuinely requires a new export.
 
 ## 12. Artifact index
@@ -244,7 +245,7 @@ Only U-01 (the cranehelperd XPC interface) genuinely requires a new export.
 | Analysis reports | `analysis/` — 12 reports |
 | Machine-readable indexes | `analysis/symbols_index.csv` (2651), `callers_index.csv` (6485), `strings_index.csv` (3667), `hooks_index.csv` (159), `objc_classes.json`, `preference_schema.csv`, `preference_access.csv`, `crane_api_symbols.csv`, `consistency_audit.txt` |
 | Analysis tools | `tools/` — 11 scripts, all reproducible |
-| Reconstruction | `reconstruction/` — 6 components + shared contract layer + 12 plists + 10 assets + CI workflow |
+| Reconstruction | `reconstruction/` — 7 build targets + shared contract layer + 12 plists + 10 assets; workflow at repo-root `.github/workflows/build.yml` |
 | Tests | `tests/` — 5 files: functional, regression, CI, device, UI comparison |
 | Final | `final/` — report, specification, build/install, known differences, acceptance matrix |
 | Untouched | every original file and every IDA export directory |

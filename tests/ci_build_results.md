@@ -11,7 +11,7 @@ The analysis environment has:
 - no git remote,
 - no macOS / Xcode / Theos toolchain.
 
-A workflow has been authored at `reconstruction/.github/workflows/build.yml`.
+A workflow has been authored at the repository root: `.github/workflows/build.yml`.
 Pushing this repository to a GitHub remote and letting the workflow run is the
 only way to obtain a real result. Until a run ID exists, no build claim can be
 made.
@@ -28,14 +28,14 @@ when the first run completes.
 | Step | Purpose | Fails the job on |
 |---|---|---|
 | `actions/checkout@v4` | get the source | checkout error |
-| Record toolchain versions | writes runner OS, `xcodebuild -version`, `git --version` to `$GITHUB_STEP_SUMMARY` | — |
-| `theos/theos-action@v1` | install Theos | install error |
-| `make package` | build all six components and lay out the package | any build or packaging error (`set -o pipefail` + `tee` keeps errors visible) |
-| Inspect the produced package | extract `data.tar.gz`, emit `pkg.manifest.sha256` and `deb.sha256` | missing `.deb` |
-| **Verify staged layout** | assert 19 required install paths exist, including `Library/MobileSubstrate/DynamicLibraries/ Crane.dylib` **with its leading space** | any missing path |
-| **Verify architectures** | `python3 tools/verify_architectures.py pkg` | any dylib that is not `arm64 + arm64e`, or any executable that is not thin `arm64` |
+| `waruhachi/theos-action@v2.6.3` | install Theos, SDKs and AltList | setup error |
+| Record toolchain | writes macOS/Xcode/clang/make/Theos details to `$GITHUB_STEP_SUMMARY` | toolchain command error |
+| `make clean package FINALPACKAGE=1` | build all seven reconstruction targets and lay out the package | any build or packaging error (`set -o pipefail` + `tee` keeps errors visible) |
+| Inspect the produced package | `dpkg-deb -x`, emit `pkg.manifest.sha256` and `deb.sha256` | missing/invalid `.deb` |
+| **Verify package layout** | `python3 tools/verify_package_layout.py pkg` checks 23 recovered static files + 7 compiled artifacts, including `Library/MobileSubstrate/DynamicLibraries/ Crane.dylib` | any missing file |
+| **Verify architectures** | `python3 tools/verify_architectures.py pkg` | any dylib/bundle that is not `arm64 + arm64e`, or any executable that is not thin `arm64` |
 | Upload build log | `build-log` artifact (`if: always()`) | — |
-| Upload package + manifest | `crane-package` artifact | upload error |
+| Upload package + manifest | `crane-reconstruction-package` artifact | upload error |
 
 The two verification steps are the CI equivalent of an artifact inspection: a
 green build alone would not prove the package is installable where the tweak
@@ -45,7 +45,7 @@ expects.
 
 | It would prove | It would **not** prove |
 |---|---|
-| The six components compile and link | That any hook behaves correctly |
+| The seven reconstruction targets compile and link | That any hook behaves correctly |
 | The package installs to the recovered paths | That any dylib is injected |
 | The fat-slice architectures match the original | That `cranehelperd` starts and serves its Mach services |
 | The layout plists are present | That the preference domain is the original's store |
@@ -61,12 +61,11 @@ investigated from scratch:
 
 | Risk | Where it would fail | Likely cause |
 |---|---|---|
-| AltList headers absent | `CranePrefs` compile | `AltList.framework` ships with the `firmware` package on the runner's Theos; `PSSpecifier`/`PSListController` declarations in `sources/prefs/CRPreferences.m` are minimal stand-ins that may not match the real headers |
-| `libcrane.dylib` link order | `CraneSB`, `CraneSupport`, `CranePrefs` link | `LIBRARIES = objc libcrane.dylib` resolves to Theos' staged output; the master Makefile's `package-stage` rule is what places it at `/usr/lib` |
-| Rootless staging prefix | layout verification | `THEOS_PACKAGE_SCHEME = rootless` puts files under `_jbroot` during staging; `package-stage` must copy to the un-prefixed names the verification step expects |
-| `TWEAK_NAME =  Crane` | main dylib build | Theos may reject or mangle a name with a leading space; the `package-stage` rule exists precisely because of this |
-| Private framework headers | `CraneSB` / `CraneSupport` | `BackBoardServices`, `AppSupport`, `Preferences`, `CoreData` are used only for constants and string literals in this implementation, so header availability should not matter |
-| `libbsm.0.dylib` | `CraneSupport` link | provided by the `firmware` package |
+| Private framework / SDK availability | `CraneSB`, `CraneSupport`, `CranePrefs` link | the selected Theos SDK must provide stubs for the private Apple frameworks referenced by the source |
+| Preferences declarations | `CranePrefs` compile | the source uses minimal `PS*` declarations; a compiler/API mismatch may require matching private headers |
+| `libcrane` aggregate order | `CraneSB`, `CraneSupport`, `CranePrefs` link | dependent subprojects link `-lcrane` from `$(THEOS_OBJ_DIR)` after `sources/libcrane`; CI is the first real validation of that aggregate ordering |
+| `bsm.0` availability | `CraneSupport` link | the SDK/toolchain must provide the expected libbsm stub |
+| Private cfprefsd ABI | runtime only, not build | U-02 control flow is resolved, but the three version-specific private hook entry points are intentionally not installed yet |
 
 ## 5. Record to add on the first real run
 
@@ -76,15 +75,15 @@ Commit SHA:        <fill in>
 Trigger:           <push | pull_request | workflow_dispatch>
 Runner:            <macos-14 image version>
 Xcode:             <xcodebuild -version output>
-Theos revision:    <theos/theos-action resolved revision>
-Build command:     make package  (reconstruction/)
+Theos action:      waruhachi/theos-action@v2.6.3
+Build command:     make clean package FINALPACKAGE=1  (reconstruction/)
 Result:            <success | failure>
 Warnings:          <count and text>
 .deb name:         reconstruction/packages/<name>.deb
 .deb SHA-256:      <from deb.sha256>
-Artifact names:    build-log, crane-package
+Artifact names:    build-log, crane-reconstruction-package
 pkg.manifest sha:  <from pkg.manifest.sha256>
-Verified paths:    <count of the 19 expected paths present>
+Verified files:    <30/30 required package files present>
 Architecture check: <output tail of verify_architectures.py>
 Automated tests:   none defined yet
 ```
@@ -98,7 +97,7 @@ No automated functional tests exist. What CI does check mechanically today:
 | Mach-O architectures | `reconstruction/tools/verify_architectures.py` | **PASS locally** — run against the original package tree, 11/11 binaries conform |
 | Layout plist equivalence | `python3` + `plistlib` comparison of `reconstruction/layout/**` against the original files | **PASS locally** — 12/12 semantically identical |
 | Export↔binary identity | `tools/prove_export_identity.py` | **PASS** — 5/5 exports, 100% `__text` match on the arm64 slice |
-| Layout path set | CI step | NOT_TESTED |
+| Package layout set | `reconstruction/tools/verify_package_layout.py` | NOT_TESTED in CI; verifier is authored for 30 required files |
 
 The architecture verifier and the layout comparison are the two checks that can
 be, and have been, run without a device or a macOS toolchain; their results are

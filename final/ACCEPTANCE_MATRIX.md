@@ -56,7 +56,7 @@ No row can be anything above PARTIAL — BUILD ONLY, because no CI run exists.
 
 | Req | Requirement | Result | Evidence |
 |---|---|---|---|
-| D-1 | The replacement builds through GitHub Actions | NOT_TESTED | workflow authored at `reconstruction/.github/workflows/build.yml` |
+| D-1 | The replacement builds through GitHub Actions | NOT_TESTED | workflow authored at repo-root `.github/workflows/build.yml` |
 | D-2 | The actual CI result is available | NOT_TESTED | no run exists; `tests/ci_build_results.md` records why |
 | D-3 | Source revision and artifact identifiable | NOT_TESTED | — |
 | D-4 | The generated package has been inspected | NOT_TESTED | — |
@@ -97,7 +97,7 @@ No row can be anything above PARTIAL — BUILD ONLY, because no CI run exists.
 | F-02 | In-app env + dirs | CONFIRMED_STATIC (Crane 0x65D0) | SOURCE_IMPLEMENTED | NOT_TESTED | NOT_TESTED | NOT_TESTED | NOT_TESTED | PARTIAL — BUILD ONLY |
 | F-03 | Container isolation | CONFIRMED_STATIC (Crane 0x7268/0x721C/0x71C0/0x7140/0x70B0) | SOURCE_IMPLEMENTED | NOT_TESTED | NOT_TESTED | NOT_TESTED | NOT_TESTED | PARTIAL — BUILD ONLY |
 | F-04 | Sandbox spoofing | CONFIRMED_STATIC (Crane 0x6564) | SOURCE_IMPLEMENTED | NOT_TESTED | NOT_TESTED | NOT_TESTED | NOT_TESTED | PARTIAL — BUILD ONLY |
-| F-05 | Per-container prefs | CORROBORATED (Support 0xBBFC) | PARTIAL — stub (D-05) | NOT_TESTED | NOT_TESTED | NOT_TESTED | NOT_TESTED | PARTIAL — BUILD ONLY |
+| F-05 | Per-container prefs | CONFIRMED_STATIC (Support 0xBBFC/0xAB1C/0xADF0/0xB4D0) | PARTIAL — control flow recovered, private ABI hooks pending (D-05) | NOT_TESTED | NOT_TESTED | NOT_TESTED | NOT_TESTED | PARTIAL — BUILD ONLY |
 | F-06 | Container resolution | CORROBORATED (Support 0xCC88) | PARTIAL — dispatch only | NOT_TESTED | NOT_TESTED | NOT_TESTED | NOT_TESTED | PARTIAL — BUILD ONLY |
 | F-07 | Per-container keychain | CORROBORATED (Support 0x11E5C) | NOT_IMPLEMENTED (D-06) | NOT_TESTED | NOT_TESTED | NOT_TESTED | NOT_TESTED | PARTIAL — BUILD ONLY |
 | F-08 | Per-container APNs | CORROBORATED (Support 0x9C4C, SB 0x1EB9C) | NOT_IMPLEMENTED (D-07) | NOT_TESTED | NOT_TESTED | NOT_TESTED | NOT_TESTED | PARTIAL — BUILD ONLY |

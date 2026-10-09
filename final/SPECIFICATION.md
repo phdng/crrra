@@ -146,7 +146,7 @@ Summary:
 | F-02 | In-app env + dirs | consume+unset 3 vars; create 8 directories; `setenv(overwrite=1)` | CONFIRMED_STATIC |
 | F-03 | Container isolation | `unlink` returns 0 on a match **without calling the original**; `readdir`/`readdir_r`/`URLEnumeratorGetNextURL` loop past matches | CONFIRMED_STATIC |
 | F-04 | Sandbox spoofing | original runs first, then overwrite the buffer for `getpid()` only; return value unchanged | CONFIRMED_STATIC |
-| F-05 | Per-container prefs | `CFPrefsGetPathForTriplet` is hooked with `_orig` and its result rewritten | CORROBORATED |
+| F-05 | Per-container prefs | cfprefsd tracks host bundle + PID, resolves the active container, and rewrites the plist basename to `<domain>.c_r_a_n_e.<id>.plist` | CONFIRMED_STATIC |
 | F-06 | Container resolution | `MCMContainerFactory` V2/V3 identity variants hooked with `_orig` | CORROBORATED |
 | F-07 | Per-container keychain | 4 `SecItem*` hooks with `_orig` + a securityd code-signature patch | CORROBORATED |
 | F-08 | Per-container APNs | 8 `APSCourierConnection` + 40 CraneSB hooks; topic rewrite to `<topic>.c_r_a_n_e.<id>.plist` | CORROBORATED |
@@ -227,7 +227,7 @@ directly against a device.
 
 ## 10. Unresolved uncertainties
 
-14 open, 1 blocked, 3 resolved. Full register:
+15 open, 1 blocked, 4 resolved. Full register:
 `analysis/uncertainty_register.md`.
 
 Highest impact:
@@ -235,7 +235,6 @@ Highest impact:
 | ID | Question | Blocks |
 |---|---|---|
 | U-01 | the cranehelperd XPC interface | F-19, and the honest interoperability of any rebuild |
-| U-02 | the cfprefsd redirect condition | F-05 |
 | U-04 | container on-disk layout and identifier generation | F-16, F-17 |
 | U-05 | the selection-menu layout | F-13 |
 | U-06 | backup archive, encryption and keychain dump formats | F-07, F-17 |

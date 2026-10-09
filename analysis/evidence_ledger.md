@@ -121,7 +121,7 @@ see `analysis/runtime_observations.md`.
 | Item | Why | Where tracked |
 |---|---|---|
 | The cranehelperd XPC interface | no export for that binary | U-01 |
-| The cfprefsd redirect condition | export exists, not read line by line | U-02 |
+| The cfprefsd redirect condition | resolved from `BBFC.c`, `ADF0.c`, `AB1C.c`, `B4D0.c` + `ClientContainerCache` call sites | U-02 RESOLVED |
 | The securityd patch's failure behaviour | export exists, not read line by line | U-03 |
 | Container on-disk metadata format and identifier generation | no export for libcrane | U-04 |
 | The selection-menu visual layout | needs a screenshot | U-05 |

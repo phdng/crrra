@@ -64,14 +64,18 @@ SpringBoard API that could not be recovered.
 the environment should be is correct; the plumbing that delivers it is absent.
 This is the single largest functional gap.
 
-### D-05 — Per-container preferences are not redirected
+### D-05 — Per-container preferences are not redirected yet
 
-**Original:** `initCfprefsd` hooks `CFPrefsGetPathForTriplet` and rewrites the
-resolved path. **Reconstruction:** the hook is a stub that resolves the original
-symbol and then does nothing, because the redirect condition is unknown (U-02).
+**Original:** `initCfprefsd` captures the client host bundle identifier and PID,
+uses `ClientContainerCache` to resolve a non-default active container, and hooks
+CoreFoundation's source/path resolution. The final triplet hook rewrites the
+plist basename to `<domain>.c_r_a_n_e.<container>.plist`. U-02 is now resolved
+from the decompiled control flow. **Reconstruction:** the pure filename rewrite
+is represented, but the three private cfprefsd hook entry points and their
+version-specific/libundirect ABI shims are not installed yet.
 
-**Consequence:** containers will not have isolated preferences. They will share
-the default container's.
+**Consequence:** containers still do not have isolated preferences until that
+private ABI layer is ported.
 
 ### D-06 — Keychain isolation is entirely absent
 

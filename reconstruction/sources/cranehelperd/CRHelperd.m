@@ -54,7 +54,7 @@
 /* Protocol definitions live here rather than being forward-declared, so the
  * delegate/service conformances and the NSXPCInterface are well formed. */
 @protocol CRHPreferencesServiceProtocol <NSObject>
-- (id)getPreferenceValueForKey:(NSString *)key withReply:(void (^)(id value))reply;
+- (void)getPreferenceValueForKey:(NSString *)key withReply:(void (^)(id value))reply;
 - (void)setPreferenceValue:(id)value forKey:(NSString *)key;
 @end
 
@@ -102,7 +102,7 @@
     return [NSXPCInterface interfaceWithProtocol:protocol];
 }
 
-- (id)getPreferenceValueForKey:(NSString *)key withReply:(void (^)(id))reply
+- (void)getPreferenceValueForKey:(NSString *)key withReply:(void (^)(id))reply
 {
     reply([self.delegate storedPreferenceValueForKey:key]);
 }
@@ -154,7 +154,7 @@
     BOOL libSandyWorks = CRIsDylibLoaded(CR_LIB_SANDY);
     BOOL works = mainDylibExists && libSandyWorks;
 
-    NSArray<NSString *> *broken = [NSMutableArray array];
+    NSMutableArray<NSString *> *broken = [NSMutableArray array];
     if (!mainDylibExists)
         [broken addObject:@" Crane.dylib"];
     if (!libSandyWorks)
