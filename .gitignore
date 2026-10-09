@@ -11,3 +11,5 @@ tools
 !reconstruction/tools/
 !reconstruction/tools/verify_architectures.py
 !reconstruction/tools/verify_package_layout.py
+!reconstruction/layout/
+!reconstruction/layout/**
