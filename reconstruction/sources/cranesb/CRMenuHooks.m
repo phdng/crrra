@@ -31,27 +31,26 @@ static NSString *const kApplicationContainerType =
 
 extern void CRPresentNewContainerAlert(NSString *appID);
 
-@interface NSObject (CraneMenuRuntime)
-- (NSString *)type;
-- (void)setType:(NSString *)type;
-- (void)setLocalizedTitle:(NSString *)title;
-- (void)setBundleIdentifierToLaunch:(NSString *)bundleIdentifier;
-- (NSString *)applicationBundleIdentifier;
-- (NSString *)applicationBundleIdentifierForShortcuts;
-- (id)actionView;
-- (void)setSubtitle:(NSString *)subtitle;
-- (BOOL)reversesActionOrder;
-- (NSArray *)actions;
-- (id)customContentView;
-- (id)titleLabel;
-- (id)imageView;
-- (NSString *)text;
-- (UIImage *)image;
-- (void)setValue:(id)value forKey:(NSString *)key;
-- (void)openApplication:(NSString *)appID
-            withOptions:(id)options
-             completion:(id)completion;
-@end
+static id CRDynamicObjectGetter(id object, SEL selector)
+{
+    if (!object || ![object respondsToSelector:selector])
+        return nil;
+    return ((id (*)(id, SEL))objc_msgSend)(object, selector);
+}
+
+static BOOL CRDynamicBoolGetter(id object, SEL selector)
+{
+    if (!object || ![object respondsToSelector:selector])
+        return NO;
+    return ((BOOL (*)(id, SEL))objc_msgSend)(object, selector);
+}
+
+static void CRDynamicObjectSetter(id object, SEL selector, id value)
+{
+    if (!object || ![object respondsToSelector:selector])
+        return;
+    ((void (*)(id, SEL, id))objc_msgSend)(object, selector, value);
+}
 
 @interface UIMenu (CraneMenuPrivateCopy)
 - (id)_copyWithOverrideChildren:(NSArray *)children;
@@ -107,28 +106,28 @@ static char kCRSubtitleKey;
 - (id)copyWithZone:(NSZone *)zone
 {
     id copy = [super copyWithZone:zone];
-    [copy setSubtitle:self.subtitle];
+    [(CRSubtitleMenu *)copy setSubtitle:self.subtitle];
     return copy;
 }
 
 - (id)_copyWithOverrideChildren:(NSArray *)children
 {
     id copy = [super _copyWithOverrideChildren:children];
-    [copy setSubtitle:self.subtitle];
+    [(CRSubtitleMenu *)copy setSubtitle:self.subtitle];
     return copy;
 }
 
 - (id)_immutableCopy
 {
     id copy = [super _immutableCopy];
-    [copy setSubtitle:self.subtitle];
+    [(CRSubtitleMenu *)copy setSubtitle:self.subtitle];
     return copy;
 }
 
 - (id)_mutableCopy
 {
     id copy = [super _mutableCopy];
-    [copy setSubtitle:self.subtitle];
+    [(CRSubtitleMenu *)copy setSubtitle:self.subtitle];
     return copy;
 }
 
@@ -150,7 +149,12 @@ static void CRLaunchApplicationIfEnabled(NSString *appID)
     SEL selector =
         NSSelectorFromString(@"openApplication:withOptions:completion:");
     if ([service respondsToSelector:selector]) {
-        [service openApplication:appID withOptions:nil completion:nil];
+        ((void (*)(id, SEL, id, id, id))objc_msgSend)(
+            service,
+            selector,
+            appID,
+            nil,
+            nil);
     }
 }
 
@@ -328,7 +332,7 @@ static NSArray *CRChildrenByReplacingPlaceholder(NSArray *children)
     for (NSUInteger index = 0; index < children.count; index++) {
         id child = children[index];
         NSString *title =
-            [child respondsToSelector:@selector(title)] ? [child title] : nil;
+            CRDynamicObjectGetter(child, NSSelectorFromString(@"title"));
         if ([title isEqualToString:kMenuPlaceholder])
             found = (NSInteger)index;
     }
@@ -440,7 +444,8 @@ static IMP gOrigInterfaceActionGroup;
 
 static BOOL CRShortcutIsSystem(id self, SEL _cmd)
 {
-    if ([[self type] isEqualToString:kApplicationContainerType])
+    if ([CRDynamicObjectGetter(self, NSSelectorFromString(@"type"))
+            isEqualToString:kApplicationContainerType])
         return !CRPrefBool(CRPref_ExpandContainersShortcut);
 
     BOOL (*original)(id, SEL) =
@@ -450,7 +455,8 @@ static BOOL CRShortcutIsSystem(id self, SEL _cmd)
 
 static NSInteger CRShortcutSection(id self, SEL _cmd)
 {
-    if ([[self type] isEqualToString:kApplicationContainerType])
+    if ([CRDynamicObjectGetter(self, NSSelectorFromString(@"type"))
+            isEqualToString:kApplicationContainerType])
         return CRPrefBool(CRPref_ExpandContainersShortcut) ? 1 : 2;
 
     NSInteger (*original)(id, SEL) =
@@ -460,12 +466,14 @@ static NSInteger CRShortcutSection(id self, SEL _cmd)
 
 static NSString *CRShortcutApplicationIdentifier(id self)
 {
-    if ([self respondsToSelector:@selector(applicationBundleIdentifier)])
-        return [self applicationBundleIdentifier];
-    if ([self respondsToSelector:
-            @selector(applicationBundleIdentifierForShortcuts)]) {
-        return [self applicationBundleIdentifierForShortcuts];
-    }
+    SEL primary = NSSelectorFromString(@"applicationBundleIdentifier");
+    if ([self respondsToSelector:primary])
+        return CRDynamicObjectGetter(self, primary);
+
+    SEL shortcuts =
+        NSSelectorFromString(@"applicationBundleIdentifierForShortcuts");
+    if ([self respondsToSelector:shortcuts])
+        return CRDynamicObjectGetter(self, shortcuts);
     return nil;
 }
 
@@ -498,9 +506,15 @@ static NSArray *CRApplicationShortcutItems(id self, SEL _cmd)
     if (!placeholder)
         return existing;
 
-    [placeholder setLocalizedTitle:kMenuPlaceholder];
-    [placeholder setBundleIdentifierToLaunch:nil];
-    [placeholder setType:kApplicationContainerType];
+    CRDynamicObjectSetter(placeholder,
+                          NSSelectorFromString(@"setLocalizedTitle:"),
+                          kMenuPlaceholder);
+    CRDynamicObjectSetter(placeholder,
+                          NSSelectorFromString(@"setBundleIdentifierToLaunch:"),
+                          nil);
+    CRDynamicObjectSetter(placeholder,
+                          NSSelectorFromString(@"setType:"),
+                          kApplicationContainerType);
 
     if (CRPrefBool(CRPref_ExpandContainersShortcut)) {
         return existing ? [existing arrayByAddingObject:placeholder]
@@ -550,9 +564,10 @@ static void CRApplySubtitleToCell(id cell, id element)
         return;
 
     id actionView =
-        [cell respondsToSelector:@selector(actionView)] ? [cell actionView] : nil;
-    if ([actionView respondsToSelector:@selector(setSubtitle:)])
-        [actionView setSubtitle:((CRSubtitleMenu *)element).subtitle];
+        CRDynamicObjectGetter(cell, NSSelectorFromString(@"actionView"));
+    CRDynamicObjectSetter(actionView,
+                          NSSelectorFromString(@"setSubtitle:"),
+                          ((CRSubtitleMenu *)element).subtitle);
 }
 
 static void CRConfigureCellLong(id self,
@@ -611,11 +626,9 @@ static id CRInterfaceActionGroup(id self, SEL _cmd, NSArray *elements)
         return group;
 
     NSArray *actions =
-        [group respondsToSelector:@selector(actions)] ? [group actions] : nil;
+        CRDynamicObjectGetter(group, NSSelectorFromString(@"actions"));
     BOOL reverse =
-        [self respondsToSelector:@selector(reversesActionOrder)]
-            ? [self reversesActionOrder]
-            : NO;
+        CRDynamicBoolGetter(self, NSSelectorFromString(@"reversesActionOrder"));
 
     [elements enumerateObjectsUsingBlock:
         ^(id element, NSUInteger index, BOOL *stop) {
@@ -630,28 +643,21 @@ static id CRInterfaceActionGroup(id self, SEL _cmd, NSArray *elements)
 
         id interfaceAction = actions[mapped];
         id customView =
-            [interfaceAction respondsToSelector:@selector(customContentView)]
-                ? [interfaceAction customContentView]
-                : nil;
+            CRDynamicObjectGetter(interfaceAction,
+                                  NSSelectorFromString(@"customContentView"));
         NSString *title = nil;
         UIImage *image = nil;
         if (customView) {
             id titleLabel =
-                [customView respondsToSelector:@selector(titleLabel)]
-                    ? [customView titleLabel]
-                    : nil;
-            title =
-                [titleLabel respondsToSelector:@selector(text)]
-                    ? [titleLabel text]
-                    : nil;
+                CRDynamicObjectGetter(customView,
+                                      NSSelectorFromString(@"titleLabel"));
+            title = CRDynamicObjectGetter(titleLabel,
+                                          NSSelectorFromString(@"text"));
             id imageView =
-                [customView respondsToSelector:@selector(imageView)]
-                    ? [customView imageView]
-                    : nil;
-            image =
-                [imageView respondsToSelector:@selector(image)]
-                    ? [imageView image]
-                    : nil;
+                CRDynamicObjectGetter(customView,
+                                      NSSelectorFromString(@"imageView"));
+            image = CRDynamicObjectGetter(imageView,
+                                          NSSelectorFromString(@"image"));
         }
 
         Class viewClass =
