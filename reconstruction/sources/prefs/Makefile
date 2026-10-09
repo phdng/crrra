@@ -1,8 +1,9 @@
 TARGET := iphone:clang:latest:11.0
 ARCHS = arm64 arm64e
 
-# CranePrefs.bundle/CranePrefs - the Settings UI. The original links AltList and
-# Preferences, so both are hard requirements here (see the file header).
+# CranePrefs.bundle/CranePrefs - the Settings UI. The original hard-links
+# Preferences.framework. CI's stock iOS SDK omits that private-framework stub,
+# so reconstruction/vendor supplies a linker-only TBD with the same install name.
 BUNDLE_NAME = CranePrefs
 CranePrefs_INSTALL_PATH = /Library/PreferenceBundles
 
@@ -15,6 +16,6 @@ CranePrefs_FRAMEWORKS = Foundation CoreFoundation UIKit Security CoreGraphics Lo
 CranePrefs_PRIVATE_FRAMEWORKS = Preferences
 CranePrefs_EXTRA_FRAMEWORKS = AltList
 CranePrefs_LIBRARIES  = crane z iconv
-CranePrefs_LDFLAGS += -L$(THEOS_OBJ_DIR)
+CranePrefs_LDFLAGS += -F$(THEOS_PROJECT_DIR)/vendor -L$(THEOS_OBJ_DIR)
 
 include $(THEOS_MAKE_PATH)/bundle.mk
