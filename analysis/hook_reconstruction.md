@@ -178,7 +178,9 @@ Two further module constructors (`InitFunc_0` 0x9684, `InitFunc_1` 0x9E08)
 create the alert classes. `InitFunc_0` subclasses `SBAlertItem` as
 `CRErrorAlert` with properties `errorTitle`, `errorMessage`, `actions`,
 `crane_reappearsAfterUnlock` and hooks `configure:requirePasscodeForActions:`
-and `reappearsAfterUnlock`. `InitFunc_1` creates `CRNewContainerAlert` with
+and `reappearsAfterUnlock`. This class, its retain-nonatomic associated storage,
+default-action dismissal behavior and alert-controller configuration are now
+transcribed in `reconstruction/sources/cranesb/CRErrorAlerts.m`. `InitFunc_1` creates `CRNewContainerAlert` with
 `applicationID`, hooking only `configure:requirePasscodeForActions:`.
 
 ### `crane_initSpringBoard` (0x17A14) — SpringBoard hook group
@@ -304,7 +306,13 @@ Hooks `UNSUserNotificationServerConnectionListener.listener:shouldAcceptNewConne
 adds `crane_presentMainDylibNotLoadedErrorForAppName:`,
 `crane_presentApsdRegistrationErrorForAppId:`, `crane_presentPkdRegistrationErrorForAppId:`,
 `crane_presentLibSandyNotWorkingError`,
-`crane_presentDaemonErrorWithBrokenDaemons:error:connectionWorks:`.
+`crane_presentDaemonErrorWithBrokenDaemons:error:connectionWorks:`. The listener
+bridge and the corresponding SpringBoard presenters (0x19A2C, 0x19E70,
+0x1A68C, 0x1AA34, 0x1AEC0) are transcribed in `CRErrorAlerts.m`, including the
+restart-daemons/SpringBoard action and `crane_reappearsAfterUnlock` on the pkd
+error. The separate launch-injection callback path at 0x18238/0x194EC/0x19608
+remains limited by U-01 because the recovered helper reply ABI is wider than the
+reconstructed helper protocol.
 
 ### Activator integration — `CraneActivatorManager` (0x1C4D4–0x1E284)
 

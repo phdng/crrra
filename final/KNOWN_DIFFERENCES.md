@@ -43,8 +43,9 @@ exported functions still remain at selector/call-graph/string-constant coverage
 rather than full control-flow transcription.
 
 **Consequence:** F-14, F-15 (partially),
-F-16 (partially), F-19 and F-20 remain declarations/dispatch or incomplete
-implementations. F-21 now has its recovered Choicy provider/runtime core
+F-16 (partially) and F-19 remain declarations/dispatch or incomplete
+implementations. F-20 now has its recovered `CRErrorAlert`/presenter core
+transcribed, but launch-injection verification still depends on U-01. F-21 now has its recovered Choicy provider/runtime core
 transcribed, but the reconstructed settings bundle still lacks its per-container Choicy editor. F-08 now has its recovered apsd-side token/topic hook chain
 transcribed but still lacks the SpringBoard notification-routing half and U-01 health proxy. F-11 now has its recovered lsd/device-identifier hook chain
 transcribed but still depends on U-01 helperd/PID plumbing. F-09 now has its recovered accountsd/Core Data hook chain
@@ -283,14 +284,36 @@ notification and keychain rows), the 12 backup/restore controllers, the 9
 `Root.plist` still references them, so the settings UI will reference classes
 that do not exist in the rebuilt bundle.
 
-### D-19 — Alert UI is not built
+### D-19 — Self-verification alert core is reconstructed; new-container and injection-check edges remain partial
 
-`CRErrorAlert` and `CRNewContainerAlert` are `SBAlertItem` subclasses created at
-runtime with `errorTitle` / `errorMessage` / `actions` /
-`crane_reappearsAfterUnlock` / `applicationID`. Their property sets and hook
-registrations are recovered; the presentation bodies are not implemented. The
-error *paths* exist (F-01 logs rather than alerts) but nothing is shown to the
-user.
+**Original:** `InitFunc_0` creates the runtime `SBAlertItem` subclass
+`CRErrorAlert` with retain-nonatomic `errorTitle`, `errorMessage`, `actions` and
+a BOOL `crane_reappearsAfterUnlock`. Its `configure:requirePasscodeForActions:`
+hook populates the private alert controller and supplies a default
+`deactivateForButton` handler to actions that do not already have one;
+`reappearsAfterUnlock` forwards the Crane flag. The libSandy, daemon-insurance,
+main-dylib, apsd-registration and pkd-registration presenters create these
+alerts, localize the messages, and activate them through
+`SBAlertItemsController`. Newer systems also add forwarding methods to
+`UNSUserNotificationServerConnectionListener` so runningboardd-side failures can
+reach SpringBoard. The daemon-error restart action asks cranehelperd to reload
+the affected daemons and then relaunches SpringBoard.
+
+**Reconstruction:** `CRErrorAlerts.m` now transcribes that runtime class,
+associated storage, configure/reappear behavior, daemon-name formatting, five
+presenters, close/restart actions and the iOS 15+ listener bridge without private
+SpringBoard headers. `CRApplyEnvironmentChanges` now invokes the recovered
+libSandy and daemon/insurance presenters instead of merely logging those
+fail-open errors. `CraneSB` now links Substrate explicitly because the original
+binary imports `_MSHookMessageEx`.
+
+**Remaining difference:** `CRNewContainerAlert` (InitFunc_1) is still absent.
+The launch-injection verification path at 0x18238/0x194EC/0x19608 is not wired
+because the original `fetchActiveContainerIDForProcessWithPid:reply:` block ABI
+includes status information not represented by the reconstructed U-01 helper
+protocol. The original `injectionFixupError` producer is also not reconstructed,
+so its optional `FIXUP_ERROR_DESCRIPTION` paragraph is not emitted. No device
+alert/presentation test has been performed.
 
 ### D-20 — No visual comparison was performed
 
@@ -311,8 +334,11 @@ the localization tables (204 keys), and the specifier order from `Root.plist`.
 
 The three `__mod_init_func` constructors of `CraneSB` (0x9684, 0x9E08, 0x1BC70)
 run in address order, i.e. `CRErrorAlert` and `CRNewContainerAlert` are created
-before `crane_initSpringBoard`. The reconstruction has one constructor, so any
-hook that depended on those alert classes already existing is not reproduced.
+before `crane_initSpringBoard`. The reconstruction still has one constructor,
+but it now calls `CRInitErrorAlerts()` before `CRInitSpringBoard()`, preserving
+the recovered ordering dependency for `CRErrorAlert`. `CRNewContainerAlert`
+remains absent, so only the InitFunc_1 half of the original constructor ordering
+is still unreproduced.
 
 ### D-23 — Activator core and icon ABI are reconstructed; observer refresh remains partial
 
@@ -461,7 +487,7 @@ No runtime testing was possible, so these are untested rather than known-good:
 | Partially implemented | 13 |
 | Fully implemented | 5 (F-02, F-03, F-04, F-18, and F-01's contract) |
 | Whole binaries not reconstructed | 6 of 11 |
-| Function coverage | Initial 17-function core plus later main-dylib/libroot/Activator, cfprefsd, accountsd/Core Data, lsd/device-ID, apsd token/topic isolation, Choicy override provider, containermanagerd/cache/proxy and pkd/PlugInKit transcriptions; no inflated single 1:1 count is claimed |
+| Function coverage | Initial 17-function core plus later main-dylib/libroot/Activator, cfprefsd, accountsd/Core Data, lsd/device-ID, apsd token/topic isolation, Choicy override provider, self-verification/error alerts, containermanagerd/cache/proxy and pkd/PlugInKit transcriptions; no inflated single 1:1 count is claimed |
 | Runtime tests executed | 0 |
 | Visual comparisons performed | 0 |
 

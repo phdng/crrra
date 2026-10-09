@@ -24,8 +24,8 @@
  *     neither of which is available here;
  *   * the badge view constraint maths behind initCRBadgeContextMenuActionView
  *     (0x7F58) beyond the property additions;
- *   * the SBAlertItem alert subclasses' body (InitFunc_0/1) beyond their
- *     property sets and hook registrations.
+ *   * CRNewContainerAlert (InitFunc_1) remains incomplete; CRErrorAlert and
+ *     the recovered self-verification error presenters live in CRErrorAlerts.m.
  *
  * See final/KNOWN_DIFFERENCES.md.
  */
@@ -41,6 +41,15 @@
 @interface CraneActivatorManager : NSObject
 + (void)startIfPossible;
 @end
+
+extern void CRInitErrorAlerts(void);
+extern void CRInitRunningboarddErrorAlertHooks(void);
+extern void CRPresentLibSandyNotWorkingError(void);
+extern void CRPresentDaemonError(id brokenDaemons, NSError *error,
+                                 BOOL connectionWorks);
+extern void CRPresentMainDylibNotLoadedError(NSString *appName);
+extern void CRPresentApsdRegistrationError(NSString *appID);
+extern void CRPresentPkdRegistrationError(NSString *appID);
 
 /* ------------------------------------------------------------------------- */
 /* Globals recovered from the export                                          */
@@ -147,9 +156,9 @@ static NSMutableDictionary *CRApplyEnvironmentChanges(NSMutableDictionary *envir
 
     /* libSandy must be running, otherwise the daemon cannot be reached. */
     if (!CRIsDylibLoaded(CR_LIB_SANDY)) {
-        /* crane_presentLibSandyNotWorkingError - the user sees an alert, the
-         * environment is left untouched and the app starts in its real
-         * container. Fail-open is deliberate in the original. */
+        /* 0x1B45C -> crane_presentLibSandyNotWorkingError. Fail-open is
+         * deliberate: the launch environment remains untouched. */
+        CRPresentLibSandyNotWorkingError();
         return environment;
     }
 
@@ -185,10 +194,11 @@ static NSMutableDictionary *CRApplyEnvironmentChanges(NSMutableDictionary *envir
         return env;
     }
 
-    /* crane_presentDaemonErrorWithBrokenDaemons:error:connectionWorks: */
-    NSLog(@"[Crane] refusing to redirect %@: %@ (%@)", appID, brokenDaemons,
-          insuranceError ?: lastError ?: @"unknown");
-    (void)connectionWorks;
+    /* 0x1B45C -> crane_presentDaemonError. Preserve fail-open launch
+     * semantics after presenting the recovered user-visible failure. */
+    CRPresentDaemonError(brokenDaemons,
+                         insuranceError ?: lastError,
+                         connectionWorks);
     return environment;
 }
 
@@ -417,9 +427,7 @@ static void CRInitSpringBoard(void)
      * bundle and does the Choicy integration instead. The inversion is
      * reproduced as read from the decompilation (U-07). */
     if (kCFCoreFoundationVersionNumber >= 1665.15) {
-        /* initRunningboarddErrorAlertHooks (0x17620) needs the
-         * UNSUserNotificationServerConnectionListener API, which only exists on
-         * the newer systems - hence the gate. */
+        CRInitRunningboarddErrorAlertHooks();
     } else {
         CRInitChoicyIntegration();
     }
@@ -472,6 +480,7 @@ static void CRInitFunc(void)
         NSString *executable = CRGetProcessName();
         if ([executable isEqualToString:@"SpringBoard"]) {
             gIsSpringBoard = YES;
+            CRInitErrorAlerts();
             CRInitSpringBoard();
         } else if ([executable isEqualToString:@"runningboardd"]) {
             CRInitRunningBoardd();
