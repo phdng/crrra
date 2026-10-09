@@ -37,6 +37,16 @@
 #include <notify.h>
 #include <xpc/xpc.h>
 
+/* Modern iOS SDKs declare xpc_connection_create_mach_service() as unavailable
+ * to app targets even though the symbol is present in libxpc and is imported
+ * by the recovered Crane binaries. Give the same linker symbol a private local
+ * declaration without the SDK availability annotation so the jailbreak daemon
+ * can retain the original ABI. */
+extern xpc_connection_t CRXPCConnectionCreateMachService(const char *name,
+                                                         dispatch_queue_t targetq,
+                                                         uint64_t flags)
+    __asm("_xpc_connection_create_mach_service");
+
 #pragma mark - Identifiers
 
 /* cranehelperd 0x10000DFA2 / 0x10000DFE0 */
@@ -356,15 +366,15 @@ int main(int argc, char *argv[], char *envp[])
          * A service that is already registered by an older instance must not
          * abort this one; KeepAlive means launchd will restart us anyway. */
         xpc_connection_t prefsConn =
-            xpc_connection_create_mach_service(CR_HELPERD_PREFS_MACH_SERVICE.UTF8String,
-                                               NULL, 0);
+            CRXPCConnectionCreateMachService(CR_HELPERD_PREFS_MACH_SERVICE.UTF8String,
+                                             NULL, 0);
         xpc_connection_set_event_handler(prefsConn,
             ^(xpc_connection_t c) { xpc_connection_resume(c); });
         xpc_connection_resume(prefsConn);
 
         xpc_connection_t globalConn =
-            xpc_connection_create_mach_service(CR_HELPERD_MACH_SERVICE.UTF8String,
-                                               NULL, 0);
+            CRXPCConnectionCreateMachService(CR_HELPERD_MACH_SERVICE.UTF8String,
+                                             NULL, 0);
         xpc_connection_set_event_handler(globalConn,
             ^(xpc_connection_t c) { xpc_connection_resume(c); });
         xpc_connection_resume(globalConn);
