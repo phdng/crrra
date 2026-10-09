@@ -14,8 +14,8 @@
  *     would silently weaken the keychain isolation, so it is left out and
  *     called out in final/KNOWN_DIFFERENCES.md;
  *   * initApsd's eight APSCourierConnection hooks - selectors are exact but
- *     the bodies were not read line by line. initPkd has since been transcribed
- *     into CRPkd.m;
+ *     the bodies were not read line by line. initPkd and initContainermanagerd
+ *     have since been transcribed into CRPkd.m and CRMCM.m;
  *   * initNotificationSupport in CraneSB, which depends on CraneSupport's
  *     notification-topic rewriting.
  *
@@ -112,25 +112,9 @@ static void CRInitCfprefsd(void)
 /* containermanagerd (0xCC88)                                                  */
 /* ------------------------------------------------------------------------- */
 
-static void CRInitContainermanagerd(void)
-{
-    Class factory = NSClassFromString(@"MCMContainerFactory");
-    if (!factory)
-        return;
-    /* MCMContainerFactory containerForContainerIdentity:createIfNecessary:…
-     * and groupContainerPathsForUser:clientConnection:… are hooked by the
-     * original; the bodies live in containerForContainerIdentityHook (0xC8E8)
-     * and createOrLookupContainerWithContainerIdentityV2V3Hook (0xC680). */
-    (void)factory;
-}
+extern void CRInitContainermanagerd(void);
 
-static void CRInitCraneProxy(void)
-{
-    /* kCFCoreFoundationVersionNumber >= 1932.101 only. Installs an
-     * xpc_connection_set_event_handler hook so unsandboxed XPC to the helper is
-     * caught. */
-    NSLog(@"[Crane] containermanagerd proxy hooks installed");
-}
+extern void CRInitCraneProxy(void);
 
 /* ------------------------------------------------------------------------- */
 /* accountsd (0x7200)                                                          */

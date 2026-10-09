@@ -42,9 +42,11 @@ and the core `CraneActivatorManager` listener/event flow. Most of the 2651
 exported functions still remain at selector/call-graph/string-constant coverage
 rather than full control-flow transcription.
 
-**Consequence:** F-05, F-06, F-08, F-09, F-11, F-14, F-15 (partially),
+**Consequence:** F-05, F-08, F-09, F-11, F-14, F-15 (partially),
 F-16 (partially), F-19, F-20, F-21 remain declarations/dispatch or incomplete
-implementations. F-12 now has its recovered pkd/PlugInKit server-side hook chain
+implementations. F-06 now has its recovered containermanagerd hook/cache/proxy
+chain transcribed but still depends on missing libcrane/helperd transport. F-12
+now has its recovered pkd/PlugInKit server-side hook chain
 transcribed, but still depends on the SpringBoard notification-support query-tag
 path for the container-specific notification-extension case. See
 `reconstruction/IMPLEMENTATION_STATUS.md` §2.
@@ -304,6 +306,30 @@ hooks live inside the still-unported notification-support group whose target
 classes are U-10, so container-specific notification-service extension queries
 are not yet end-to-end equivalent.
 
+### D-25 — Container-manager hooks are transcribed; PID transport remains reconstruction-limited
+
+**Original:** `CraneSupport` carries a shared `ClientContainerCache` keyed by PID,
+cleared on `com.opa334.cranesb/Loaded`. `initContainermanagerd` selects among
+modern `MCMContainerFactory`, legacy `MCMClientConnection`, and older group-path
+APIs, rewriting root/data paths into the active Crane container. On newer Core
+Foundation versions, `initCraneProxy` wraps containermanagerd XPC and accepts
+`crane_isProxyMessage` requests only from six signing-identifier allowlisted
+CraneSupport daemons.
+
+**Reconstruction:** those hook bodies, cache queue semantics, PID-capture hook,
+metadata/path copying, corrupt suppression, group rewrite and guarded modern
+proxy are transcribed in `CRMCM.m` without private MobileContainerManager
+headers. Audit-token/SecTask SPI is resolved dynamically and fails closed if it
+is unavailable.
+
+**Remaining difference:** the original cache obtains a PID's active container
+through libcrane's synchronous cranehelperd proxy, with an error-specific direct
+containermanagerd fallback. The reconstructed `CraneManager`/helperd transport
+is still U-01 and currently answers `DEFAULT`, and libcrane's private
+`_populateContainerDirectory:ofType:` body is unavailable. The hook chain is
+therefore source-complete at the recovered CraneSupport layer but not claimed
+end-to-end behaviourally equivalent.
+
 ## 7. Untested edge cases
 
 No runtime testing was possible, so these are untested rather than known-good:
@@ -341,7 +367,7 @@ No runtime testing was possible, so these are untested rather than known-good:
 | Partially implemented | 10 |
 | Fully implemented | 5 (F-02, F-03, F-04, F-18, and F-01's contract) |
 | Whole binaries not reconstructed | 6 of 11 |
-| Function coverage | Initial 17-function core plus later main-dylib/libroot/Activator and pkd/PlugInKit transcriptions; no inflated single 1:1 count is claimed |
+| Function coverage | Initial 17-function core plus later main-dylib/libroot/Activator, containermanagerd/cache/proxy and pkd/PlugInKit transcriptions; no inflated single 1:1 count is claimed |
 | Runtime tests executed | 0 |
 | Visual comparisons performed | 0 |
 
