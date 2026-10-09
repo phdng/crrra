@@ -7,7 +7,7 @@ ARCHS = arm64
 #   UserName root, RunAtLoad, KeepAlive, ProcessType Interactive
 #   EnvironmentVariables: _MSSafeMode=1, _SafeMode=1
 #   MachServices: com.opa334.cranehelperd.xpc, com.opa334.cranehelperd.preferences.xpc
-PROGRAM_NAME = cranehelperd
+TOOL_NAME = cranehelperd
 cranehelperd_INSTALL_PATH = /usr/local/libexec
 
 include $(THEOS)/makefiles/common.mk
@@ -17,4 +17,4 @@ cranehelperd_CFLAGS  = -fobjc-arc -I$(THEOS_PROJECT_DIR)/sources/common
 cranehelperd_FRAMEWORKS = Foundation CoreFoundation Security
 cranehelperd_LIBRARIES  = objc
 
-include $(THEOS_MAKE_PATH)/program.mk
+include $(THEOS_MAKE_PATH)/tool.mk

@@ -17,7 +17,6 @@ export TARGET = iphone:clang:latest:11.0
 export IPHONEOS_DEPLOYMENT_TARGET = 11.0
 export GO_EASY_ON_ME = 1
 export THEOS_PACKAGE_BASE_VERSION = 6.0
-export THEOS_PACKAGE_VERSION = 6.0
 
 # Dependency packages present on a standard jailbreak. `firmware` is required
 # because AltList.framework (linked by CranePrefs) lives in it.
