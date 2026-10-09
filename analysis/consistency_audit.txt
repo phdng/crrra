@@ -1,0 +1,85 @@
+all required deliverables exist                      PASS
+total exported functions = 2651                      PASS  2651
+ida_export_coverage lists Crane.dylib = 68           PASS
+ida_export_coverage lists CraneSB.dylib = 538        PASS
+ida_export_coverage lists CraneSupport.dylib = 624   PASS
+ida_export_coverage lists CranePrefs = 1368          PASS
+ida_export_coverage lists CraneApplication = 53      PASS
+ida_export_coverage states 2651 total                PASS
+binary_inventory states 11 Mach-O binaries           PASS
+environment_report states 2651 exported              PASS
+environment_report states min OS 11.0                PASS
+environment_report states SDK 14.5.0                 PASS
+functional_tests defines 76 unique test ids          PASS  76 found
+functional_tests states 76                           PASS
+device_test_results agrees on 76 tests               PASS
+SPECIFICATION F01 count = 7                          PASS
+SPECIFICATION F02 count = 4                          PASS
+SPECIFICATION F03 count = 6                          PASS
+SPECIFICATION F04 count = 4                          PASS
+SPECIFICATION F05 count = 3                          PASS
+SPECIFICATION F06 count = 2                          PASS
+SPECIFICATION F07 count = 3                          PASS
+SPECIFICATION F08 count = 4                          PASS
+SPECIFICATION F09 count = 2                          PASS
+SPECIFICATION F10 count = 2                          PASS
+SPECIFICATION F11 count = 3                          PASS
+SPECIFICATION F12 count = 2                          PASS
+SPECIFICATION F13 count = 5                          PASS
+SPECIFICATION F14 count = 3                          PASS
+SPECIFICATION F15 count = 4                          PASS
+SPECIFICATION F16 count = 3                          PASS
+SPECIFICATION F17 count = 5                          PASS
+SPECIFICATION F18 count = 2                          PASS
+SPECIFICATION F19 count = 4                          PASS
+SPECIFICATION F20 count = 2                          PASS
+SPECIFICATION F21 count = 2                          PASS
+SPECIFICATION F22 count = 2                          PASS
+SPECIFICATION F23 count = 2                          PASS
+all 23 feature test counts appear in SPECIFICATION   PASS  []
+behavior_specification defines F-01..F-23            PASS  23 features
+ACCEPTANCE_MATRIX covers all 23 features             PASS  matrix=23 spec=23
+SPECIFICATION covers all 23 features                 PASS  spec=23
+uncertainty register: RESOLVED rollup matches rows   PASS  resolved=3
+uncertainty register: OPEN rollup matches open rows  PASS  table rows=17 blocked=1 open=16 stated=16
+uncertainty register: every U-nn accounted for       PASS  open=16 resolved=3
+uncertainty register: main + resolved tables cover U-01..U-20 PASS
+uncertainty register: BLOCKED rollup matches rows    PASS  blocked=1
+no unnegated passed-status claim in analysis/environment_report.md PASS
+no unnegated passed-status claim in analysis/package_inventory.md PASS
+no unnegated passed-status claim in analysis/binary_inventory.md PASS
+no unnegated passed-status claim in analysis/ida_export_inventory.md PASS
+no unnegated passed-status claim in analysis/ida_export_coverage.md PASS
+no unnegated passed-status claim in analysis/symbols_and_selectors.md PASS
+no unnegated passed-status claim in analysis/hook_reconstruction.md PASS
+no unnegated passed-status claim in analysis/preference_schema.md PASS
+no unnegated passed-status claim in analysis/class_and_method_map.md PASS
+no unnegated passed-status claim in analysis/behavior_specification.md PASS
+no unnegated passed-status claim in analysis/uncertainty_register.md PASS
+no unnegated passed-status claim in analysis/evidence_ledger.md PASS
+no unnegated passed-status claim in analysis/ui_specification.md PASS
+no unnegated passed-status claim in analysis/runtime_observations.md PASS
+no unnegated passed-status claim in tests/ci_build_results.md PASS
+no unnegated passed-status claim in tests/device_test_results.md PASS
+no unnegated passed-status claim in tests/functional_tests.md PASS
+no unnegated passed-status claim in tests/regression_results.md PASS
+no unnegated passed-status claim in tests/ui_comparison.md PASS
+no unnegated passed-status claim in final/RECONSTRUCTION_REPORT.md PASS
+no unnegated passed-status claim in final/SPECIFICATION.md PASS
+no unnegated passed-status claim in final/BUILD_AND_INSTALL.md PASS
+no unnegated passed-status claim in final/KNOWN_DIFFERENCES.md PASS
+no unnegated passed-status claim in final/ACCEPTANCE_MATRIX.md PASS
+no unnegated passed-status claim in reconstruction/IMPLEMENTATION_STATUS.md PASS
+no unnegated passed-status claim in reconstruction/Makefile PASS
+no unnegated passed-status claim in reconstruction/control PASS
+no unnegated passed-status claim in reconstruction/.github/workflows/build.yml PASS
+ACCEPTANCE_MATRIX overall status is PARTIAL - BUILD ONLY PASS
+KNOWN_DIFFERENCES states it is not a behavioural equivalent PASS
+KNOWN_DIFFERENCES documents 0 runtime tests          PASS
+architecture verifier: 11 binaries, 0 failures       PASS  11 Mach-O binaries checked, 0 failures
+12 layout plists semantically identical to the original PASS  []
+regression_results states 12/12                      PASS
+reconstruction: every CR identifier resolves         PASS  RESULT: clean
+reconstruction: braces and parens balanced in all .m files PASS
+
+84 checks, 83 passed, 0 failed

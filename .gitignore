@@ -1,0 +1,10 @@
+Applications/
+Library/
+.catdesk/
+.theos/
+.theos-sdk/
+dist/
+packages/
+__pycache__/
+*.pyc
+tools

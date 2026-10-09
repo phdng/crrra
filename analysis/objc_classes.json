@@ -1,0 +1,3286 @@
+{
+ "Crane.dylib": {},
+ "CraneSB.dylib": {
+  "CRBadgeAction": {
+   "addr": "0x2CD00",
+   "instance_methods": [
+    {
+     "sel": "badgeText",
+     "types": "@16@0:8",
+     "imp": "0x1C188"
+    },
+    {
+     "sel": "setBadgeText:",
+     "types": "v24@0:8@16",
+     "imp": "0x1C194"
+    },
+    {
+     "sel": "associatedApplicationID",
+     "types": "@16@0:8",
+     "imp": "0x1C1A4"
+    },
+    {
+     "sel": "setAssociatedApplicationID:",
+     "types": "v24@0:8@16",
+     "imp": "0x1C1B0"
+    }
+   ],
+   "class_methods": [],
+   "categories": []
+  },
+  "CRSubtitleMenu": {
+   "addr": "0x2CD28",
+   "instance_methods": [
+    {
+     "sel": "subtitle",
+     "types": "@16@0:8",
+     "imp": "0x1C2B0"
+    },
+    {
+     "sel": "setSubtitle:",
+     "types": "v24@0:8@16",
+     "imp": "0x1C2BC"
+    },
+    {
+     "sel": "copyWithZone:",
+     "types": "@24@0:8^{_NSZone=}16",
+     "imp": "0x1C2CC"
+    },
+    {
+     "sel": "_copyWithOverrideChildren:",
+     "types": "@24@0:8@16",
+     "imp": "0x1C34C"
+    },
+    {
+     "sel": "_immutableCopy",
+     "types": "@16@0:8",
+     "imp": "0x1C3CC"
+    },
+    {
+     "sel": "_mutableCopy",
+     "types": "@16@0:8",
+     "imp": "0x1C454"
+    }
+   ],
+   "class_methods": [],
+   "categories": []
+  },
+  "ClientContainerCache": {
+   "addr": "0x2CE18",
+   "instance_methods": [
+    {
+     "sel": "init",
+     "types": "@16@0:8",
+     "imp": "0x2019C"
+    },
+    {
+     "sel": "_registerForClearMessages",
+     "types": "v16@0:8",
+     "imp": "0x20244"
+    },
+    {
+     "sel": "_getActiveContainerFromCacheForPid:",
+     "types": "@20@0:8i16",
+     "imp": "0x20274"
+    },
+    {
+     "sel": "_setActiveContainer:toCacheForPid:",
+     "types": "v28@0:8@16i24",
+     "imp": "0x20434"
+    },
+    {
+     "sel": "_clearActiveContainerCache",
+     "types": "v16@0:8",
+     "imp": "0x20534"
+    },
+    {
+     "sel": "activeContainerIdentifierForPid:",
+     "types": "@20@0:8i16",
+     "imp": "0x205CC"
+    },
+    {
+     "sel": ".cxx_destruct",
+     "types": "v16@0:8",
+     "imp": "0x20B3C"
+    }
+   ],
+   "class_methods": [],
+   "categories": []
+  },
+  "CraneActivatorManager": {
+   "addr": "0x2CD78",
+   "instance_methods": [
+    {
+     "sel": "init",
+     "types": "@16@0:8",
+     "imp": "0x1C61C"
+    },
+    {
+     "sel": "dealloc",
+     "types": "v16@0:8",
+     "imp": "0x1C740"
+    },
+    {
+     "sel": "didChangeContainersOfApplicationWithIdentifier:",
+     "types": "v24@0:8@16",
+     "imp": "0x1C814"
+    },
+    {
+     "sel": "applicationsDidInstall:",
+     "types": "v24@0:8@16",
+     "imp": "0x1C848"
+    },
+    {
+     "sel": "applicationsDidUninstall:",
+     "types": "v24@0:8@16",
+     "imp": "0x1C87C"
+    },
+    {
+     "sel": "listenerNameForSettingActiveContainerOfApplicationWithIdentifier:toActiveContainerWithIdentifier:",
+     "types": "@32@0:8@16@24",
+     "imp": "0x1C8B0"
+    },
+    {
+     "sel": "listenerNameIsSetActiveContainerListener:",
+     "types": "B24@0:8@16",
+     "imp": "0x1C924"
+    },
+    {
+     "sel": "applicationIdentifierForSetActiveContainerListenerName:",
+     "types": "@24@0:8@16",
+     "imp": "0x1C93C"
+    },
+    {
+     "sel": "containerIdentifierForSetActiveContainerListenerName:",
+     "types": "@24@0:8@16",
+     "imp": "0x1CA00"
+    },
+    {
+     "sel": "unregisterAllListeners",
+     "types": "v16@0:8",
+     "imp": "0x1CAC4"
+    },
+    {
+     "sel": "updateAvailableListeners",
+     "types": "v16@0:8",
+     "imp": "0x1CAD0"
+    },
+    {
+     "sel": "updateSetActiveContainerListeners",
+     "types": "v16@0:8",
+     "imp": "0x1CADC"
+    },
+    {
+     "sel": "unregisterSetActiveContainerListeners",
+     "types": "v16@0:8",
+     "imp": "0x1CEF4"
+    },
+    {
+     "sel": "activator:receiveEvent:forListenerName:",
+     "types": "v40@0:8@16@24@32",
+     "imp": "0x1CF4C"
+    },
+    {
+     "sel": "activator:abortEvent:forListenerName:",
+     "types": "v40@0:8@16@24@32",
+     "imp": "0x1D130"
+    },
+    {
+     "sel": "activator:receiveUnlockingDeviceEvent:forListenerName:",
+     "types": "B40@0:8@16@24@32",
+     "imp": "0x1D234"
+    },
+    {
+     "sel": "activator:requiresLocalizedTitleForListenerName:",
+     "types": "@32@0:8@16@24",
+     "imp": "0x1D23C"
+    },
+    {
+     "sel": "activator:requiresLocalizedDescriptionForListenerName:",
+     "types": "@32@0:8@16@24",
+     "imp": "0x1D3CC"
+    },
+    {
+     "sel": "activator:requiresLocalizedGroupForListenerName:",
+     "types": "@32@0:8@16@24",
+     "imp": "0x1D52C"
+    },
+    {
+     "sel": "activator:requiresRequiresAssignmentForListenerName:",
+     "types": "@32@0:8@16@24",
+     "imp": "0x1D538"
+    },
+    {
+     "sel": "activator:requiresCompatibleEventModesForListenerWithName:",
+     "types": "@32@0:8@16@24",
+     "imp": "0x1D550"
+    },
+    {
+     "sel": "activator:requiresIsCompatibleWithEventName:listenerName:",
+     "types": "@40@0:8@16@24@32",
+     "imp": "0x1D59C"
+    },
+    {
+     "sel": "activator:requiresExclusiveAssignmentGroupsForListenerName:",
+     "types": "@32@0:8@16@24",
+     "imp": "0x1D5B4"
+    },
+    {
+     "sel": "activator:requiresInfoDictionaryValueOfKey:forListenerWithName:",
+     "types": "@40@0:8@16@24@32",
+     "imp": "0x1D5C8"
+    },
+    {
+     "sel": "activator:requiresNeedsPoweredDisplayForListenerName:",
+     "types": "B32@0:8@16@24",
+     "imp": "0x1D5D0"
+    },
+    {
+     "sel": "imageForApplicationWithIdentifier:scale:",
+     "types": "@32@0:8@16d24",
+     "imp": "0x1D5D8"
+    },
+    {
+     "sel": "activator:requiresIconForListenerName:scale:",
+     "types": "@40@0:8@16@24d32",
+     "imp": "0x1D6B8"
+    },
+    {
+     "sel": "activator:requiresSmallIconForListenerName:scale:",
+     "types": "@40@0:8@16@24d32",
+     "imp": "0x1D76C"
+    },
+    {
+     "sel": "activator:requiresSupportsRemovalForListenerWithName:",
+     "types": "B32@0:8@16@24",
+     "imp": "0x1D820"
+    },
+    {
+     "sel": "activator:requestsRemovalForListenerWithName:",
+     "types": "v32@0:8@16@24",
+     "imp": "0x1D828"
+    },
+    {
+     "sel": "changedToContainerEventNameForContainerIdentifier:ofApplicationWithIdentifier:",
+     "types": "@32@0:8@16@24",
+     "imp": "0x1D82C"
+    },
+    {
+     "sel": "eventNameIsChangedToContainerEvent:",
+     "types": "B24@0:8@16",
+     "imp": "0x1D8A0"
+    },
+    {
+     "sel": "containerIDForChangedToContainerEventName:",
+     "types": "@24@0:8@16",
+     "imp": "0x1D93C"
+    },
+    {
+     "sel": "applicationIDForChangedToContainerEventName:",
+     "types": "@24@0:8@16",
+     "imp": "0x1DA00"
+    },
+    {
+     "sel": "updateProvidedEvents",
+     "types": "v16@0:8",
+     "imp": "0x1DAC4"
+    },
+    {
+     "sel": "unregisterAllEvents",
+     "types": "v16@0:8",
+     "imp": "0x1DEE0"
+    },
+    {
+     "sel": "localizedGroupForEventName:",
+     "types": "@24@0:8@16",
+     "imp": "0x1DF38"
+    },
+    {
+     "sel": "localizedTitleForEventName:",
+     "types": "@24@0:8@16",
+     "imp": "0x1DF44"
+    },
+    {
+     "sel": "localizedDescriptionForEventName:",
+     "types": "@24@0:8@16",
+     "imp": "0x1E0D4"
+    },
+    {
+     "sel": "eventWithName:isCompatibleWithMode:",
+     "types": "B32@0:8@16@24",
+     "imp": "0x1E284"
+    },
+    {
+     "sel": ".cxx_destruct",
+     "types": "v16@0:8",
+     "imp": "0x1E28C"
+    }
+   ],
+   "class_methods": [],
+   "categories": []
+  },
+  "CraneChoicyOverwriteProvider": {
+   "addr": "0x2CDF0",
+   "instance_methods": [
+    {
+     "sel": "providedOverridesForApplication:",
+     "types": "I24@0:8@16",
+     "imp": "0x1E3A4"
+    },
+    {
+     "sel": "customTweakConfigurationEnabledOverrideForApplication:",
+     "types": "B24@0:8@16",
+     "imp": "0x1E4E0"
+    },
+    {
+     "sel": "overwriteGlobalConfigurationOverrideForApplication:",
+     "types": "B24@0:8@16",
+     "imp": "0x1E65C"
+    },
+    {
+     "sel": "disableTweakInjectionOverrideForApplication:",
+     "types": "B24@0:8@16",
+     "imp": "0x1E798"
+    },
+    {
+     "sel": "customTweakConfigurationAllowDenyModeOverrideForApplication:",
+     "types": "B24@0:8@16",
+     "imp": "0x1E7A0"
+    },
+    {
+     "sel": "customTweakConfigurationAllowOrDenyListOverrideForApplication:",
+     "types": "@24@0:8@16",
+     "imp": "0x1E920"
+    }
+   ],
+   "class_methods": [],
+   "categories": []
+  }
+ },
+ "CraneSupport.dylib": {
+  "ClientContainerCache": {
+   "addr": "0x22B80",
+   "instance_methods": [
+    {
+     "sel": "init",
+     "types": "@16@0:8",
+     "imp": "0x1267C"
+    },
+    {
+     "sel": "_registerForClearMessages",
+     "types": "v16@0:8",
+     "imp": "0x12724"
+    },
+    {
+     "sel": "_getActiveContainerFromCacheForPid:",
+     "types": "@20@0:8i16",
+     "imp": "0x12754"
+    },
+    {
+     "sel": "_setActiveContainer:toCacheForPid:",
+     "types": "v28@0:8@16i24",
+     "imp": "0x128B4"
+    },
+    {
+     "sel": "_clearActiveContainerCache",
+     "types": "v16@0:8",
+     "imp": "0x129B4"
+    },
+    {
+     "sel": "activeContainerIdentifierForPid:",
+     "types": "@20@0:8i16",
+     "imp": "0x12A4C"
+    },
+    {
+     "sel": ".cxx_destruct",
+     "types": "v16@0:8",
+     "imp": "0x12FBC"
+    }
+   ],
+   "class_methods": [],
+   "categories": []
+  }
+ },
+ "CranePrefs": {
+  "CRPActiveContainerListItemsController": {
+   "addr": "0x59500",
+   "instance_methods": [
+    {
+     "sel": "applicationIdentifier",
+     "types": "@16@0:8",
+     "imp": "0x747C"
+    },
+    {
+     "sel": "tableView:didSelectRowAtIndexPath:",
+     "types": "v32@0:8@16@24",
+     "imp": "0x74D8"
+    }
+   ],
+   "class_methods": [],
+   "categories": []
+  },
+  "CRPAlertWithLoadingBarController": {
+   "addr": "0x59578",
+   "instance_methods": [
+    {
+     "sel": "init",
+     "types": "@16@0:8",
+     "imp": "0x78E8"
+    },
+    {
+     "sel": "viewDidLoad",
+     "types": "v16@0:8",
+     "imp": "0x7970"
+    },
+    {
+     "sel": "viewDidLayoutSubviews",
+     "types": "v16@0:8",
+     "imp": "0x79C0"
+    },
+    {
+     "sel": "loadingBar",
+     "types": "@16@0:8",
+     "imp": "0x7AA4"
+    },
+    {
+     "sel": "setLoadingBar:",
+     "types": "v24@0:8@16",
+     "imp": "0x7AB4"
+    },
+    {
+     "sel": ".cxx_destruct",
+     "types": "v16@0:8",
+     "imp": "0x7AC8"
+    }
+   ],
+   "class_methods": [],
+   "categories": []
+  },
+  "CRPApplicationConfigurationListController": {
+   "addr": "0x595A0",
+   "instance_methods": [
+    {
+     "sel": "init",
+     "types": "@16@0:8",
+     "imp": "0x7ADC"
+    },
+    {
+     "sel": "dealloc",
+     "types": "v16@0:8",
+     "imp": "0x7B5C"
+    },
+    {
+     "sel": "didChangeSettingsForApplicationWithIdentifier:",
+     "types": "v24@0:8@16",
+     "imp": "0x7BD4"
+    },
+    {
+     "sel": "didChangeContainersOfApplicationWithIdentifier:",
+     "types": "v24@0:8@16",
+     "imp": "0x7CC8"
+    },
+    {
+     "sel": "didChangeContainerSettingsForContainerWithIdentifier:onApplicationWithIdentifier:",
+     "types": "v32@0:8@16@24",
+     "imp": "0x7DD4"
+    },
+    {
+     "sel": "containerNameForContainerIdentifier:",
+     "types": "@24@0:8@16",
+     "imp": "0x7EE0"
+    },
+    {
+     "sel": "containersForApplication",
+     "types": "@16@0:8",
+     "imp": "0x7F98"
+    },
+    {
+     "sel": "containerIdentifersForApplication",
+     "types": "@16@0:8",
+     "imp": "0x7FB8"
+    },
+    {
+     "sel": "containerNamesForApplication",
+     "types": "@16@0:8",
+     "imp": "0x8154"
+    },
+    {
+     "sel": "applicationIdentifier",
+     "types": "@16@0:8",
+     "imp": "0x8310"
+    },
+    {
+     "sel": "containerIdentifierForSpecifier:",
+     "types": "@24@0:8@16",
+     "imp": "0x836C"
+    },
+    {
+     "sel": "setContainerIdentifier:ofSpecifier:",
+     "types": "v32@0:8@16@24",
+     "imp": "0x8384"
+    },
+    {
+     "sel": "renameContainerWithIdentifier:toName:",
+     "types": "v32@0:8@16@24",
+     "imp": "0x8400"
+    },
+    {
+     "sel": "removeContainerWithIdentifier:",
+     "types": "v24@0:8@16",
+     "imp": "0x86A8"
+    },
+    {
+     "sel": "newSpecifierForContainerWithIdentifier:",
+     "types": "@24@0:8@16",
+     "imp": "0x8920"
+    },
+    {
+     "sel": "loadApplicationSettings",
+     "types": "v16@0:8",
+     "imp": "0x8A94"
+    },
+    {
+     "sel": "getSpecifiersForContainers",
+     "types": "@16@0:8",
+     "imp": "0x8B4C"
+    },
+    {
+     "sel": "specifiers",
+     "types": "@16@0:8",
+     "imp": "0x8D00"
+    },
+    {
+     "sel": "addButtonPressed",
+     "types": "v16@0:8",
+     "imp": "0x9848"
+    },
+    {
+     "sel": "reloadActiveContainer",
+     "types": "v16@0:8",
+     "imp": "0x9D3C"
+    },
+    {
+     "sel": "reloadContainerNames",
+     "types": "v16@0:8",
+     "imp": "0x9E24"
+    },
+    {
+     "sel": "reloadContainerSpecifiers",
+     "types": "v16@0:8",
+     "imp": "0xA038"
+    },
+    {
+     "sel": "setActiveContainer:specifier:",
+     "types": "v32@0:8@16@24",
+     "imp": "0xA0F8"
+    },
+    {
+     "sel": "readActiveContainer:",
+     "types": "@24@0:8@16",
+     "imp": "0xA190"
+    },
+    {
+     "sel": "setSeparateNotificationRegistrationsValue:specifier:",
+     "types": "v32@0:8@16@24",
+     "imp": "0xA224"
+    },
+    {
+     "sel": "setSeparateSystemAccountsValue:specifier:",
+     "types": "v32@0:8@16@24",
+     "imp": "0xA4B8"
+    },
+    {
+     "sel": "setGameCenterSupportValue:specifier:",
+     "types": "v32@0:8@16@24",
+     "imp": "0xA670"
+    },
+    {
+     "sel": "setPreferenceValue:specifier:",
+     "types": "v32@0:8@16@24",
+     "imp": "0xA770"
+    },
+    {
+     "sel": "setPreferenceValue:key:",
+     "types": "v32@0:8@16@24",
+     "imp": "0xA7EC"
+    },
+    {
+     "sel": "readPreferenceValue:",
+     "types": "@24@0:8@16",
+     "imp": "0xA948"
+    },
+    {
+     "sel": "readPreferenceValueForKey:",
+     "types": "@24@0:8@16",
+     "imp": "0xA9F4"
+    },
+    {
+     "sel": "tableView:canEditRowAtIndexPath:",
+     "types": "B32@0:8@16@24",
+     "imp": "0xAA0C"
+    },
+    {
+     "sel": "tableView:editingStyleForRowAtIndexPath:",
+     "types": "q32@0:8@16@24",
+     "imp": "0xAABC"
+    },
+    {
+     "sel": "tableView:canMoveRowAtIndexPath:",
+     "types": "B32@0:8@16@24",
+     "imp": "0xABF0"
+    },
+    {
+     "sel": "tableView:targetIndexPathForMoveFromRowAtIndexPath:toProposedIndexPath:",
+     "types": "@40@0:8@16@24@32",
+     "imp": "0xACAC"
+    },
+    {
+     "sel": "tableView:moveRowAtIndexPath:toIndexPath:",
+     "types": "v40@0:8@16@24@32",
+     "imp": "0xADD8"
+    },
+    {
+     "sel": "tableView:commitEditingStyle:forRowAtIndexPath:",
+     "types": "v40@0:8@16q24@32",
+     "imp": "0xAF4C"
+    },
+    {
+     "sel": "performDeletionActionForSpecifier:",
+     "types": "B24@0:8@16",
+     "imp": "0xB504"
+    },
+    {
+     "sel": "viewDidLoad",
+     "types": "v16@0:8",
+     "imp": "0xB5D8"
+    },
+    {
+     "sel": "checkForUnknownContainers",
+     "types": "v16@0:8",
+     "imp": "0xB638"
+    },
+    {
+     "sel": "checkForSlices",
+     "types": "v16@0:8",
+     "imp": "0xBFF4"
+    },
+    {
+     "sel": "viewWillDisappear:",
+     "types": "v20@0:8B16",
+     "imp": "0xCC88"
+    },
+    {
+     "sel": ".cxx_destruct",
+     "types": "v16@0:8",
+     "imp": "0xCD3C"
+    }
+   ],
+   "class_methods": [],
+   "categories": []
+  },
+  "CRPApplicationListSubcontrollerController": {
+   "addr": "0x59618",
+   "instance_methods": [
+    {
+     "sel": "shouldShowSubtitles",
+     "types": "B16@0:8",
+     "imp": "0xCD7C"
+    },
+    {
+     "sel": "subtitleForApplicationWithIdentifier:",
+     "types": "@24@0:8@16",
+     "imp": "0xCD84"
+    },
+    {
+     "sel": "previewStringForApplicationWithIdentifier:",
+     "types": "@24@0:8@16",
+     "imp": "0xCE8C"
+    }
+   ],
+   "class_methods": [],
+   "categories": []
+  },
+  "CRPBackupContainer": {
+   "addr": "0x59DC0",
+   "instance_methods": [
+    {
+     "sel": "initWithContainerIdentifier:ofApplicationWithIdentifier:",
+     "types": "@32@0:8@16@24",
+     "imp": "0x232B4"
+    },
+    {
+     "sel": "initWithBackupInfoDictionary:",
+     "types": "@24@0:8@16",
+     "imp": "0x23358"
+    },
+    {
+     "sel": "initWithBackupContainer:",
+     "types": "@24@0:8@16",
+     "imp": "0x2344C"
+    },
+    {
+     "sel": "initNonExistantContainerWithName:ofApplicationWithIdentifier:",
+     "types": "@32@0:8@16@24",
+     "imp": "0x2354C"
+    },
+    {
+     "sel": "dictionaryRepresentation",
+     "types": "@16@0:8",
+     "imp": "0x235F0"
+    },
+    {
+     "sel": "applicationName",
+     "types": "@16@0:8",
+     "imp": "0x236C8"
+    },
+    {
+     "sel": "containerName",
+     "types": "@16@0:8",
+     "imp": "0x23774"
+    },
+    {
+     "sel": "cachedApplicationName",
+     "types": "@16@0:8",
+     "imp": "0x2384C"
+    },
+    {
+     "sel": "cachedContainerName",
+     "types": "@16@0:8",
+     "imp": "0x23854"
+    },
+    {
+     "sel": "setContainerName:",
+     "types": "v24@0:8@16",
+     "imp": "0x2385C"
+    },
+    {
+     "sel": "existsOnDevice",
+     "types": "B16@0:8",
+     "imp": "0x23868"
+    },
+    {
+     "sel": "createIfNotExists",
+     "types": "v16@0:8",
+     "imp": "0x23950"
+    },
+    {
+     "sel": "isApplicationInstalledOnDevice",
+     "types": "B16@0:8",
+     "imp": "0x239D4"
+    },
+    {
+     "sel": "reloadApplicationIfContainerActive",
+     "types": "v16@0:8",
+     "imp": "0x23A30"
+    },
+    {
+     "sel": "isEqual:",
+     "types": "B24@0:8@16",
+     "imp": "0x23A80"
+    },
+    {
+     "sel": "hash",
+     "types": "Q16@0:8",
+     "imp": "0x23B20"
+    },
+    {
+     "sel": "description",
+     "types": "@16@0:8",
+     "imp": "0x23B6C"
+    },
+    {
+     "sel": "copyWithZone:",
+     "types": "@24@0:8^{_NSZone=}16",
+     "imp": "0x23BAC"
+    },
+    {
+     "sel": "applicationID",
+     "types": "@16@0:8",
+     "imp": "0x23BE0"
+    },
+    {
+     "sel": "setApplicationID:",
+     "types": "v24@0:8@16",
+     "imp": "0x23BE8"
+    },
+    {
+     "sel": "containerID",
+     "types": "@16@0:8",
+     "imp": "0x23BF4"
+    },
+    {
+     "sel": "setContainerID:",
+     "types": "v24@0:8@16",
+     "imp": "0x23BFC"
+    },
+    {
+     "sel": ".cxx_destruct",
+     "types": "v16@0:8",
+     "imp": "0x23C08"
+    }
+   ],
+   "class_methods": [],
+   "categories": []
+  },
+  "CRPBackupOperation": {
+   "addr": "0x59E10",
+   "instance_methods": [
+    {
+     "sel": "init",
+     "types": "@16@0:8",
+     "imp": "0x23C50"
+    },
+    {
+     "sel": "initWithTargetPath:",
+     "types": "@24@0:8@16",
+     "imp": "0x23CB8"
+    },
+    {
+     "sel": "isCancellable",
+     "types": "B16@0:8",
+     "imp": "0x23D24"
+    },
+    {
+     "sel": "setContainersToBackup:",
+     "types": "v24@0:8@16",
+     "imp": "0x23D2C"
+    },
+    {
+     "sel": "pauseBackupWithEvent:withParameters:",
+     "types": "@32@0:8Q16@24",
+     "imp": "0x23D78"
+    },
+    {
+     "sel": "pauseBackupWithEvent:",
+     "types": "@24@0:8Q16",
+     "imp": "0x23F50"
+    },
+    {
+     "sel": "handleFreeSpaceCheck",
+     "types": "v16@0:8",
+     "imp": "0x23F60"
+    },
+    {
+     "sel": "prepareBackup",
+     "types": "v16@0:8",
+     "imp": "0x2440C"
+    },
+    {
+     "sel": "processBackupOfPath:withIdentifier:pathPrefix:collectAttributes:",
+     "types": "v48@0:8@16@24@32@40",
+     "imp": "0x24774"
+    },
+    {
+     "sel": "processBackupOfContainer:",
+     "types": "v24@0:8@16",
+     "imp": "0x24CF8"
+    },
+    {
+     "sel": "addMultiBackupInformation",
+     "types": "v16@0:8",
+     "imp": "0x257AC"
+    },
+    {
+     "sel": "handleCancellation",
+     "types": "v16@0:8",
+     "imp": "0x25A18"
+    },
+    {
+     "sel": "handleFinish",
+     "types": "v16@0:8",
+     "imp": "0x25A74"
+    },
+    {
+     "sel": "main",
+     "types": "v16@0:8",
+     "imp": "0x25A8C"
+    },
+    {
+     "sel": "targetPath",
+     "types": "@16@0:8",
+     "imp": "0x25CD4"
+    },
+    {
+     "sel": "setTargetPath:",
+     "types": "v24@0:8@16",
+     "imp": "0x25CE4"
+    },
+    {
+     "sel": "passwordToUse",
+     "types": "@16@0:8",
+     "imp": "0x25CF8"
+    },
+    {
+     "sel": "setPasswordToUse:",
+     "types": "v24@0:8@16",
+     "imp": "0x25D08"
+    },
+    {
+     "sel": "shouldIncludeKeychain",
+     "types": "B16@0:8",
+     "imp": "0x25D1C"
+    },
+    {
+     "sel": "setShouldIncludeKeychain:",
+     "types": "v20@0:8B16",
+     "imp": "0x25D2C"
+    },
+    {
+     "sel": "sepKeychainItemsOmmited",
+     "types": "B16@0:8",
+     "imp": "0x25D3C"
+    },
+    {
+     "sel": "setSepKeychainItemsOmmited:",
+     "types": "v20@0:8B16",
+     "imp": "0x25D4C"
+    },
+    {
+     "sel": "isMultiContainerBackup",
+     "types": "B16@0:8",
+     "imp": "0x25D5C"
+    },
+    {
+     "sel": "setIsMultiContainerBackup:",
+     "types": "v20@0:8B16",
+     "imp": "0x25D6C"
+    },
+    {
+     "sel": "handlerDelegate",
+     "types": "@16@0:8",
+     "imp": "0x25D7C"
+    },
+    {
+     "sel": "setHandlerDelegate:",
+     "types": "v24@0:8@16",
+     "imp": "0x25D8C"
+    },
+    {
+     "sel": "status",
+     "types": "@16@0:8",
+     "imp": "0x25DA0"
+    },
+    {
+     "sel": "setStatus:",
+     "types": "v24@0:8@16",
+     "imp": "0x25DB0"
+    },
+    {
+     "sel": "totalSuboperationsCount",
+     "types": "Q16@0:8",
+     "imp": "0x25DC4"
+    },
+    {
+     "sel": "setTotalSuboperationsCount:",
+     "types": "v24@0:8Q16",
+     "imp": "0x25DD4"
+    },
+    {
+     "sel": "currentSuboperationIndex",
+     "types": "Q16@0:8",
+     "imp": "0x25DE4"
+    },
+    {
+     "sel": "setCurrentSuboperationIndex:",
+     "types": "v24@0:8Q16",
+     "imp": "0x25DF4"
+    },
+    {
+     "sel": "processedFile",
+     "types": "@16@0:8",
+     "imp": "0x25E04"
+    },
+    {
+     "sel": "setProcessedFile:",
+     "types": "v24@0:8@16",
+     "imp": "0x25E14"
+    },
+    {
+     "sel": "processedContainer",
+     "types": "@16@0:8",
+     "imp": "0x25E28"
+    },
+    {
+     "sel": "setProcessedContainer:",
+     "types": "v24@0:8@16",
+     "imp": "0x25E38"
+    },
+    {
+     "sel": "processedIdentifier",
+     "types": "@16@0:8",
+     "imp": "0x25E4C"
+    },
+    {
+     "sel": "setProcessedIdentifier:",
+     "types": "v24@0:8@16",
+     "imp": "0x25E5C"
+    },
+    {
+     "sel": "error",
+     "types": "@16@0:8",
+     "imp": "0x25E70"
+    },
+    {
+     "sel": "setError:",
+     "types": "v24@0:8@16",
+     "imp": "0x25E80"
+    },
+    {
+     "sel": ".cxx_destruct",
+     "types": "v16@0:8",
+     "imp": "0x25E94"
+    }
+   ],
+   "class_methods": [],
+   "categories": []
+  },
+  "CRPBackupRestoreController": {
+   "addr": "0x59E60",
+   "instance_methods": [
+    {
+     "sel": "init",
+     "types": "@16@0:8",
+     "imp": "0x25F74"
+    },
+    {
+     "sel": "initWithPresentationController:",
+     "types": "@24@0:8@16",
+     "imp": "0x25FE4"
+    },
+    {
+     "sel": "_configureAndStartBackupWithConfigurationListController:",
+     "types": "v24@0:8@16",
+     "imp": "0x26048"
+    },
+    {
+     "sel": "configureAndStartSingleBackupForContainer:",
+     "types": "v24@0:8@16",
+     "imp": "0x260D8"
+    },
+    {
+     "sel": "configureAndStartMultiBackup",
+     "types": "v16@0:8",
+     "imp": "0x2614C"
+    },
+    {
+     "sel": "didFinishConfiguringBackupWithListController:",
+     "types": "v24@0:8@16",
+     "imp": "0x2619C"
+    },
+    {
+     "sel": "_openFilePickerForBackupWithExtension:completion:",
+     "types": "v32@0:8@16@?24",
+     "imp": "0x26468"
+    },
+    {
+     "sel": "documentPicker:didPickDocumentsAtURLs:",
+     "types": "v32@0:8@16@24",
+     "imp": "0x26AF0"
+    },
+    {
+     "sel": "configureAndStartSingleRestoreForContainer:completion:",
+     "types": "v32@0:8@16@?24",
+     "imp": "0x26B3C"
+    },
+    {
+     "sel": "configureAndStartMultiRestoreWithCompletion:",
+     "types": "v24@0:8@?16",
+     "imp": "0x26D7C"
+    },
+    {
+     "sel": "showErrorForOperation:",
+     "types": "v24@0:8@16",
+     "imp": "0x26FAC"
+    },
+    {
+     "sel": "presentProgressAlertWithCompletion:",
+     "types": "v24@0:8@?16",
+     "imp": "0x27178"
+    },
+    {
+     "sel": "dismissProgressAlertWithCompletion:",
+     "types": "v24@0:8@?16",
+     "imp": "0x271FC"
+    },
+    {
+     "sel": "dismissProgressAlertAndPresentViewController:completion:",
+     "types": "v32@0:8@16@?24",
+     "imp": "0x27308"
+    },
+    {
+     "sel": "observeValueForKeyPath:ofObject:change:context:",
+     "types": "v48@0:8@16@24@32^v40",
+     "imp": "0x2747C"
+    },
+    {
+     "sel": "processOperation:completion:",
+     "types": "v32@0:8@16@?24",
+     "imp": "0x27660"
+    },
+    {
+     "sel": "operation:didPauseWithEvent:withParameters:completion:",
+     "types": "v48@0:8@16Q24@32@?40",
+     "imp": "0x27B50"
+    },
+    {
+     "sel": "operationDidFinish:",
+     "types": "v24@0:8@16",
+     "imp": "0x28BD0"
+    },
+    {
+     "sel": ".cxx_destruct",
+     "types": "v16@0:8",
+     "imp": "0x28CB0"
+    }
+   ],
+   "class_methods": [],
+   "categories": []
+  },
+  "CRPBackupRestoreProgressAlertController": {
+   "addr": "0x59640",
+   "instance_methods": [
+    {
+     "sel": "init",
+     "types": "@16@0:8",
+     "imp": "0xCFC4"
+    },
+    {
+     "sel": "viewDidLoad",
+     "types": "v16@0:8",
+     "imp": "0xD0B0"
+    },
+    {
+     "sel": "viewDidLayoutSubviews",
+     "types": "v16@0:8",
+     "imp": "0xD100"
+    },
+    {
+     "sel": "updatePropertiesFromOperation:",
+     "types": "v24@0:8@16",
+     "imp": "0xD230"
+    },
+    {
+     "sel": "setShowsCancelButton:",
+     "types": "v20@0:8B16",
+     "imp": "0xD36C"
+    },
+    {
+     "sel": "setStatus:",
+     "types": "v24@0:8@16",
+     "imp": "0xD560"
+    },
+    {
+     "sel": "setTotalSuboperationsCount:",
+     "types": "v24@0:8Q16",
+     "imp": "0xD5B4"
+    },
+    {
+     "sel": "setCurrentSuboperationIndex:",
+     "types": "v24@0:8Q16",
+     "imp": "0xD5F4"
+    },
+    {
+     "sel": "setProcessedFile:",
+     "types": "v24@0:8@16",
+     "imp": "0xD634"
+    },
+    {
+     "sel": "setProcessedContainer:",
+     "types": "v24@0:8@16",
+     "imp": "0xD6B4"
+    },
+    {
+     "sel": "setProcessedIdentifier:",
+     "types": "v24@0:8@16",
+     "imp": "0xD718"
+    },
+    {
+     "sel": "setAmountOfOperations:",
+     "types": "v24@0:8Q16",
+     "imp": "0xD76C"
+    },
+    {
+     "sel": "setCurrentOperationIndex:",
+     "types": "v24@0:8Q16",
+     "imp": "0xD784"
+    },
+    {
+     "sel": "refreshProcessedContainerDescription",
+     "types": "v16@0:8",
+     "imp": "0xD79C"
+    },
+    {
+     "sel": "updateAlertContent",
+     "types": "v16@0:8",
+     "imp": "0xD9A8"
+    },
+    {
+     "sel": "updateAlertContentOnMainThread",
+     "types": "v16@0:8",
+     "imp": "0xDC70"
+    },
+    {
+     "sel": "updateProgress",
+     "types": "v16@0:8",
+     "imp": "0xDD18"
+    },
+    {
+     "sel": "updateProgressOnMainThread",
+     "types": "v16@0:8",
+     "imp": "0xDDC8"
+    },
+    {
+     "sel": "showsCancelButton",
+     "types": "B16@0:8",
+     "imp": "0xDE70"
+    },
+    {
+     "sel": "cancelHandler",
+     "types": "@?16@0:8",
+     "imp": "0xDE80"
+    },
+    {
+     "sel": "setCancelHandler:",
+     "types": "v24@0:8@?16",
+     "imp": "0xDE90"
+    },
+    {
+     "sel": "amountOfOperations",
+     "types": "Q16@0:8",
+     "imp": "0xDE9C"
+    },
+    {
+     "sel": "currentOperationIndex",
+     "types": "Q16@0:8",
+     "imp": "0xDEAC"
+    },
+    {
+     "sel": "status",
+     "types": "@16@0:8",
+     "imp": "0xDEBC"
+    },
+    {
+     "sel": "totalSuboperationsCount",
+     "types": "Q16@0:8",
+     "imp": "0xDECC"
+    },
+    {
+     "sel": "currentSuboperationIndex",
+     "types": "Q16@0:8",
+     "imp": "0xDEDC"
+    },
+    {
+     "sel": "processedFile",
+     "types": "@16@0:8",
+     "imp": "0xDEEC"
+    },
+    {
+     "sel": "processedContainer",
+     "types": "@16@0:8",
+     "imp": "0xDEFC"
+    },
+    {
+     "sel": "processedIdentifier",
+     "types": "@16@0:8",
+     "imp": "0xDF0C"
+    },
+    {
+     "sel": ".cxx_destruct",
+     "types": "v16@0:8",
+     "imp": "0xDF1C"
+    }
+   ],
+   "class_methods": [],
+   "categories": []
+  },
+  "CRPBrowseContainerListController": {
+   "addr": "0x596B8",
+   "instance_methods": [
+    {
+     "sel": "containerIdentifier",
+     "types": "@16@0:8",
+     "imp": "0xDFD4"
+    },
+    {
+     "sel": "applicationIdentifier",
+     "types": "@16@0:8",
+     "imp": "0xE030"
+    },
+    {
+     "sel": "openPathForSpecifier:",
+     "types": "v24@0:8@16",
+     "imp": "0xE08C"
+    },
+    {
+     "sel": "specifierForIdentifier:path:",
+     "types": "@32@0:8@16@24",
+     "imp": "0xE1E0"
+    },
+    {
+     "sel": "specifiers",
+     "types": "@16@0:8",
+     "imp": "0xE31C"
+    }
+   ],
+   "class_methods": [],
+   "categories": []
+  },
+  "CRPCellRefreshingListItemsController": {
+   "addr": "0x59708",
+   "instance_methods": [
+    {
+     "sel": "viewWillDisappear:",
+     "types": "v20@0:8B16",
+     "imp": "0xEB50"
+    }
+   ],
+   "class_methods": [],
+   "categories": []
+  },
+  "CRPContainerConfigurationListController": {
+   "addr": "0x59730",
+   "instance_methods": [
+    {
+     "sel": "init",
+     "types": "@16@0:8",
+     "imp": "0xEC04"
+    },
+    {
+     "sel": "viewDidLoad",
+     "types": "v16@0:8",
+     "imp": "0xEC9C"
+    },
+    {
+     "sel": "reloadSpecifiers",
+     "types": "v16@0:8",
+     "imp": "0xEDAC"
+    },
+    {
+     "sel": "didChangeContainerSettingsForContainerWithIdentifier:onApplicationWithIdentifier:",
+     "types": "v32@0:8@16@24",
+     "imp": "0xEDFC"
+    },
+    {
+     "sel": "setContainerIdentifier:",
+     "types": "v24@0:8@16",
+     "imp": "0xEF38"
+    },
+    {
+     "sel": "containerIdentifier",
+     "types": "@16@0:8",
+     "imp": "0xF034"
+    },
+    {
+     "sel": "applicationIdentifier",
+     "types": "@16@0:8",
+     "imp": "0xF090"
+    },
+    {
+     "sel": "reloadTitle",
+     "types": "v16@0:8",
+     "imp": "0xF0EC"
+    },
+    {
+     "sel": "isDefaultContainer",
+     "types": "B16@0:8",
+     "imp": "0xF214"
+    },
+    {
+     "sel": "isActiveContainer",
+     "types": "B16@0:8",
+     "imp": "0xF268"
+    },
+    {
+     "sel": "reloadApplicationIfThisContainerIsActive",
+     "types": "v16@0:8",
+     "imp": "0xF33C"
+    },
+    {
+     "sel": "reloadGameCenterIfThisContainerIsActive",
+     "types": "v16@0:8",
+     "imp": "0xF3D0"
+    },
+    {
+     "sel": "updateTopSectionAndReload:",
+     "types": "v20@0:8B16",
+     "imp": "0xF438"
+    },
+    {
+     "sel": "updateNameSpecifierAndReload:",
+     "types": "v20@0:8B16",
+     "imp": "0xF5FC"
+    },
+    {
+     "sel": "updateDeviceIdentifierSpecifierAndReload:",
+     "types": "v20@0:8B16",
+     "imp": "0xF690"
+    },
+    {
+     "sel": "reloadSpecifiersForDeviceIdentifierGroup",
+     "types": "v16@0:8",
+     "imp": "0xF720"
+    },
+    {
+     "sel": "reloadAssociatedGameCenterAccount",
+     "types": "v16@0:8",
+     "imp": "0xF870"
+    },
+    {
+     "sel": "useContainerIdentifierAsDeviceIdentifier",
+     "types": "B16@0:8",
+     "imp": "0xF8F0"
+    },
+    {
+     "sel": "customDeviceIdentifier",
+     "types": "@16@0:8",
+     "imp": "0xF954"
+    },
+    {
+     "sel": "setDeviceIdentifier:",
+     "types": "v24@0:8@16",
+     "imp": "0xF968"
+    },
+    {
+     "sel": "setCustomDeviceIdentifier:",
+     "types": "v24@0:8@16",
+     "imp": "0xFAD8"
+    },
+    {
+     "sel": "showIdentifierChangingWarningWithCompletionHandler:",
+     "types": "v24@0:8@?16",
+     "imp": "0xFAEC"
+    },
+    {
+     "sel": "showIdentifierInfoAlert",
+     "types": "v16@0:8",
+     "imp": "0xFD64"
+    },
+    {
+     "sel": "tableView:accessoryButtonTappedForRowWithIndexPath:",
+     "types": "v32@0:8@16@24",
+     "imp": "0xFE84"
+    },
+    {
+     "sel": "generateNewIdentifierButtonPressed",
+     "types": "v16@0:8",
+     "imp": "0xFF28"
+    },
+    {
+     "sel": "presentSetCustomIdentifierAlertComingFromError:",
+     "types": "v20@0:8B16",
+     "imp": "0x10004"
+    },
+    {
+     "sel": "setCustomIdentifierButtonPressed",
+     "types": "v16@0:8",
+     "imp": "0x105F8"
+    },
+    {
+     "sel": "specifiersForDeviceIdentifierGroup",
+     "types": "@16@0:8",
+     "imp": "0x10608"
+    },
+    {
+     "sel": "choicyProcessConfigurationSubclassIfExists",
+     "types": "#16@0:8",
+     "imp": "0x10B94"
+    },
+    {
+     "sel": "setChoicyOverwriteEnabled:specifier:",
+     "types": "v32@0:8@16@24",
+     "imp": "0x10CD0"
+    },
+    {
+     "sel": "previewStringForChoicyConfiguration:",
+     "types": "@24@0:8@16",
+     "imp": "0x10D84"
+    },
+    {
+     "sel": "updateChoicyIntegrationGroup",
+     "types": "B16@0:8",
+     "imp": "0x10E68"
+    },
+    {
+     "sel": "updateChoicyIntegrationGroupAvailability",
+     "types": "v16@0:8",
+     "imp": "0x111AC"
+    },
+    {
+     "sel": "updateContainerSize",
+     "types": "v16@0:8",
+     "imp": "0x113A4"
+    },
+    {
+     "sel": "updateSizeGroupSpecifierAndReload:",
+     "types": "v20@0:8B16",
+     "imp": "0x11520"
+    },
+    {
+     "sel": "loadContainerSettings",
+     "types": "v16@0:8",
+     "imp": "0x1164C"
+    },
+    {
+     "sel": "specifiers",
+     "types": "@16@0:8",
+     "imp": "0x11734"
+    },
+    {
+     "sel": "setContainerName:specifier:",
+     "types": "v32@0:8@16@24",
+     "imp": "0x128F0"
+    },
+    {
+     "sel": "setRequiresBiometricAuthentication:specifier:",
+     "types": "v32@0:8@16@24",
+     "imp": "0x12950"
+    },
+    {
+     "sel": "setUseContainerIdentifierAsDeviceIdentifier:specifier:",
+     "types": "v32@0:8@16@24",
+     "imp": "0x129F0"
+    },
+    {
+     "sel": "shouldShowDeviceIdentifierSection",
+     "types": "B16@0:8",
+     "imp": "0x12EE8"
+    },
+    {
+     "sel": "deviceIdentifierToUse",
+     "types": "@16@0:8",
+     "imp": "0x12F74"
+    },
+    {
+     "sel": "tapGestureReceivedTap:",
+     "types": "v24@0:8@16",
+     "imp": "0x13028"
+    },
+    {
+     "sel": "makeDefaultButtonPressed",
+     "types": "v16@0:8",
+     "imp": "0x1306C"
+    },
+    {
+     "sel": "availableGameCenterAccountNames",
+     "types": "@16@0:8",
+     "imp": "0x1312C"
+    },
+    {
+     "sel": "availableGameCenterAccountIdentifiers",
+     "types": "@16@0:8",
+     "imp": "0x13310"
+    },
+    {
+     "sel": "openShareMenuWithFile:",
+     "types": "v24@0:8@16",
+     "imp": "0x134D4"
+    },
+    {
+     "sel": "backupButtonPressed",
+     "types": "v16@0:8",
+     "imp": "0x135F8"
+    },
+    {
+     "sel": "didFinishBackupAtPath:",
+     "types": "v24@0:8@16",
+     "imp": "0x136DC"
+    },
+    {
+     "sel": "restoreButtonPressed",
+     "types": "v16@0:8",
+     "imp": "0x13740"
+    },
+    {
+     "sel": "resetNotificationRegistrationButtonPressed",
+     "types": "v16@0:8",
+     "imp": "0x13980"
+    },
+    {
+     "sel": "wipeButtonPressed",
+     "types": "v16@0:8",
+     "imp": "0x13A28"
+    },
+    {
+     "sel": "setPreferenceValue:specifier:",
+     "types": "v32@0:8@16@24",
+     "imp": "0x13D80"
+    },
+    {
+     "sel": "setPreferenceValue:key:",
+     "types": "v32@0:8@16@24",
+     "imp": "0x13E00"
+    },
+    {
+     "sel": "readPreferenceValue:",
+     "types": "@24@0:8@16",
+     "imp": "0x13F74"
+    },
+    {
+     "sel": "readPreferenceValueForKey:",
+     "types": "@24@0:8@16",
+     "imp": "0x14020"
+    },
+    {
+     "sel": "setAssociatedGameCenterAccount:specifier:",
+     "types": "v32@0:8@16@24",
+     "imp": "0x14038"
+    },
+    {
+     "sel": "readAssociatedGameCenterAccount:",
+     "types": "@24@0:8@16",
+     "imp": "0x140E8"
+    },
+    {
+     "sel": "dealloc",
+     "types": "v16@0:8",
+     "imp": "0x14188"
+    },
+    {
+     "sel": ".cxx_destruct",
+     "types": "v16@0:8",
+     "imp": "0x14204"
+    }
+   ],
+   "class_methods": [],
+   "categories": []
+  },
+  "CRPContainerManager": {
+   "addr": "0x59780",
+   "instance_methods": [
+    {
+     "sel": "allWritableFileAttributes",
+     "types": "@16@0:8",
+     "imp": "0x143E8"
+    },
+    {
+     "sel": "unknownContainersInsideApplicationWithIdentifier:knownContainers:",
+     "types": "@32@0:8@16@24",
+     "imp": "0x144F0"
+    }
+   ],
+   "class_methods": [],
+   "categories": []
+  },
+  "CRPCreditsController": {
+   "addr": "0x597F8",
+   "instance_methods": [
+    {
+     "sel": "specifiers",
+     "types": "@16@0:8",
+     "imp": "0x146D4"
+    },
+    {
+     "sel": "zipArchiveLink",
+     "types": "v16@0:8",
+     "imp": "0x147B0"
+    },
+    {
+     "sel": "miniZipLink",
+     "types": "v16@0:8",
+     "imp": "0x14830"
+    },
+    {
+     "sel": "trithucLink",
+     "types": "v16@0:8",
+     "imp": "0x148B0"
+    },
+    {
+     "sel": "nvbikLink",
+     "types": "v16@0:8",
+     "imp": "0x148C4"
+    },
+    {
+     "sel": "sn0wl3r0kerLink",
+     "types": "v16@0:8",
+     "imp": "0x148D8"
+    },
+    {
+     "sel": "nzar1988Link",
+     "types": "v16@0:8",
+     "imp": "0x148EC"
+    },
+    {
+     "sel": "bwntyHntrLink",
+     "types": "v16@0:8",
+     "imp": "0x14900"
+    },
+    {
+     "sel": "guezomriLink",
+     "types": "v16@0:8",
+     "imp": "0x14914"
+    },
+    {
+     "sel": "torrekieLink",
+     "types": "v16@0:8",
+     "imp": "0x14928"
+    },
+    {
+     "sel": "ian_dxxLink",
+     "types": "v16@0:8",
+     "imp": "0x1493C"
+    },
+    {
+     "sel": "Vitalik2187836Link",
+     "types": "v16@0:8",
+     "imp": "0x14950"
+    },
+    {
+     "sel": "frknvkilicLink",
+     "types": "v16@0:8",
+     "imp": "0x14964"
+    },
+    {
+     "sel": "rdaraujoLink",
+     "types": "v16@0:8",
+     "imp": "0x14978"
+    },
+    {
+     "sel": "RedenticDevLink",
+     "types": "v16@0:8",
+     "imp": "0x149F8"
+    },
+    {
+     "sel": "cySxLLink",
+     "types": "v16@0:8",
+     "imp": "0x14A0C"
+    }
+   ],
+   "class_methods": [],
+   "categories": []
+  },
+  "CRPCreditsMiniZipController": {
+   "addr": "0x59848",
+   "instance_methods": [
+    {
+     "sel": "specifiers",
+     "types": "@16@0:8",
+     "imp": "0x14A20"
+    }
+   ],
+   "class_methods": [],
+   "categories": []
+  },
+  "CRPCreditsZipArchiveController": {
+   "addr": "0x59898",
+   "instance_methods": [
+    {
+     "sel": "specifiers",
+     "types": "@16@0:8",
+     "imp": "0x14A88"
+    }
+   ],
+   "class_methods": [],
+   "categories": []
+  },
+  "CRPDestructiveTableCell": {
+   "addr": "0x598C0",
+   "instance_methods": [
+    {
+     "sel": "layoutSubviews",
+     "types": "v16@0:8",
+     "imp": "0x14AF0"
+    }
+   ],
+   "class_methods": [],
+   "categories": []
+  },
+  "CRPGameCenterAccountsController": {
+   "addr": "0x59910",
+   "instance_methods": [
+    {
+     "sel": "reloadListInParentController",
+     "types": "v16@0:8",
+     "imp": "0x14BF4"
+    },
+    {
+     "sel": "loadGameCenterAccounts",
+     "types": "v16@0:8",
+     "imp": "0x14D00"
+    },
+    {
+     "sel": "saveGameCenterAccounts",
+     "types": "v16@0:8",
+     "imp": "0x14D8C"
+    },
+    {
+     "sel": "dictionaryForAccountWithIdentifier:",
+     "types": "@24@0:8@16",
+     "imp": "0x14DF4"
+    },
+    {
+     "sel": "removeAccountWithIdentifier:",
+     "types": "v24@0:8@16",
+     "imp": "0x1502C"
+    },
+    {
+     "sel": "renameAccountWithIdentifier:toName:",
+     "types": "v32@0:8@16@24",
+     "imp": "0x15250"
+    },
+    {
+     "sel": "addAccountWithIdentifier:name:",
+     "types": "v32@0:8@16@24",
+     "imp": "0x15448"
+    },
+    {
+     "sel": "addAccountWithName:",
+     "types": "@24@0:8@16",
+     "imp": "0x15564"
+    },
+    {
+     "sel": "accountNameForAccountWithIdentifier:",
+     "types": "@24@0:8@16",
+     "imp": "0x1560C"
+    },
+    {
+     "sel": "newSpecifierForAccountIdentifier:accountName:",
+     "types": "@32@0:8@16@24",
+     "imp": "0x156C4"
+    },
+    {
+     "sel": "specifiers",
+     "types": "@16@0:8",
+     "imp": "0x157E4"
+    },
+    {
+     "sel": "editBarButtonItem",
+     "types": "@16@0:8",
+     "imp": "0x15B58"
+    },
+    {
+     "sel": "_editButtonBarItem",
+     "types": "@16@0:8",
+     "imp": "0x15B9C"
+    },
+    {
+     "sel": "addButtonPressed",
+     "types": "v16@0:8",
+     "imp": "0x15BE0"
+    },
+    {
+     "sel": "accountPressed:",
+     "types": "v24@0:8@16",
+     "imp": "0x15F90"
+    },
+    {
+     "sel": "tableView:canEditRowAtIndexPath:",
+     "types": "B32@0:8@16@24",
+     "imp": "0x163F8"
+    },
+    {
+     "sel": "tableView:editingStyleForRowAtIndexPath:",
+     "types": "q32@0:8@16@24",
+     "imp": "0x16400"
+    },
+    {
+     "sel": "tableView:commitEditingStyle:forRowAtIndexPath:",
+     "types": "v40@0:8@16q24@32",
+     "imp": "0x1649C"
+    },
+    {
+     "sel": "performDeletionActionForSpecifier:",
+     "types": "B24@0:8@16",
+     "imp": "0x167D0"
+    },
+    {
+     "sel": ".cxx_destruct",
+     "types": "v16@0:8",
+     "imp": "0x168B8"
+    }
+   ],
+   "class_methods": [],
+   "categories": []
+  },
+  "CRPInfoTableCell": {
+   "addr": "0x59960",
+   "instance_methods": [
+    {
+     "sel": "refreshCellContentsWithSpecifier:",
+     "types": "v24@0:8@16",
+     "imp": "0x168CC"
+    }
+   ],
+   "class_methods": [],
+   "categories": []
+  },
+  "CRPKeychainManager": {
+   "addr": "0x599D8",
+   "instance_methods": [],
+   "class_methods": [],
+   "categories": []
+  },
+  "CRPListController": {
+   "addr": "0x59A28",
+   "instance_methods": [
+    {
+     "sel": "localizeSpecifiers:",
+     "types": "v24@0:8@16",
+     "imp": "0x16DA0"
+    },
+    {
+     "sel": "openTwitterWithUsername:",
+     "types": "v24@0:8@16",
+     "imp": "0x16F9C"
+    }
+   ],
+   "class_methods": [],
+   "categories": []
+  },
+  "CRPMultiBackupContainerSelectionCell": {
+   "addr": "0x59A50",
+   "instance_methods": [
+    {
+     "sel": "setValue:",
+     "types": "v24@0:8@16",
+     "imp": "0x17100"
+    }
+   ],
+   "class_methods": [],
+   "categories": []
+  },
+  "CRPMultiBackupContainerSelectionListController": {
+   "addr": "0x59AA0",
+   "instance_methods": [
+    {
+     "sel": "init",
+     "types": "@16@0:8",
+     "imp": "0x1728C"
+    },
+    {
+     "sel": "viewDidLoad",
+     "types": "v16@0:8",
+     "imp": "0x172FC"
+    },
+    {
+     "sel": "displayedContainers",
+     "types": "@16@0:8",
+     "imp": "0x17518"
+    },
+    {
+     "sel": "updateSelectDeselectButton",
+     "types": "v16@0:8",
+     "imp": "0x176E4"
+    },
+    {
+     "sel": "selectDeselectAllButtonPressed",
+     "types": "v16@0:8",
+     "imp": "0x17810"
+    },
+    {
+     "sel": "updateSearchResultsForSearchController:",
+     "types": "v24@0:8@16",
+     "imp": "0x17914"
+    },
+    {
+     "sel": "loadPreferences",
+     "types": "v16@0:8",
+     "imp": "0x17AB8"
+    },
+    {
+     "sel": "savePreferences",
+     "types": "v16@0:8",
+     "imp": "0x17BA4"
+    },
+    {
+     "sel": "tableView:willDisplayCell:forRowAtIndexPath:",
+     "types": "v40@0:8@16@24@32",
+     "imp": "0x17C2C"
+    },
+    {
+     "sel": "specifiers",
+     "types": "@16@0:8",
+     "imp": "0x17DDC"
+    },
+    {
+     "sel": "tableView:cellForRowAtIndexPath:",
+     "types": "@32@0:8@16@24",
+     "imp": "0x184A8"
+    },
+    {
+     "sel": "tableView:didSelectRowAtIndexPath:",
+     "types": "v32@0:8@16@24",
+     "imp": "0x18534"
+    },
+    {
+     "sel": "tableView:didDeselectRowAtIndexPath:",
+     "types": "v32@0:8@16@24",
+     "imp": "0x185F0"
+    },
+    {
+     "sel": "viewWillDisappear:",
+     "types": "v20@0:8B16",
+     "imp": "0x186AC"
+    },
+    {
+     "sel": ".cxx_destruct",
+     "types": "v16@0:8",
+     "imp": "0x1878C"
+    }
+   ],
+   "class_methods": [],
+   "categories": []
+  },
+  "CRPMultiBackupPresetListController": {
+   "addr": "0x59AF0",
+   "instance_methods": [
+    {
+     "sel": "loadPreferences",
+     "types": "v16@0:8",
+     "imp": "0x187F4"
+    },
+    {
+     "sel": "savePreferences",
+     "types": "v16@0:8",
+     "imp": "0x188B8"
+    },
+    {
+     "sel": "resetSelection",
+     "types": "v16@0:8",
+     "imp": "0x18918"
+    },
+    {
+     "sel": "selectedPresetIdentifier",
+     "types": "@16@0:8",
+     "imp": "0x18A1C"
+    },
+    {
+     "sel": "setSelectedPresetIdentifier:",
+     "types": "v24@0:8@16",
+     "imp": "0x18A8C"
+    },
+    {
+     "sel": "tableView:cellForRowAtIndexPath:",
+     "types": "@32@0:8@16@24",
+     "imp": "0x18B00"
+    },
+    {
+     "sel": "presetForPresetIdentifier:",
+     "types": "@24@0:8@16",
+     "imp": "0x18C7C"
+    },
+    {
+     "sel": "setPreset:forIdentifier:",
+     "types": "v32@0:8@16@24",
+     "imp": "0x18E18"
+    },
+    {
+     "sel": "newSpecifierForPreset:",
+     "types": "@24@0:8@16",
+     "imp": "0x190B0"
+    },
+    {
+     "sel": "specifiers",
+     "types": "@16@0:8",
+     "imp": "0x19230"
+    },
+    {
+     "sel": "getCurrentContainerSelection",
+     "types": "@16@0:8",
+     "imp": "0x19638"
+    },
+    {
+     "sel": "saveSelectionIntoPresetButtonPressed",
+     "types": "v16@0:8",
+     "imp": "0x1982C"
+    },
+    {
+     "sel": "tableView:didSelectRowAtIndexPath:",
+     "types": "v32@0:8@16@24",
+     "imp": "0x19E1C"
+    },
+    {
+     "sel": "tableView:canMoveRowAtIndexPath:",
+     "types": "B32@0:8@16@24",
+     "imp": "0x19FD4"
+    },
+    {
+     "sel": "tableView:editingStyleForRowAtIndexPath:",
+     "types": "q32@0:8@16@24",
+     "imp": "0x19FFC"
+    },
+    {
+     "sel": "tableView:canEditRowAtIndexPath:",
+     "types": "B32@0:8@16@24",
+     "imp": "0x1A024"
+    },
+    {
+     "sel": "tableView:targetIndexPathForMoveFromRowAtIndexPath:toProposedIndexPath:",
+     "types": "@40@0:8@16@24@32",
+     "imp": "0x1A04C"
+    },
+    {
+     "sel": "tableView:moveRowAtIndexPath:toIndexPath:",
+     "types": "v40@0:8@16@24@32",
+     "imp": "0x1A0C0"
+    },
+    {
+     "sel": "performDeletionActionForSpecifier:",
+     "types": "B24@0:8@16",
+     "imp": "0x1A1C8"
+    },
+    {
+     "sel": "viewWillDisappear:",
+     "types": "v20@0:8B16",
+     "imp": "0x1A224"
+    },
+    {
+     "sel": ".cxx_destruct",
+     "types": "v16@0:8",
+     "imp": "0x1A340"
+    }
+   ],
+   "class_methods": [],
+   "categories": []
+  },
+  "CRPNewBackupListController": {
+   "addr": "0x59B40",
+   "instance_methods": [
+    {
+     "sel": "init",
+     "types": "@16@0:8",
+     "imp": "0x1A354"
+    },
+    {
+     "sel": "initWithContainer:",
+     "types": "@24@0:8@16",
+     "imp": "0x1A4E4"
+    },
+    {
+     "sel": "initForMultiContainerSelection",
+     "types": "@16@0:8",
+     "imp": "0x1A604"
+    },
+    {
+     "sel": "isMultiSelection",
+     "types": "B16@0:8",
+     "imp": "0x1A654"
+    },
+    {
+     "sel": "updateCreateButtonEnabled",
+     "types": "v16@0:8",
+     "imp": "0x1A664"
+    },
+    {
+     "sel": "noSelection_containerIdentifier",
+     "types": "@16@0:8",
+     "imp": "0x1A750"
+    },
+    {
+     "sel": "noSelection_applicationIdentifier",
+     "types": "@16@0:8",
+     "imp": "0x1A844"
+    },
+    {
+     "sel": "refreshContainerName",
+     "types": "v16@0:8",
+     "imp": "0x1A938"
+    },
+    {
+     "sel": "viewDidLoad",
+     "types": "v16@0:8",
+     "imp": "0x1AA08"
+    },
+    {
+     "sel": "setEncryptBackupAndReload:",
+     "types": "v20@0:8B16",
+     "imp": "0x1AB08"
+    },
+    {
+     "sel": "setIncludeKeychainAndReload:",
+     "types": "v20@0:8B16",
+     "imp": "0x1AB88"
+    },
+    {
+     "sel": "handleEncryptionWarning",
+     "types": "v16@0:8",
+     "imp": "0x1AC08"
+    },
+    {
+     "sel": "showNoPasswordError",
+     "types": "v16@0:8",
+     "imp": "0x1AE64"
+    },
+    {
+     "sel": "showPasswordConfirmationAlertIfNeededWithCompletionHandler:comingFromFailure:",
+     "types": "v28@0:8@?16B24",
+     "imp": "0x1AF84"
+    },
+    {
+     "sel": "handleTap:",
+     "types": "v24@0:8@16",
+     "imp": "0x1B3C8"
+    },
+    {
+     "sel": "cancelButtonPressed",
+     "types": "v16@0:8",
+     "imp": "0x1B40C"
+    },
+    {
+     "sel": "createButtonPressed",
+     "types": "v16@0:8",
+     "imp": "0x1B420"
+    },
+    {
+     "sel": "getBackupName:",
+     "types": "@24@0:8@16",
+     "imp": "0x1B5BC"
+    },
+    {
+     "sel": "setBackupName:specifier:",
+     "types": "v32@0:8@16@24",
+     "imp": "0x1B5CC"
+    },
+    {
+     "sel": "setContainersToBackup:specifier:",
+     "types": "v32@0:8@16@24",
+     "imp": "0x1B624"
+    },
+    {
+     "sel": "getContainersToBackup:",
+     "types": "@24@0:8@16",
+     "imp": "0x1B6BC"
+    },
+    {
+     "sel": "setSelectedPresetIdentifier:specifier:",
+     "types": "v32@0:8@16@24",
+     "imp": "0x1B710"
+    },
+    {
+     "sel": "getSelectedPresetIdentifier:",
+     "types": "@24@0:8@16",
+     "imp": "0x1BA84"
+    },
+    {
+     "sel": "reloadIncludedContainersSpecifier",
+     "types": "v16@0:8",
+     "imp": "0x1BA94"
+    },
+    {
+     "sel": "updateBackupNameFooterAndReload:",
+     "types": "v20@0:8B16",
+     "imp": "0x1BAEC"
+    },
+    {
+     "sel": "getEncryptBackup:",
+     "types": "@24@0:8@16",
+     "imp": "0x1BF5C"
+    },
+    {
+     "sel": "setEncryptBackup:specifier:",
+     "types": "v32@0:8@16@24",
+     "imp": "0x1BF7C"
+    },
+    {
+     "sel": "getBackupPassword:",
+     "types": "@24@0:8@16",
+     "imp": "0x1C024"
+    },
+    {
+     "sel": "setBackupPassword:specifier:",
+     "types": "v32@0:8@16@24",
+     "imp": "0x1C034"
+    },
+    {
+     "sel": "getIncludeKeychain:",
+     "types": "@24@0:8@16",
+     "imp": "0x1C048"
+    },
+    {
+     "sel": "setIncludeKeychain:specifier:",
+     "types": "v32@0:8@16@24",
+     "imp": "0x1C068"
+    },
+    {
+     "sel": "specifiers",
+     "types": "@16@0:8",
+     "imp": "0x1C0C8"
+    },
+    {
+     "sel": "delegate",
+     "types": "@16@0:8",
+     "imp": "0x1C9C4"
+    },
+    {
+     "sel": "setDelegate:",
+     "types": "v24@0:8@16",
+     "imp": "0x1C9D4"
+    },
+    {
+     "sel": "containersToBackup",
+     "types": "@16@0:8",
+     "imp": "0x1C9E8"
+    },
+    {
+     "sel": "setContainersToBackup:",
+     "types": "v24@0:8@16",
+     "imp": "0x1C9F8"
+    },
+    {
+     "sel": "fullBackupFilename",
+     "types": "@16@0:8",
+     "imp": "0x1CA0C"
+    },
+    {
+     "sel": "backupName",
+     "types": "@16@0:8",
+     "imp": "0x1CA1C"
+    },
+    {
+     "sel": "encryptBackup",
+     "types": "B16@0:8",
+     "imp": "0x1CA2C"
+    },
+    {
+     "sel": "backupPassword",
+     "types": "@16@0:8",
+     "imp": "0x1CA3C"
+    },
+    {
+     "sel": "includeKeychain",
+     "types": "B16@0:8",
+     "imp": "0x1CA4C"
+    },
+    {
+     "sel": ".cxx_destruct",
+     "types": "v16@0:8",
+     "imp": "0x1CA5C"
+    }
+   ],
+   "class_methods": [],
+   "categories": []
+  },
+  "CRPNonBlueButtonTableCell": {
+   "addr": "0x59B90",
+   "instance_methods": [
+    {
+     "sel": "layoutSubviews",
+     "types": "v16@0:8",
+     "imp": "0x1CB8C"
+    }
+   ],
+   "class_methods": [],
+   "categories": []
+  },
+  "CRPPreferenceMigrator": {
+   "addr": "0x59C08",
+   "instance_methods": [],
+   "class_methods": [],
+   "categories": []
+  },
+  "CRPPresetSelectionCell": {
+   "addr": "0x59C30",
+   "instance_methods": [
+    {
+     "sel": "setValue:",
+     "types": "v24@0:8@16",
+     "imp": "0x1D2B0"
+    }
+   ],
+   "class_methods": [],
+   "categories": []
+  },
+  "CRPRestoreContainerMatchController": {
+   "addr": "0x59C80",
+   "instance_methods": [
+    {
+     "sel": "initWithContainersInBackup:",
+     "types": "@24@0:8@16",
+     "imp": "0x1D578"
+    },
+    {
+     "sel": "viewDidLoad",
+     "types": "v16@0:8",
+     "imp": "0x1D950"
+    },
+    {
+     "sel": "tapGestureReceivedTap:",
+     "types": "v24@0:8@16",
+     "imp": "0x1DA1C"
+    },
+    {
+     "sel": "targetContainerMatchingBackupContainer:",
+     "types": "@24@0:8@16",
+     "imp": "0x1DA60"
+    },
+    {
+     "sel": "performInitialMatching",
+     "types": "v16@0:8",
+     "imp": "0x1DF44"
+    },
+    {
+     "sel": "labelForContainer:",
+     "types": "@24@0:8@16",
+     "imp": "0x1E034"
+    },
+    {
+     "sel": "loadSpecifiersByContainer",
+     "types": "v16@0:8",
+     "imp": "0x1E0EC"
+    },
+    {
+     "sel": "specifierGroupForContainer:",
+     "types": "@24@0:8@16",
+     "imp": "0x1E5C4"
+    },
+    {
+     "sel": "updateGroupForContainer:animated:",
+     "types": "v28@0:8@16B24",
+     "imp": "0x1E7B0"
+    },
+    {
+     "sel": "backupContainerForSpecifier:",
+     "types": "@24@0:8@16",
+     "imp": "0x1E99C"
+    },
+    {
+     "sel": "setShouldRestoreContainer:specifier:",
+     "types": "v32@0:8@16@24",
+     "imp": "0x1E9F8"
+    },
+    {
+     "sel": "readShouldRestoreContainer:",
+     "types": "@24@0:8@16",
+     "imp": "0x1EB18"
+    },
+    {
+     "sel": "setTargetContainer:specifier:",
+     "types": "v32@0:8@16@24",
+     "imp": "0x1EBBC"
+    },
+    {
+     "sel": "readTargetContainer:",
+     "types": "@24@0:8@16",
+     "imp": "0x1EC54"
+    },
+    {
+     "sel": "setNewContainerName:specifier:",
+     "types": "v32@0:8@16@24",
+     "imp": "0x1ECBC"
+    },
+    {
+     "sel": "readNewContainerName:",
+     "types": "@24@0:8@16",
+     "imp": "0x1ED5C"
+    },
+    {
+     "sel": "getAvailableContainersForSpecifier:",
+     "types": "@24@0:8@16",
+     "imp": "0x1EDB0"
+    },
+    {
+     "sel": "getAvailableContainerValuesForSpecifier:",
+     "types": "@24@0:8@16",
+     "imp": "0x1F074"
+    },
+    {
+     "sel": "getAvailableContainerTitlesForSpecifier:",
+     "types": "@24@0:8@16",
+     "imp": "0x1F080"
+    },
+    {
+     "sel": "specifiers",
+     "types": "@16@0:8",
+     "imp": "0x1F254"
+    },
+    {
+     "sel": "cancelButtonPressed",
+     "types": "v16@0:8",
+     "imp": "0x1F398"
+    },
+    {
+     "sel": "continueButtonPressed",
+     "types": "v16@0:8",
+     "imp": "0x1F418"
+    },
+    {
+     "sel": "completionBlock",
+     "types": "@?16@0:8",
+     "imp": "0x1F4EC"
+    },
+    {
+     "sel": "setCompletionBlock:",
+     "types": "v24@0:8@?16",
+     "imp": "0x1F4FC"
+    },
+    {
+     "sel": ".cxx_destruct",
+     "types": "v16@0:8",
+     "imp": "0x1F508"
+    }
+   ],
+   "class_methods": [],
+   "categories": []
+  },
+  "CRPRestoreOperation": {
+   "addr": "0x59EB0",
+   "instance_methods": [
+    {
+     "sel": "initWithBackupPath:",
+     "types": "@24@0:8@16",
+     "imp": "0x28D10"
+    },
+    {
+     "sel": "isMultiContainerBackup",
+     "types": "B16@0:8",
+     "imp": "0x28D90"
+    },
+    {
+     "sel": "isCancellable",
+     "types": "B16@0:8",
+     "imp": "0x28DF0"
+    },
+    {
+     "sel": "pauseRestoreWithEvent:withParameters:",
+     "types": "@32@0:8Q16@24",
+     "imp": "0x28DF8"
+    },
+    {
+     "sel": "pauseRestoreWithEvent:",
+     "types": "@24@0:8Q16",
+     "imp": "0x28FD0"
+    },
+    {
+     "sel": "handleFreeSpaceCheck",
+     "types": "v16@0:8",
+     "imp": "0x28FE0"
+    },
+    {
+     "sel": "retrievePasswordIfNeeded",
+     "types": "v16@0:8",
+     "imp": "0x292EC"
+    },
+    {
+     "sel": "loadBackupInfo",
+     "types": "v16@0:8",
+     "imp": "0x29504"
+    },
+    {
+     "sel": "determineBackupsToRestore",
+     "types": "v16@0:8",
+     "imp": "0x29A84"
+    },
+    {
+     "sel": "handleAppIdentifierCheck",
+     "types": "v16@0:8",
+     "imp": "0x29CAC"
+    },
+    {
+     "sel": "extractBackup",
+     "types": "v16@0:8",
+     "imp": "0x29F54"
+    },
+    {
+     "sel": "pathOfContainerInExtractedBackup:",
+     "types": "@24@0:8@16",
+     "imp": "0x2A17C"
+    },
+    {
+     "sel": "handleGroupIdentifierCheckForBackupContainer:targetContainer:",
+     "types": "v32@0:8@16@24",
+     "imp": "0x2A298"
+    },
+    {
+     "sel": "restoreMetadataOfContainer:",
+     "types": "v24@0:8@16",
+     "imp": "0x2A848"
+    },
+    {
+     "sel": "restoreBackupContainer:intoContainer:",
+     "types": "v32@0:8@16@24",
+     "imp": "0x2ADA0"
+    },
+    {
+     "sel": "updatePathsOfContainer:withBackupContainer:",
+     "types": "v32@0:8@16@24",
+     "imp": "0x2B31C"
+    },
+    {
+     "sel": "handleFinish",
+     "types": "v16@0:8",
+     "imp": "0x2B904"
+    },
+    {
+     "sel": "main",
+     "types": "v16@0:8",
+     "imp": "0x2B9B0"
+    },
+    {
+     "sel": "backupPath",
+     "types": "@16@0:8",
+     "imp": "0x2C078"
+    },
+    {
+     "sel": "setBackupPath:",
+     "types": "v24@0:8@16",
+     "imp": "0x2C088"
+    },
+    {
+     "sel": "containedBackups",
+     "types": "@16@0:8",
+     "imp": "0x2C09C"
+    },
+    {
+     "sel": "setContainedBackups:",
+     "types": "v24@0:8@16",
+     "imp": "0x2C0AC"
+    },
+    {
+     "sel": "backupsToRestore",
+     "types": "@16@0:8",
+     "imp": "0x2C0C0"
+    },
+    {
+     "sel": "setBackupsToRestore:",
+     "types": "v24@0:8@16",
+     "imp": "0x2C0D0"
+    },
+    {
+     "sel": "single_targetContainer",
+     "types": "@16@0:8",
+     "imp": "0x2C0E4"
+    },
+    {
+     "sel": "setSingle_targetContainer:",
+     "types": "v24@0:8@16",
+     "imp": "0x2C0F4"
+    },
+    {
+     "sel": "handlerDelegate",
+     "types": "@16@0:8",
+     "imp": "0x2C108"
+    },
+    {
+     "sel": "setHandlerDelegate:",
+     "types": "v24@0:8@16",
+     "imp": "0x2C118"
+    },
+    {
+     "sel": "status",
+     "types": "@16@0:8",
+     "imp": "0x2C12C"
+    },
+    {
+     "sel": "setStatus:",
+     "types": "v24@0:8@16",
+     "imp": "0x2C13C"
+    },
+    {
+     "sel": "totalSuboperationsCount",
+     "types": "Q16@0:8",
+     "imp": "0x2C150"
+    },
+    {
+     "sel": "setTotalSuboperationsCount:",
+     "types": "v24@0:8Q16",
+     "imp": "0x2C160"
+    },
+    {
+     "sel": "currentSuboperationIndex",
+     "types": "Q16@0:8",
+     "imp": "0x2C170"
+    },
+    {
+     "sel": "setCurrentSuboperationIndex:",
+     "types": "v24@0:8Q16",
+     "imp": "0x2C180"
+    },
+    {
+     "sel": "processedFile",
+     "types": "@16@0:8",
+     "imp": "0x2C190"
+    },
+    {
+     "sel": "setProcessedFile:",
+     "types": "v24@0:8@16",
+     "imp": "0x2C1A0"
+    },
+    {
+     "sel": "processedContainer",
+     "types": "@16@0:8",
+     "imp": "0x2C1B4"
+    },
+    {
+     "sel": "setProcessedContainer:",
+     "types": "v24@0:8@16",
+     "imp": "0x2C1C4"
+    },
+    {
+     "sel": "processedIdentifier",
+     "types": "@16@0:8",
+     "imp": "0x2C1D8"
+    },
+    {
+     "sel": "setProcessedIdentifier:",
+     "types": "v24@0:8@16",
+     "imp": "0x2C1E8"
+    },
+    {
+     "sel": "error",
+     "types": "@16@0:8",
+     "imp": "0x2C1FC"
+    },
+    {
+     "sel": "setError:",
+     "types": "v24@0:8@16",
+     "imp": "0x2C20C"
+    },
+    {
+     "sel": ".cxx_destruct",
+     "types": "v16@0:8",
+     "imp": "0x2C220"
+    }
+   ],
+   "class_methods": [],
+   "categories": []
+  },
+  "CRPRightAlignedEditableTableCell": {
+   "addr": "0x59CD0",
+   "instance_methods": [
+    {
+     "sel": "initWithStyle:reuseIdentifier:specifier:",
+     "types": "@40@0:8q16@24@32",
+     "imp": "0x1F584"
+    }
+   ],
+   "class_methods": [],
+   "categories": []
+  },
+  "CRPRootListController": {
+   "addr": "0x59D20",
+   "instance_methods": [
+    {
+     "sel": "viewDidLoad",
+     "types": "v16@0:8",
+     "imp": "0x1FDA4"
+    },
+    {
+     "sel": "dealloc",
+     "types": "v16@0:8",
+     "imp": "0x1FE3C"
+    },
+    {
+     "sel": "tableView:accessoryButtonTappedForRowWithIndexPath:",
+     "types": "v32@0:8@16@24",
+     "imp": "0x1FE80"
+    },
+    {
+     "sel": "specifiers",
+     "types": "@16@0:8",
+     "imp": "0x1FF44"
+    },
+    {
+     "sel": "handleLiteMigration",
+     "types": "v16@0:8",
+     "imp": "0x20194"
+    },
+    {
+     "sel": "readPreferenceValue:",
+     "types": "@24@0:8@16",
+     "imp": "0x2074C"
+    },
+    {
+     "sel": "removeDisabledGroups:",
+     "types": "v24@0:8@16",
+     "imp": "0x20828"
+    },
+    {
+     "sel": "setPreferenceValue:specifier:",
+     "types": "v32@0:8@16@24",
+     "imp": "0x20BCC"
+    },
+    {
+     "sel": "setNotificationsSupportEnabled:specifier:",
+     "types": "v32@0:8@16@24",
+     "imp": "0x20DE8"
+    },
+    {
+     "sel": "createMultiBackupTapped",
+     "types": "v16@0:8",
+     "imp": "0x20E64"
+    },
+    {
+     "sel": "didFinishBackupAtPath:",
+     "types": "v24@0:8@16",
+     "imp": "0x20E98"
+    },
+    {
+     "sel": "openShareMenuWithFile:",
+     "types": "v24@0:8@16",
+     "imp": "0x20EFC"
+    },
+    {
+     "sel": "restoreMultiBackupTapped",
+     "types": "v16@0:8",
+     "imp": "0x211A8"
+    },
+    {
+     "sel": "openTwitter",
+     "types": "v16@0:8",
+     "imp": "0x213CC"
+    },
+    {
+     "sel": ".cxx_destruct",
+     "types": "v16@0:8",
+     "imp": "0x213E0"
+    }
+   ],
+   "class_methods": [],
+   "categories": []
+  },
+  "CRPRootPageSuggestionProvider": {
+   "addr": "0x59D98",
+   "instance_methods": [],
+   "class_methods": [],
+   "categories": []
+  },
+  "ClientContainerCache": {
+   "addr": "0x59F50",
+   "instance_methods": [
+    {
+     "sel": "init",
+     "types": "@16@0:8",
+     "imp": "0x3E78C"
+    },
+    {
+     "sel": "_registerForClearMessages",
+     "types": "v16@0:8",
+     "imp": "0x3E834"
+    },
+    {
+     "sel": "_getActiveContainerFromCacheForPid:",
+     "types": "@20@0:8i16",
+     "imp": "0x3E864"
+    },
+    {
+     "sel": "_setActiveContainer:toCacheForPid:",
+     "types": "v28@0:8@16i24",
+     "imp": "0x3E9C4"
+    },
+    {
+     "sel": "_clearActiveContainerCache",
+     "types": "v16@0:8",
+     "imp": "0x3EAC4"
+    },
+    {
+     "sel": "activeContainerIdentifierForPid:",
+     "types": "@20@0:8i16",
+     "imp": "0x3EB5C"
+    },
+    {
+     "sel": ".cxx_destruct",
+     "types": "v16@0:8",
+     "imp": "0x3F0CC"
+    }
+   ],
+   "class_methods": [],
+   "categories": []
+  },
+  "SSZipArchive": {
+   "addr": "0x59F00",
+   "instance_methods": [
+    {
+     "sel": "writeSymlinkFileAtPath:withFileName:compressionLevel:password:AES:",
+     "types": "B48@0:8@16@24i32@36B44",
+     "imp": "0x2FD40"
+    },
+    {
+     "sel": "init",
+     "types": "@16@0:8",
+     "imp": "0x2FFF8"
+    },
+    {
+     "sel": "initWithPath:",
+     "types": "@24@0:8@16",
+     "imp": "0x30008"
+    },
+    {
+     "sel": "open",
+     "types": "B16@0:8",
+     "imp": "0x30088"
+    },
+    {
+     "sel": "openForAppending",
+     "types": "B16@0:8",
+     "imp": "0x30130"
+    },
+    {
+     "sel": "writeFolderAtPath:withFolderName:withPassword:",
+     "types": "B40@0:8@16@24@32",
+     "imp": "0x301D8"
+    },
+    {
+     "sel": "writeFile:withPassword:",
+     "types": "B32@0:8@16@24",
+     "imp": "0x30454"
+    },
+    {
+     "sel": "writeFileAtPath:withFileName:withPassword:",
+     "types": "B40@0:8@16@24@32",
+     "imp": "0x304B4"
+    },
+    {
+     "sel": "writeFileAtPath:withFileName:compressionLevel:password:AES:",
+     "types": "B48@0:8@16@24i32@36B44",
+     "imp": "0x30534"
+    },
+    {
+     "sel": "writeData:filename:withPassword:",
+     "types": "B40@0:8@16@24@32",
+     "imp": "0x30744"
+    },
+    {
+     "sel": "writeData:filename:compressionLevel:password:AES:",
+     "types": "B48@0:8@16@24i32@36B44",
+     "imp": "0x307C4"
+    },
+    {
+     "sel": "close",
+     "types": "B16@0:8",
+     "imp": "0x30938"
+    },
+    {
+     "sel": ".cxx_destruct",
+     "types": "v16@0:8",
+     "imp": "0x30F3C"
+    }
+   ],
+   "class_methods": [],
+   "categories": []
+  }
+ },
+ "libcrane.dylib": {},
+ "cranehelperd": {
+  "CRHGlobalService": {
+   "addr": "0x100012D40",
+   "instance_methods": [
+    {
+     "sel": "testCallAndReply:",
+     "types": "v24@0:8@?16",
+     "imp": "0x1000052B4"
+    },
+    {
+     "sel": "fetchActiveContainerIDForProcessWithPid:reply:",
+     "types": "v28@0:8i16@?20",
+     "imp": "0x1000052C4"
+    },
+    {
+     "sel": "verifyCraneSBLoadedAndReply:",
+     "types": "v24@0:8@?16",
+     "imp": "0x100005518"
+    },
+    {
+     "sel": "verifyCraneSupportLoadedIntoDaemon:reply:",
+     "types": "v32@0:8@16@?24",
+     "imp": "0x100005580"
+    },
+    {
+     "sel": "verifyCraneInsuranceAndReply:",
+     "types": "v24@0:8@?16",
+     "imp": "0x100005624"
+    },
+    {
+     "sel": "runInjectionFixUpIfNeededAndReply:",
+     "types": "v24@0:8@?16",
+     "imp": "0x1000058B0"
+    },
+    {
+     "sel": "reloadDaemons:",
+     "types": "v24@0:8@16",
+     "imp": "0x100005A48"
+    },
+    {
+     "sel": "reloadApplication:",
+     "types": "v24@0:8@16",
+     "imp": "0x100005CD0"
+    },
+    {
+     "sel": "getDisplayNameOfApplicationWithIdentifier:reply:",
+     "types": "v32@0:8@16@?24",
+     "imp": "0x100005DE4"
+    },
+    {
+     "sel": "getIdentifiersOfAllSupportedApplicationsAndReply:",
+     "types": "v24@0:8@?16",
+     "imp": "0x100005E58"
+    },
+    {
+     "sel": "checkIsApplicationWithIdentifier:supportedByCraneAndReply:",
+     "types": "v32@0:8@16@?24",
+     "imp": "0x100005EA8"
+    },
+    {
+     "sel": "moveKeychainItemsFromContainerWithIdentifier:toContainerWithIdentifier:forApplicationWithIdentifier:reply:",
+     "types": "v48@0:8@16@24@32@?40",
+     "imp": "0x100005F3C"
+    },
+    {
+     "sel": "deleteKeychainItemsForContainerWithIdentifier:forApplicationIdentifier:",
+     "types": "v32@0:8@16@24",
+     "imp": "0x100005FF8"
+    },
+    {
+     "sel": "readDeviceVendorIdentifierFromApplicationWithIdentifier:reply:",
+     "types": "v32@0:8@16@?24",
+     "imp": "0x100006040"
+    },
+    {
+     "sel": "writeDeviceVendorIdentifier:toApplicationWithIdentifier:",
+     "types": "v32@0:8@16@24",
+     "imp": "0x10000627C"
+    }
+   ],
+   "class_methods": [],
+   "categories": []
+  },
+  "CRHGlobalServiceDelegate": {
+   "addr": "0x100012D90",
+   "instance_methods": [
+    {
+     "sel": "listener:shouldAcceptNewConnection:",
+     "types": "B32@0:8@16@24",
+     "imp": "0x100006380"
+    }
+   ],
+   "class_methods": [],
+   "categories": []
+  },
+  "CRHKeychain": {
+   "addr": "0x100012DE0",
+   "instance_methods": [],
+   "class_methods": [],
+   "categories": []
+  },
+  "CRHPreferencesService": {
+   "addr": "0x100012E30",
+   "instance_methods": [
+    {
+     "sel": "dumpKeychainItemsFromContainerWithIdentifier:forApplicationIdentifier:reply:",
+     "types": "v40@0:8@16@24@?32",
+     "imp": "0x100009748"
+    },
+    {
+     "sel": "restoreKeychainItemsToContainerWithIdentifier:forApplicationIdentifier:fromDictionary:",
+     "types": "v40@0:8@16@24@32",
+     "imp": "0x1000097F8"
+    },
+    {
+     "sel": "migrateApplication:withAppSettings:",
+     "types": "v32@0:8@16@24",
+     "imp": "0x100009864"
+    }
+   ],
+   "class_methods": [],
+   "categories": []
+  },
+  "CRHPreferencesServiceDelegate": {
+   "addr": "0x100012E80",
+   "instance_methods": [
+    {
+     "sel": "listener:shouldAcceptNewConnection:",
+     "types": "B32@0:8@16@24",
+     "imp": "0x1000098AC"
+    }
+   ],
+   "class_methods": [],
+   "categories": []
+  },
+  "CRHServiceShared": {
+   "addr": "0x100012ED0",
+   "instance_methods": [
+    {
+     "sel": "_daemonsForCraneSupportInjection",
+     "types": "@16@0:8",
+     "imp": "0x10000A080"
+    },
+    {
+     "sel": "_crucialCraneSupportDaemons",
+     "types": "@16@0:8",
+     "imp": "0x10000A1B0"
+    },
+    {
+     "sel": "_enumerateProcessesUsingBlock:",
+     "types": "v24@0:8@?16",
+     "imp": "0x10000A238"
+    },
+    {
+     "sel": "_pidForExecutablePath:",
+     "types": "i24@0:8@16",
+     "imp": "0x10000A4A0"
+    },
+    {
+     "sel": "_pidForProcessWithName:",
+     "types": "i24@0:8@16",
+     "imp": "0x10000A6A0"
+    },
+    {
+     "sel": "_processWithPidIsRunning:",
+     "types": "B20@0:8i16",
+     "imp": "0x10000A800"
+    },
+    {
+     "sel": "_enumerateImagesOfProcessWithPid:withBlock:",
+     "types": "v28@0:8i16@?20",
+     "imp": "0x10000A8D4"
+    },
+    {
+     "sel": "_serviceNameForDaemon:",
+     "types": "@24@0:8@16",
+     "imp": "0x10000AA64"
+    },
+    {
+     "sel": "_pingDaemon:",
+     "types": "B24@0:8@16",
+     "imp": "0x10000AB4C"
+    },
+    {
+     "sel": "_execute:whileDaemonWithNameIsRunning:",
+     "types": "B32@0:8@?16@24",
+     "imp": "0x10000AC20"
+    },
+    {
+     "sel": "_injectDylib:intoProcessWithPid:error:",
+     "types": "B36@0:8@16i24^@28",
+     "imp": "0x10000ACD4"
+    },
+    {
+     "sel": "_injectDylib:intoProcessWithName:error:",
+     "types": "B40@0:8@16@24^@32",
+     "imp": "0x10000B144"
+    },
+    {
+     "sel": "_fixupInjectionIfNeededForDaemon:error:",
+     "types": "B32@0:8@16^@24",
+     "imp": "0x10000B1BC"
+    },
+    {
+     "sel": "_isDylib:loadedIntoProcessWithPid:",
+     "types": "B28@0:8@16i24",
+     "imp": "0x10000B2AC"
+    },
+    {
+     "sel": "_isDylib:loadedIntoProcessWithName:",
+     "types": "B32@0:8@16@24",
+     "imp": "0x10000B450"
+    },
+    {
+     "sel": "_verifyCraneSupportLoadedIntoDaemon:error:",
+     "types": "B32@0:8@16^@24",
+     "imp": "0x10000B4C0"
+    },
+    {
+     "sel": "_waitUntilDylib:isLoadedIntoProcessWithPid:timeoutInSeconds:",
+     "types": "B36@0:8@16i24d28",
+     "imp": "0x10000B7D0"
+    },
+    {
+     "sel": "_waitUntilDylib:isLoadedIntoProcessWithName:timeoutInSeconds:",
+     "types": "B40@0:8@16@24d32",
+     "imp": "0x10000BA30"
+    },
+    {
+     "sel": "_killallProcessesWithName:",
+     "types": "v24@0:8@16",
+     "imp": "0x10000BAB0"
+    }
+   ],
+   "class_methods": [],
+   "categories": []
+  }
+ },
+ "cranehelperd_start": {},
+ "CraneApplication": {},
+ "CraneShortcuts(legacy)": {
+  "IntentHandler": {
+   "addr": "0x100008CB0",
+   "instance_methods": [
+    {
+     "sel": "handlerForIntent:",
+     "types": "@24@0:8@16",
+     "imp": "0x1000053A4"
+    }
+   ],
+   "class_methods": [],
+   "categories": []
+  },
+  "SetActiveCraneContainerIntent": {
+   "addr": "0x100008D00",
+   "instance_methods": [],
+   "class_methods": [],
+   "categories": []
+  },
+  "SetActiveCraneContainerIntentHandler": {
+   "addr": "0x100008C60",
+   "instance_methods": [
+    {
+     "sel": "matchingApplicationIdentifiersInArray:forSearchString:primaryMatch:",
+     "types": "@40@0:8@16@24^@32",
+     "imp": "0x1000041D8"
+    },
+    {
+     "sel": "resolvedApplicationIdentifierForSearchString:sortedMatches:",
+     "types": "@32@0:8@16^@24",
+     "imp": "0x100004478"
+    },
+    {
+     "sel": "resolvedApplicationIdentifierForSearchString:",
+     "types": "@24@0:8@16",
+     "imp": "0x1000045B0"
+    },
+    {
+     "sel": "matchingContainerIdentifiersInArray:forSearchString:ofApplicationWithIdentifier:primaryMatch:",
+     "types": "@48@0:8@16@24@32^@40",
+     "imp": "0x1000045B8"
+    },
+    {
+     "sel": "resolvedContainerIdentifierForSearchString:ofApplicationWithIdentifier:sortedMatches:",
+     "types": "@40@0:8@16@24^@32",
+     "imp": "0x10000488C"
+    },
+    {
+     "sel": "resolvedContainerIdentifierForSearchString:ofApplicationWithIdentifier:",
+     "types": "@32@0:8@16@24",
+     "imp": "0x1000049F0"
+    },
+    {
+     "sel": "handleSetActiveCraneContainer:completion:",
+     "types": "v32@0:8@16@?24",
+     "imp": "0x1000049F8"
+    },
+    {
+     "sel": "resolveAppForSetActiveCraneContainer:withCompletion:",
+     "types": "v32@0:8@16@?24",
+     "imp": "0x100004C90"
+    },
+    {
+     "sel": "resolveContainerForSetActiveCraneContainer:withCompletion:",
+     "types": "v32@0:8@16@?24",
+     "imp": "0x100004FA4"
+    }
+   ],
+   "class_methods": [],
+   "categories": []
+  },
+  "SetActiveCraneContainerIntentResponse": {
+   "addr": "0x100008D28",
+   "instance_methods": [
+    {
+     "sel": "initWithCode:userActivity:",
+     "types": "@32@0:8q16@24",
+     "imp": "0x10000542C"
+    },
+    {
+     "sel": "code",
+     "types": "q16@0:8",
+     "imp": "0x1000054B0"
+    },
+    {
+     "sel": "setCode:",
+     "types": "v24@0:8q16",
+     "imp": "0x1000054C0"
+    }
+   ],
+   "class_methods": [],
+   "categories": []
+  }
+ }
+}

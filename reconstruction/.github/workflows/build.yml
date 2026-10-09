@@ -1,0 +1,131 @@
+name: Build
+
+# GitHub Actions is the authoritative build environment for this project.
+# No run of this workflow has been executed from the analysis environment, so
+# every build result referenced in tests/ci_build_results.md is recorded as
+# NOT_TESTED until a real run ID exists.
+
+on:
+  push:
+    branches: ["**"]
+  pull_request:
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    name: Build package (arm64 + arm64e)
+    runs-on: macos-14
+    timeout-minutes: 45
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Record toolchain versions
+        id: toolchain
+        run: |
+          echo "runner_image=macos-14" >> "$GITHUB_OUTPUT"
+          echo "date=$(date -u +%Y-%m-%dT%H:%M:%SZ)" >> "$GITHUB_OUTPUT"
+          {
+            echo "### toolchain"
+            echo '```'
+            sw_vers || true
+            xcodebuild -version || true
+            git --version || true
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Install Theos
+        uses: theos/theos-action@v1
+
+      - name: Build and package
+        working-directory: reconstruction
+        id: build
+        run: |
+          set -o pipefail
+          make package 2>&1 | tee ../build.log
+        # Do not mask packaging failures behind a green test step.
+
+      - name: Inspect the produced package
+        working-directory: reconstruction
+        id: inspect
+        run: |
+          set -e
+          DEB=$(ls -1 packages/*.deb | head -n1)
+          echo "deb=$DEB" >> "$GITHUB_OUTPUT"
+          sha256sum "$DEB" | tee deb.sha256
+          mkdir -p pkg
+          # GNU ar + tar are present on the macOS runner; the data member is a
+          # plain gzipped tar.
+          ar p "$DEB" data.tar.gz | tar xz -C pkg
+          find pkg -type f -print0 | sort -z | xargs -0 shasum -a 256 > pkg.manifest.sha256
+          cat pkg.manifest.sha256
+
+      - name: Verify the staged layout matches the original package layout
+        working-directory: reconstruction
+        run: |
+          set -e
+          # The install paths below are CONFIRMED_STATIC from the original
+          # package; see analysis/package_inventory.md. A mismatch means the
+          # build is not packaging where the tweak expects to be.
+          EXPECTED=(
+            "Library/MobileSubstrate/DynamicLibraries/ Crane.dylib"
+            "Library/MobileSubstrate/DynamicLibraries/ Crane.plist"
+            "Library/MobileSubstrate/DynamicLibraries/CraneSB.dylib"
+            "Library/MobileSubstrate/DynamicLibraries/CraneSB.plist"
+            "Library/MobileSubstrate/DynamicLibraries/CraneSupport.dylib"
+            "Library/MobileSubstrate/DynamicLibraries/CraneSupport.plist"
+            "Library/PreferenceBundles/CranePrefs.bundle/CranePrefs"
+            "Library/PreferenceBundles/CranePrefs.bundle/Root.plist"
+            "Library/PreferenceBundles/CranePrefs.bundle/Credits.plist"
+            "Library/PreferenceBundles/CranePrefs.bundle/Info.plist"
+            "Library/PreferenceLoader/Preferences/CranePrefs.plist"
+            "Library/LaunchDaemons/com.opa334.cranehelperd.plist"
+            "Library/libSandy/libCrane.plist"
+            "Library/Application Support/Crane.bundle/en.lproj/Localizable.strings"
+            "Library/Application Support/Crane.bundle/Icons/AddIcon@2x.png"
+            "usr/lib/libcrane.dylib"
+            "usr/local/libexec/cranehelperd"
+            "usr/local/bin/cranehelperd_start"
+          )
+          fail=0
+          for f in "${EXPECTED[@]}"; do
+            if [ -e "pkg/$f" ]; then
+              echo "PRESENT  $f"
+            else
+              echo "MISSING  $f"
+              fail=1
+            fi
+          done
+          exit $fail
+
+      - name: Verify fat slice architectures
+        working-directory: reconstruction
+        run: |
+          set -e
+          python3 tools/verify_architectures.py pkg || {
+            echo "::error::architecture verification failed"
+            exit 1
+          }
+
+      - name: Upload build log
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: build-log
+          path: |
+            reconstruction/build.log
+            reconstruction/deb.sha256
+
+      - name: Upload package and manifest
+        uses: actions/upload-artifact@v4
+        with:
+          name: crane-package
+          path: |
+            reconstruction/packages/*.deb
+            reconstruction/pkg.manifest.sha256
+            reconstruction/deb.sha256

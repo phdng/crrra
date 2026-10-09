@@ -1,0 +1,15 @@
+Package: com.opa334.cranereconstruction
+Name: Crane (reconstruction)
+Version: 6.0
+Architecture: iphoneos-arm
+Depends: mobilesubstrate, ellekit, libhooker, firmware, altlist, activator, choicy
+Maintainer: reconstruction <nobody@example.invalid>
+Author: Lars Fröder (opa334) <opa334@opa334.dev>
+Section: Tweaks
+Description: Behavioural reconstruction of Crane, an iOS container-switching
+ jailbreak tweak. Install paths, Substrate filters, libSandy profiles,
+ preference keys and the launch-environment contract are reproduced from the
+ recovered package. See analysis/ for the evidence ledger and
+ final/KNOWN_DIFFERENCES.md for what is NOT reproduced.
+Homepage: https://opa334.github.io
+Tag: role::hacker
