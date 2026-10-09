@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<key>Filter</key>
+	<dict>
+		<key>Executables</key>
+		<array>
+			<string>cfprefsd</string>
+			<string>containermanagerd</string>
+			<string>securityd</string>
+			<string>pkd</string>
+			<string>lsd</string>
+			<string>accountsd</string>
+			<string>apsd</string>
+		</array>
+		<key>Flags</key>
+		<integer>1</integer>
+	</dict>
+</dict>
+</plist>

@@ -31,13 +31,20 @@ SUBPROJECTS += sources/maindylib sources/libcrane sources/cranehelperd \
 include $(THEOS_MAKE_PATH)/aggregate.mk
 
 after-stage::
-	@# Theos stages layout/ automatically. The only post-stage adjustment needed
-	@# for the recovered rootful package is the deliberate LEADING SPACE in the
-	@# installed main dylib filename.
+	@# Theos requires a filter plist beside every tweak Makefile, so each tweak
+	@# stages an XML copy. Restore the recovered binary filter plists from layout/
+	@# afterwards, and preserve the deliberate LEADING SPACE on the main pair.
 	@mkdir -p "$(THEOS_STAGING_DIR)/Library/MobileSubstrate/DynamicLibraries"
 	@if [ -e "$(THEOS_STAGING_DIR)/Library/MobileSubstrate/DynamicLibraries/Crane.dylib" ]; then \
 	    mv "$(THEOS_STAGING_DIR)/Library/MobileSubstrate/DynamicLibraries/Crane.dylib" \
 	       "$(THEOS_STAGING_DIR)/Library/MobileSubstrate/DynamicLibraries/ Crane.dylib"; \
 	fi
+	@rm -f "$(THEOS_STAGING_DIR)/Library/MobileSubstrate/DynamicLibraries/Crane.plist"
+	@cp -f "$(THEOS_PROJECT_DIR)/layout/Library/MobileSubstrate/DynamicLibraries/ Crane.plist" \
+	       "$(THEOS_STAGING_DIR)/Library/MobileSubstrate/DynamicLibraries/ Crane.plist"
+	@cp -f "$(THEOS_PROJECT_DIR)/layout/Library/MobileSubstrate/DynamicLibraries/CraneSB.plist" \
+	       "$(THEOS_STAGING_DIR)/Library/MobileSubstrate/DynamicLibraries/CraneSB.plist"
+	@cp -f "$(THEOS_PROJECT_DIR)/layout/Library/MobileSubstrate/DynamicLibraries/CraneSupport.plist" \
+	       "$(THEOS_STAGING_DIR)/Library/MobileSubstrate/DynamicLibraries/CraneSupport.plist"
 	@echo "== staged layout =="
 	@find "$(THEOS_STAGING_DIR)" -type f | sed "s|$(THEOS_STAGING_DIR)/||" | sort
