@@ -8,7 +8,7 @@ INSTALL_TARGET_PROCESSES = SpringBoard runningboardd
 
 include $(THEOS)/makefiles/common.mk
 
-CraneSB_FILES  = CRSpringBoard.m CRErrorAlerts.m CRMenuHooks.m CRActivator.m ../common/CRCommon.m
+CraneSB_FILES  = CRSpringBoard.m CRErrorAlerts.m CRMenuHooks.m CRBadgeAction.m CRActivator.m ../common/CRCommon.m
 CraneSB_CFLAGS  = -fobjc-arc -I$(THEOS_PROJECT_DIR)/sources/common
 CraneSB_FRAMEWORKS = Foundation CoreFoundation UIKit LocalAuthentication MobileCoreServices
 # The original binary links BackBoardServices/AppSupport, but this partial

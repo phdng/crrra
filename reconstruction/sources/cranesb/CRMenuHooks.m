@@ -1166,6 +1166,26 @@ static IMP gOrigConfigureCellLong;
 static IMP gOrigConfigureCellSize;
 static IMP gOrigConfigureCellSimple;
 static IMP gOrigInterfaceActionGroup;
+static IMP gOrigBadgeActionCopyInit;
+
+/* 0x16820: preserve badge metadata when UIKit clones a UIAction. */
+static id CRBadgeActionCopyInit(id self, SEL _cmd, id source)
+{
+    id (*original)(id, SEL, id) =
+        (id (*)(id, SEL, id))gOrigBadgeActionCopyInit;
+    id result = original ? original(self, _cmd, source) : nil;
+    Class badgeClass = NSClassFromString(@"CRBadgeAction");
+    if (result && badgeClass && [source isKindOfClass:badgeClass]) {
+        object_setClass(result, badgeClass);
+        CRDynamicObjectSetter(result, NSSelectorFromString(@"setBadgeText:"),
+            CRDynamicObjectGetter(source, NSSelectorFromString(@"badgeText")));
+        CRDynamicObjectSetter(result,
+            NSSelectorFromString(@"setAssociatedApplicationID:"),
+            CRDynamicObjectGetter(source,
+                NSSelectorFromString(@"associatedApplicationID")));
+    }
+    return result;
+}
 
 static BOOL CRShortcutIsSystem(id self, SEL _cmd)
 {
@@ -1358,7 +1378,9 @@ static id CRInterfaceActionGroup(id self, SEL _cmd, NSArray *elements)
     [elements enumerateObjectsUsingBlock:
         ^(id element, NSUInteger index, BOOL *stop) {
         (void)stop;
-        if (![element isKindOfClass:CRSubtitleMenu.class])
+        Class badgeClass = NSClassFromString(@"CRBadgeAction");
+        BOOL isBadge = badgeClass && [element isKindOfClass:badgeClass];
+        if (![element isKindOfClass:CRSubtitleMenu.class] && !isBadge)
             return;
 
         NSUInteger mapped =
@@ -1384,6 +1406,11 @@ static id CRInterfaceActionGroup(id self, SEL _cmd, NSArray *elements)
             image = CRDynamicObjectGetter(imageView,
                                           NSSelectorFromString(@"image"));
         }
+
+        /* The badge-specific view needs F-08's notification store and
+         * CRBadgeContextMenuActionView. Until then preserve normal views. */
+        if (isBadge)
+            return;
 
         Class viewClass =
             NSClassFromString(@"_UIContextMenuActionView");
@@ -1497,6 +1524,14 @@ void CRInitApplicationShortcutHooks(void)
                             (IMP)CRInterfaceActionGroup,
                             &gOrigInterfaceActionGroup);
         }
+    }
+
+    Class actionClass = NSClassFromString(@"UIAction");
+    SEL copySelector = NSSelectorFromString(@"initWithAction:");
+    if (actionClass && [actionClass instancesRespondToSelector:copySelector]) {
+        MSHookMessageEx(actionClass, copySelector,
+                        (IMP)CRBadgeActionCopyInit,
+                        &gOrigBadgeActionCopyInit);
     }
 
     Class menuClass = NSClassFromString(@"UIMenu");
