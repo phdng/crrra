@@ -12,7 +12,16 @@
  *   _interfaceActionGroupForActions          0x16598
  *   UIMenu initWithMenu:overrideChildren:    0x166B0
  *
- * The pre-UIMenu force-touch path remains separate and is not transcribed here.
+ * Legacy (CF < 1665.15 / iOS 11-12 force-touch) path recovered from:
+ *   early shortcut hook setup                 0x14D18
+ *   late data-provider hook setup             0x169F0
+ *   craneContainersApplicationShortcutItems  0x16A90
+ *   applicationShortcutItems                 0x170A4
+ *   _actionFromApplicationShortcutItem:      0x1555C
+ *   force-touch action handlers              0x18A3C..0x19068
+ *
+ * F-14 notification-badge decoration remains separate; the legacy menu path
+ * below intentionally omits its per-container badge subtitle.
  */
 
 #import <UIKit/UIKit.h>
@@ -28,6 +37,16 @@ static NSString *const kMenuPlaceholder =
     @"com.opa334.crane.to-replace-with-container-selection";
 static NSString *const kApplicationContainerType =
     @"com.opa334.crane.application-container";
+static NSString *const kLegacyContainersType =
+    @"com.opa334.crane.containers";
+static NSString *const kLegacyContainerTypePrefix =
+    @"com.opa334.crane-container.";
+static NSString *const kLegacySeparatorType =
+    @"com.opa334.crane.separator";
+static NSString *const kLegacyNewContainerType =
+    @"com.opa334.crane.new-container-action";
+static NSString *const kLegacyPreferencesType =
+    @"com.opa334.crane.open-preferences";
 
 extern void CRPresentNewContainerAlert(NSString *appID);
 
@@ -50,6 +69,34 @@ static void CRDynamicObjectSetter(id object, SEL selector, id value)
     if (!object || ![object respondsToSelector:selector])
         return;
     ((void (*)(id, SEL, id))objc_msgSend)(object, selector, value);
+}
+
+static void CRDynamicBoolSetter(id object, SEL selector, BOOL value)
+{
+    if (!object || ![object respondsToSelector:selector])
+        return;
+    ((void (*)(id, SEL, BOOL))objc_msgSend)(object, selector, value);
+}
+
+static id CRDynamicValueForKey(id object, NSString *key)
+{
+    if (!object || !key.length)
+        return nil;
+    @try {
+        return [object valueForKey:key];
+    } @catch (__unused NSException *exception) {
+        return nil;
+    }
+}
+
+static void CRDynamicSetValueForKey(id object, NSString *key, id value)
+{
+    if (!object || !key.length)
+        return;
+    @try {
+        [object setValue:value forKey:key];
+    } @catch (__unused NSException *exception) {
+    }
 }
 
 @interface UIMenu (CraneMenuPrivateCopy)
@@ -429,6 +476,684 @@ void CRInitUIMenuHooks(void)
 }
 
 /* ------------------------------------------------------------------------- */
+/* iOS 11/12 force-touch shortcut integration                                */
+/* ------------------------------------------------------------------------- */
+
+static NSString *CRShortcutApplicationIdentifier(id self);
+
+static char kCRLegacyProvideOptionsKey;
+static char kCRLegacySeparatorKey;
+static BOOL gCRPreventDismissingForceTouchMenu;
+
+static IMP gOrigLegacyForceTouchDismiss;
+static IMP gOrigLegacyForceTouchControllerInit;
+static IMP gOrigLegacyActionViewSetHighlighted;
+static IMP gOrigLegacyActionViewSetupSubviews;
+static IMP gOrigLegacyActionViewSetBackgroundColor;
+static IMP gOrigLegacyActionFromShortcutItem;
+static IMP gOrigLegacyApplicationShortcutItems;
+
+static BOOL CRLegacyProvidesContainerOptions(id self, SEL _cmd)
+{
+    (void)_cmd;
+    NSNumber *value =
+        objc_getAssociatedObject(self, &kCRLegacyProvideOptionsKey);
+    return value.boolValue;
+}
+
+static void CRLegacySetProvidesContainerOptions(id self, SEL _cmd, BOOL value)
+{
+    (void)_cmd;
+    objc_setAssociatedObject(self,
+                             &kCRLegacyProvideOptionsKey,
+                             @(value),
+                             OBJC_ASSOCIATION_RETAIN_NONATOMIC);
+}
+
+static BOOL CRLegacyActionIsSeparator(id self, SEL _cmd)
+{
+    (void)_cmd;
+    NSNumber *value = objc_getAssociatedObject(self, &kCRLegacySeparatorKey);
+    return value.boolValue;
+}
+
+static void CRLegacySetActionIsSeparator(id self, SEL _cmd, BOOL value)
+{
+    (void)_cmd;
+    objc_setAssociatedObject(self,
+                             &kCRLegacySeparatorKey,
+                             @(value),
+                             OBJC_ASSOCIATION_RETAIN_NONATOMIC);
+}
+
+static BOOL CRLegacyIsSeparatorAction(id action)
+{
+    return CRDynamicBoolGetter(action,
+        NSSelectorFromString(@"crane_isSeparator"));
+}
+
+static UIImage *CRLegacyTemplateIcon(NSString *name)
+{
+    UIImage *image = CRIcon(name);
+    return [image imageWithRenderingMode:UIImageRenderingModeAlwaysTemplate];
+}
+
+static UIImage *CRLegacyBlankIcon(void)
+{
+    UIGraphicsBeginImageContextWithOptions(CGSizeMake(30.0, 30.0), NO, 0.0);
+    UIImage *image = UIGraphicsGetImageFromCurrentImageContext();
+    UIGraphicsEndImageContext();
+    return image;
+}
+
+static id CRLegacyForceTouchDelegate(id shortcutController)
+{
+    return CRDynamicObjectGetter(shortcutController,
+                                 NSSelectorFromString(@"delegate"));
+}
+
+static void CRLegacyDismissShortcutController(id shortcutController,
+                                              dispatch_block_t completion)
+{
+    id delegate = CRLegacyForceTouchDelegate(shortcutController);
+    SEL selector =
+        NSSelectorFromString(@"_dismissAnimated:withCompletionHandler:");
+    if (delegate && [delegate respondsToSelector:selector]) {
+        ((void (*)(id, SEL, BOOL, id))objc_msgSend)(
+            delegate, selector, YES, completion);
+    } else if (completion) {
+        completion();
+    }
+}
+
+static void CRLegacyActivateShortcutItem(id shortcutController, id item)
+{
+    id delegate = CRLegacyForceTouchDelegate(shortcutController);
+    SEL selector = NSSelectorFromString(
+        @"appIconForceTouchShortcutViewController:activateApplicationShortcutItem:");
+    if (delegate && [delegate respondsToSelector:selector]) {
+        ((void (*)(id, SEL, id, id))objc_msgSend)(
+            delegate, selector, shortcutController, item);
+    }
+}
+
+static void CRLegacyExpandContainerOptions(id shortcutController)
+{
+    id delegate = CRLegacyForceTouchDelegate(shortcutController);
+    id dataProvider = CRDynamicValueForKey(delegate, @"_dataProvider");
+    CRLegacyDismissShortcutController(shortcutController, ^{
+        id controller = CRLegacyForceTouchDelegate(shortcutController);
+        CRDynamicBoolSetter(controller,
+                            NSSelectorFromString(
+                                @"setCrane_provideContainerOptions:"),
+                            YES);
+
+        id gestureRecognizer =
+            CRDynamicObjectGetter(dataProvider,
+                                  NSSelectorFromString(@"gestureRecognizer"));
+        SEL setupSelector =
+            NSSelectorFromString(@"_setupWithGestureRecognizer:");
+        if (controller && [controller respondsToSelector:setupSelector]) {
+            ((void (*)(id, SEL, id))objc_msgSend)(
+                controller, setupSelector, gestureRecognizer);
+        }
+
+        gCRPreventDismissingForceTouchMenu = YES;
+
+        Class iconControllerClass = NSClassFromString(@"SBIconController");
+        SEL sharedSelector = NSSelectorFromString(@"sharedInstance");
+        id iconController =
+            (iconControllerClass &&
+             [iconControllerClass respondsToSelector:sharedSelector])
+                ? ((id (*)(id, SEL))objc_msgSend)(
+                      iconControllerClass, sharedSelector)
+                : nil;
+        CRDynamicSetValueForKey(iconController,
+                                @"_appIconForceTouchController",
+                                controller);
+
+        SEL peekSelector =
+            NSSelectorFromString(
+                @"_peekAnimated:withRelativeTouchForce:allowSmoothing:");
+        if (controller && [controller respondsToSelector:peekSelector]) {
+            ((void (*)(id, SEL, BOOL, double, BOOL))objc_msgSend)(
+                controller, peekSelector, NO, 0.0, NO);
+        }
+
+        SEL presentSelector =
+            NSSelectorFromString(@"_presentAnimated:withCompletionHandler:");
+        if (controller && [controller respondsToSelector:presentSelector]) {
+            ((void (*)(id, SEL, BOOL, id))objc_msgSend)(
+                controller,
+                presentSelector,
+                YES,
+                ^{
+                    gCRPreventDismissingForceTouchMenu = NO;
+                });
+        } else {
+            gCRPreventDismissingForceTouchMenu = NO;
+        }
+    });
+}
+
+static void CRLegacyHandleContainerSelection(id shortcutController,
+                                             id shortcutItem,
+                                             NSString *containerID,
+                                             NSString *activeContainerID,
+                                             NSString *appID)
+{
+    if ([containerID isEqualToString:activeContainerID]) {
+        if (CRPrefBool(CRPref_LaunchAppOnContainerSelection))
+            CRLegacyActivateShortcutItem(shortcutController, shortcutItem);
+        else
+            CRLegacyDismissShortcutController(shortcutController, nil);
+        return;
+    }
+
+    CRLegacyDismissShortcutController(shortcutController, nil);
+    [CraneManager.sharedManager
+        setActiveContainerIdentifier:containerID
+         forApplicationWithIdentifier:appID
+        usingBiometricsIfNeededWithSuccessHandler:^{
+            if (CRPrefBool(CRPref_LaunchAppOnContainerSelection))
+                CRLegacyActivateShortcutItem(shortcutController, shortcutItem);
+            else
+                CRLegacyDismissShortcutController(shortcutController, nil);
+        }];
+}
+
+static void CRLegacyDismissHook(id self,
+                                SEL _cmd,
+                                BOOL animated,
+                                id completion)
+{
+    if (gCRPreventDismissingForceTouchMenu)
+        return;
+
+    void (*original)(id, SEL, BOOL, id) =
+        (void (*)(id, SEL, BOOL, id))gOrigLegacyForceTouchDismiss;
+    if (original)
+        original(self, _cmd, animated, completion);
+}
+
+static id CRLegacyForceTouchControllerInit(id self, SEL _cmd)
+{
+    id (*original)(id, SEL) =
+        (id (*)(id, SEL))gOrigLegacyForceTouchControllerInit;
+    id result = original ? original(self, _cmd) : self;
+    CRDynamicBoolSetter(result,
+                        NSSelectorFromString(
+                            @"setCrane_provideContainerOptions:"),
+                        NO);
+    return result;
+}
+
+static void CRLegacyActionViewSetHighlighted(id self,
+                                             SEL _cmd,
+                                             BOOL highlighted)
+{
+    id action =
+        CRDynamicObjectGetter(self, NSSelectorFromString(@"action"));
+    BOOL effective = highlighted && !CRLegacyIsSeparatorAction(action);
+
+    void (*original)(id, SEL, BOOL) =
+        (void (*)(id, SEL, BOOL))gOrigLegacyActionViewSetHighlighted;
+    if (original)
+        original(self, _cmd, effective);
+}
+
+static void CRLegacyActionViewSetupSubviews(id self, SEL _cmd)
+{
+    id action =
+        CRDynamicObjectGetter(self, NSSelectorFromString(@"action"));
+    if (!CRLegacyIsSeparatorAction(action)) {
+        void (*original)(id, SEL) =
+            (void (*)(id, SEL))gOrigLegacyActionViewSetupSubviews;
+        if (original)
+            original(self, _cmd);
+        return;
+    }
+
+    if ([self isKindOfClass:UIView.class]) {
+        NSLayoutConstraint *height =
+            [[(UIView *)self heightAnchor] constraintEqualToConstant:2.0];
+        height.active = YES;
+    }
+    [(UIView *)self setBackgroundColor:UIColor.blackColor];
+
+    Class labelClass = NSClassFromString(@"SBUIActionViewLabel");
+    if (!labelClass)
+        return;
+
+    id titleLabel =
+        ((id (*)(id, SEL, CGRect))objc_msgSend)(
+            [labelClass alloc], @selector(initWithFrame:), CGRectZero);
+    id subtitleLabel =
+        ((id (*)(id, SEL, CGRect))objc_msgSend)(
+            [labelClass alloc], @selector(initWithFrame:), CGRectZero);
+    CRDynamicSetValueForKey(self, @"_titleLabel", titleLabel);
+    CRDynamicSetValueForKey(self, @"_subtitleLabel", subtitleLabel);
+}
+
+static void CRLegacyActionViewSetBackgroundColor(id self,
+                                                 SEL _cmd,
+                                                 UIColor *color)
+{
+    id action =
+        CRDynamicObjectGetter(self, NSSelectorFromString(@"action"));
+    UIColor *effective =
+        CRLegacyIsSeparatorAction(action) ? UIColor.blackColor : color;
+
+    void (*original)(id, SEL, id) =
+        (void (*)(id, SEL, id))gOrigLegacyActionViewSetBackgroundColor;
+    if (original)
+        original(self, _cmd, effective);
+}
+
+static id CRLegacyActionFromShortcutItem(id self,
+                                         SEL _cmd,
+                                         id shortcutItem)
+{
+    id (*original)(id, SEL, id) =
+        (id (*)(id, SEL, id))gOrigLegacyActionFromShortcutItem;
+    id action = original ? original(self, _cmd, shortcutItem) : nil;
+    if (!action)
+        return nil;
+
+    CRDynamicBoolSetter(action,
+                        NSSelectorFromString(@"setCrane_isSeparator:"),
+                        NO);
+
+    NSString *type =
+        CRDynamicObjectGetter(shortcutItem, NSSelectorFromString(@"type"));
+    if ([type isEqualToString:kLegacyContainersType]) {
+        CRDynamicSetValueForKey(action,
+                                @"_image",
+                                CRLegacyTemplateIcon(@"ContainersIcon"));
+        CRDynamicSetValueForKey(action,
+                                @"_handler",
+                                [^{
+            CRLegacyExpandContainerOptions(self);
+        } copy]);
+        return action;
+    }
+
+    if ([type hasPrefix:kLegacyContainerTypePrefix]) {
+        NSString *containerID =
+            [type stringByReplacingOccurrencesOfString:
+                      kLegacyContainerTypePrefix
+                                        withString:@""];
+        id dataProvider =
+            CRDynamicObjectGetter(self, NSSelectorFromString(@"dataProvider"));
+        NSString *appID = CRShortcutApplicationIdentifier(dataProvider);
+        NSString *active =
+            [CraneManager.sharedManager
+                activeContainerIdentifierForApplicationWithIdentifier:appID];
+
+        UIImage *image = [containerID isEqualToString:active]
+            ? CRLegacyTemplateIcon(@"SelectedContainerCheckmark")
+            : CRLegacyBlankIcon();
+        CRDynamicSetValueForKey(action, @"_image", image);
+
+        CRDynamicSetValueForKey(action,
+                                @"_handler",
+                                [^{
+            CRLegacyHandleContainerSelection(
+                self, shortcutItem, containerID, active, appID);
+        } copy]);
+        return action;
+    }
+
+    if ([type isEqualToString:kLegacyNewContainerType]) {
+        CRDynamicSetValueForKey(action,
+                                @"_image",
+                                CRLegacyTemplateIcon(@"AddIcon"));
+        id dataProvider =
+            CRDynamicObjectGetter(self, NSSelectorFromString(@"dataProvider"));
+        NSString *appID = CRShortcutApplicationIdentifier(dataProvider);
+        CRDynamicSetValueForKey(action,
+                                @"_handler",
+                                [^{
+            CRLegacyDismissShortcutController(self, nil);
+            dispatch_async(dispatch_get_main_queue(), ^{
+                CRPresentNewContainerAlert(appID);
+            });
+        } copy]);
+        return action;
+    }
+
+    if ([type isEqualToString:kLegacyPreferencesType]) {
+        CRDynamicSetValueForKey(action,
+                                @"_image",
+                                CRLegacyTemplateIcon(@"SettingsIcon"));
+        id dataProvider =
+            CRDynamicObjectGetter(self, NSSelectorFromString(@"dataProvider"));
+        NSString *appID = CRShortcutApplicationIdentifier(dataProvider);
+        CRDynamicSetValueForKey(action,
+                                @"_handler",
+                                [^{
+            CROpenCraneSettings(appID);
+        } copy]);
+        return action;
+    }
+
+    if ([type isEqualToString:kLegacySeparatorType]) {
+        CRDynamicBoolSetter(action,
+                            NSSelectorFromString(@"setCrane_isSeparator:"),
+                            YES);
+        CRDynamicSetValueForKey(action, @"_handler", [^{} copy]);
+    }
+
+    return action;
+}
+
+static id CRLegacyNewShortcutItem(NSString *title,
+                                  NSString *subtitle,
+                                  NSString *type,
+                                  NSString *bundleIdentifier)
+{
+    Class itemClass = NSClassFromString(@"SBSApplicationShortcutItem");
+    id item = [itemClass new];
+    if (!item)
+        return nil;
+
+    CRDynamicObjectSetter(item,
+                          NSSelectorFromString(@"setLocalizedTitle:"),
+                          title);
+    if (subtitle.length) {
+        CRDynamicObjectSetter(item,
+                              NSSelectorFromString(@"setLocalizedSubtitle:"),
+                              subtitle);
+    }
+    CRDynamicObjectSetter(item, NSSelectorFromString(@"setType:"), type);
+    if (bundleIdentifier.length) {
+        CRDynamicObjectSetter(item,
+                              NSSelectorFromString(
+                                  @"setBundleIdentifierToLaunch:"),
+                              bundleIdentifier);
+    }
+    return item;
+}
+
+static NSArray *CRLegacyContainerShortcutItems(id self)
+{
+    NSString *appID = CRShortcutApplicationIdentifier(self);
+    if (!appID.length)
+        return @[];
+
+    CraneManager *manager = CraneManager.sharedManager;
+    NSDictionary *settings =
+        [manager applicationSettingsForApplicationWithIdentifier:appID];
+    NSArray *containers = settings[CRAppSetting_Containers] ?: @[];
+    NSMutableArray *items = [NSMutableArray new];
+
+    for (NSDictionary *container in containers) {
+        NSString *containerID = container[CRCContainer_Identifier];
+        if (!containerID.length)
+            continue;
+
+        NSString *title =
+            [manager displayNameForContainerWithIdentifier:containerID
+                               ofApplicationWithIdentifier:appID
+                                    shouldUseShortVersion:YES];
+        NSString *type =
+            [kLegacyContainerTypePrefix
+                stringByAppendingString:containerID];
+        id item = CRLegacyNewShortcutItem(
+            title ?: containerID, nil, type, appID);
+        if (item)
+            [items addObject:item];
+    }
+
+    if (CRPrefBool(CRPref_NewContainerShortcut)) {
+        id item = CRLegacyNewShortcutItem(
+            CRLocalize(@"NEW_CONTAINER"),
+            nil,
+            kLegacyNewContainerType,
+            nil);
+        if (item)
+            [items addObject:item];
+    }
+
+    if (!CRPrefBool(CRPref_ExpandContainersShortcut)) {
+        id separator =
+            CRLegacyNewShortcutItem(nil, nil, kLegacySeparatorType, nil);
+        if (separator)
+            [items addObject:separator];
+    }
+
+    id settingsItem = CRLegacyNewShortcutItem(
+        CRLocalize(@"SETTINGS"), nil, kLegacyPreferencesType, nil);
+    if (settingsItem)
+        [items addObject:settingsItem];
+
+    return items;
+}
+
+static NSArray *CRLegacyContainerShortcutItemsMethod(id self, SEL _cmd)
+{
+    (void)_cmd;
+    return CRLegacyContainerShortcutItems(self);
+}
+
+static NSArray *CRLegacyApplicationShortcutItems(id self, SEL _cmd)
+{
+    NSArray *(*original)(id, SEL) =
+        (NSArray *(*)(id, SEL))gOrigLegacyApplicationShortcutItems;
+
+    NSString *appID = CRShortcutApplicationIdentifier(self);
+    if (!appID.length ||
+        !CRPrefBool(CRPref_AppShortcutEnabled) ||
+        ![CraneManager.sharedManager isApplicationSupportedByCrane:appID]) {
+        return original ? original(self, _cmd) : nil;
+    }
+
+    id controller =
+        CRDynamicObjectGetter(self, NSSelectorFromString(@"controller"));
+    if (CRDynamicBoolGetter(
+            controller,
+            NSSelectorFromString(@"crane_provideContainerOptions"))) {
+        CRDynamicBoolSetter(
+            controller,
+            NSSelectorFromString(@"setCrane_provideContainerOptions:"),
+            NO);
+        return CRLegacyContainerShortcutItems(self);
+    }
+
+    NSDictionary *settings =
+        [CraneManager.sharedManager
+            applicationSettingsForApplicationWithIdentifier:appID];
+    NSArray *containers = settings[CRAppSetting_Containers] ?: @[];
+    NSArray *existing = original ? original(self, _cmd) : nil;
+
+    if (containers.count <= 1 &&
+        CRPrefBool(CRPref_OnlyShowIfContainersExist)) {
+        return existing;
+    }
+
+    if (CRPrefBool(CRPref_ExpandContainersShortcut)) {
+        NSArray *craneItems = CRLegacyContainerShortcutItems(self);
+        if (!existing.count)
+            return craneItems;
+
+        id separator =
+            CRLegacyNewShortcutItem(nil, nil, kLegacySeparatorType, nil);
+        NSMutableArray *combined = [existing mutableCopy];
+        if (separator)
+            [combined addObject:separator];
+        [combined addObjectsFromArray:craneItems];
+        return combined;
+    }
+
+    NSString *active =
+        [CraneManager.sharedManager
+            activeContainerIdentifierForApplicationWithIdentifier:appID];
+    NSString *activeName =
+        [CraneManager.sharedManager
+            displayNameForContainerWithIdentifier:active
+                       ofApplicationWithIdentifier:appID
+                            shouldUseShortVersion:YES];
+
+    id parent = CRLegacyNewShortcutItem(
+        CRLocalize(@"CONTAINER"),
+        activeName,
+        kLegacyContainersType,
+        nil);
+    if (!parent)
+        return existing;
+
+    return existing ? [existing arrayByAddingObject:parent] : @[parent];
+}
+
+static void CRInitLegacyApplicationShortcutHooks(void)
+{
+    static dispatch_once_t onceToken;
+    dispatch_once(&onceToken, ^{
+        Class forceTouchViewController =
+            NSClassFromString(@"SBUIIconForceTouchViewController");
+        SEL dismissSelector =
+            NSSelectorFromString(@"dismissAnimated:withCompletionHandler:");
+        if (forceTouchViewController &&
+            [forceTouchViewController
+                instancesRespondToSelector:dismissSelector]) {
+            MSHookMessageEx(forceTouchViewController,
+                            dismissSelector,
+                            (IMP)CRLegacyDismissHook,
+                            &gOrigLegacyForceTouchDismiss);
+        }
+
+        Class controllerClass =
+            NSClassFromString(@"SBUIAppIconForceTouchController");
+        if (controllerClass) {
+            objc_property_attribute_t attributes[] = {
+                {"T", "B"},
+                {"N", ""}
+            };
+            class_addProperty(controllerClass,
+                              "crane_provideContainerOptions",
+                              attributes,
+                              2);
+            class_addMethod(controllerClass,
+                            NSSelectorFromString(
+                                @"crane_provideContainerOptions"),
+                            (IMP)CRLegacyProvidesContainerOptions,
+                            "B@:");
+            class_addMethod(controllerClass,
+                            NSSelectorFromString(
+                                @"setCrane_provideContainerOptions:"),
+                            (IMP)CRLegacySetProvidesContainerOptions,
+                            "v@:B");
+
+            SEL initSelector = @selector(init);
+            if ([controllerClass
+                    instancesRespondToSelector:initSelector]) {
+                MSHookMessageEx(controllerClass,
+                                initSelector,
+                                (IMP)CRLegacyForceTouchControllerInit,
+                                &gOrigLegacyForceTouchControllerInit);
+            }
+        }
+
+        Class actionClass = NSClassFromString(@"SBUIAction");
+        if (actionClass) {
+            objc_property_attribute_t attributes[] = {
+                {"T", "B"},
+                {"N", ""}
+            };
+            class_addProperty(actionClass,
+                              "crane_isSeparator",
+                              attributes,
+                              2);
+            class_addMethod(actionClass,
+                            NSSelectorFromString(@"crane_isSeparator"),
+                            (IMP)CRLegacyActionIsSeparator,
+                            "B@:");
+            class_addMethod(actionClass,
+                            NSSelectorFromString(@"setCrane_isSeparator:"),
+                            (IMP)CRLegacySetActionIsSeparator,
+                            "v@:B");
+        }
+
+        Class actionViewClass = NSClassFromString(@"SBUIActionView");
+        if (actionViewClass) {
+            SEL highlighted =
+                NSSelectorFromString(@"setHighlighted:");
+            if ([actionViewClass
+                    instancesRespondToSelector:highlighted]) {
+                MSHookMessageEx(actionViewClass,
+                                highlighted,
+                                (IMP)CRLegacyActionViewSetHighlighted,
+                                &gOrigLegacyActionViewSetHighlighted);
+            }
+
+            SEL setup = NSSelectorFromString(@"_setupSubviews");
+            if ([actionViewClass instancesRespondToSelector:setup]) {
+                MSHookMessageEx(actionViewClass,
+                                setup,
+                                (IMP)CRLegacyActionViewSetupSubviews,
+                                &gOrigLegacyActionViewSetupSubviews);
+            }
+
+            SEL background =
+                NSSelectorFromString(@"setBackgroundColor:");
+            if ([actionViewClass
+                    instancesRespondToSelector:background]) {
+                MSHookMessageEx(actionViewClass,
+                                background,
+                                (IMP)CRLegacyActionViewSetBackgroundColor,
+                                &gOrigLegacyActionViewSetBackgroundColor);
+            }
+        }
+
+        Class shortcutViewController =
+            NSClassFromString(
+                @"SBUIAppIconForceTouchShortcutViewController");
+        SEL actionSelector =
+            NSSelectorFromString(
+                @"_actionFromApplicationShortcutItem:");
+        if (shortcutViewController &&
+            [shortcutViewController
+                instancesRespondToSelector:actionSelector]) {
+            MSHookMessageEx(shortcutViewController,
+                            actionSelector,
+                            (IMP)CRLegacyActionFromShortcutItem,
+                            &gOrigLegacyActionFromShortcutItem);
+        }
+    });
+}
+
+void CRInitApplicationShortcutLateHooks(void)
+{
+    if (kCFCoreFoundationVersionNumber >= 1665.15)
+        return;
+
+    static dispatch_once_t onceToken;
+    dispatch_once(&onceToken, ^{
+        Class dataProviderClass =
+            NSClassFromString(
+                @"SBUIAppIconForceTouchControllerDataProvider");
+        if (!dataProviderClass)
+            return;
+
+        class_addMethod(dataProviderClass,
+                        NSSelectorFromString(
+                            @"craneContainersApplicationShortcutItems"),
+                        (IMP)CRLegacyContainerShortcutItemsMethod,
+                        "@@:");
+
+        SEL itemsSelector =
+            NSSelectorFromString(@"applicationShortcutItems");
+        if ([dataProviderClass
+                instancesRespondToSelector:itemsSelector]) {
+            MSHookMessageEx(dataProviderClass,
+                            itemsSelector,
+                            (IMP)CRLegacyApplicationShortcutItems,
+                            &gOrigLegacyApplicationShortcutItems);
+        }
+    });
+}
+
+/* ------------------------------------------------------------------------- */
 /* iOS 13+ shortcut integration                                              */
 /* ------------------------------------------------------------------------- */
 
@@ -683,8 +1408,10 @@ static id CRInterfaceActionGroup(id self, SEL _cmd, NSArray *elements)
 
 void CRInitApplicationShortcutHooks(void)
 {
-    if (kCFCoreFoundationVersionNumber < 1665.15)
+    if (kCFCoreFoundationVersionNumber < 1665.15) {
+        CRInitLegacyApplicationShortcutHooks();
         return;
+    }
 
     Class itemClass = NSClassFromString(@"SBSApplicationShortcutItem");
     if (itemClass) {

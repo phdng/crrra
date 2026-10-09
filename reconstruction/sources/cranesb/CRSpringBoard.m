@@ -19,8 +19,8 @@
  *     the selectors are recovered but the target class of each is aliased in
  *     the decompilation, so the hooks could not be attributed to classes
  *     without inventing them (U-10);
- *   * the pre-UIMenu (iOS 11/12) force-touch shortcut path remains unported;
- *     the modern UIMenu layout/hooks are transcribed in CRMenuHooks.m;
+ *   * the application-shortcut UI for both the modern UIMenu path and the
+ *     pre-UIMenu (iOS 11/12) force-touch path is transcribed in CRMenuHooks.m;
  *   * the badge view constraint maths behind initCRBadgeContextMenuActionView
  *     (0x7F58) beyond the property additions;
  *   * CRNewContainerAlert (InitFunc_1) remains incomplete; CRErrorAlert and
@@ -50,6 +50,7 @@ extern void CRPresentMainDylibNotLoadedError(NSString *appName);
 extern void CRPresentApsdRegistrationError(NSString *appID);
 extern void CRPresentPkdRegistrationError(NSString *appID);
 extern void CRInitApplicationShortcutHooks(void);
+extern void CRInitApplicationShortcutLateHooks(void);
 extern void CRInitUIMenuHooks(void);
 
 /* ------------------------------------------------------------------------- */
@@ -448,7 +449,7 @@ static void CRInitSpringBoard(void)
         CRInitApplicationShortcutHooks();
 
     /* initNotificationSupport / initCRBadgeContextMenuActionView remain
-     * separate gaps; the recovered modern UIMenu replacement path is wired. */
+     * separate gaps; both modern and legacy container-selection paths are wired. */
     CRInitUIMenuHooks();
 }
 
@@ -456,6 +457,8 @@ static void CRDidFinishLaunching(CFNotificationCenterRef center, void *observer,
                                  CFStringRef name, const void *object,
                                  CFDictionaryRef userInfo)
 {
+    if (kCFCoreFoundationVersionNumber < 1665.15 && CRAppShortcutEnabled())
+        CRInitApplicationShortcutLateHooks();
     hasFinishedLaunching = YES;
 }
 

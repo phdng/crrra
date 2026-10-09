@@ -147,7 +147,7 @@ its apsd/server half is source-transcribed.
 each of the 40 `CraneSB` hooks is aliased in the decompilation (U-10), so they
 cannot be attributed to classes without inventing them.
 
-### D-08 — Modern container-selection UIMenu is reconstructed; legacy force-touch and badge decoration remain
+### D-08 — Modern and legacy container-selection UI are reconstructed; badge decoration remains
 
 **Original:** the modern path injects a placeholder `SBSApplicationShortcutItem`,
 then replaces it through one of two `UIMenu` initializer hooks. The recovered
@@ -160,23 +160,30 @@ cell hooks preserve/render that subtitle. Older systems use the separate
 `SBUIAppIconForceTouch*` / `SBUIActionView` family. Container rows may become
 `CRBadgeAction`s when F-14 notification badges are enabled.
 
-**Reconstruction:** `CRMenuHooks.m` now transcribes the modern UIMenu-era path:
-placeholder injection and app-id capture, both initializer variants,
-`SBSApplicationShortcutItem` section/system classification, container switching
-through the biometric manager method, active checkmark, optional New Container,
+**Reconstruction:** `CRMenuHooks.m` now transcribes both menu families. The
+modern UIMenu-era path includes placeholder injection and app-id capture, both
+initializer variants, `SBSApplicationShortcutItem` section/system
+classification, active checkmark/subtitle, optional New Container,
 Settings/Shuffle URL handling, launch-on-selection, subtitle-preserving UIMenu
 copies, three `_configureCell` variants and `_interfaceActionGroupForActions:`.
+The CF <1665.15 path now reproduces the recovered two-phase hook timing: early
+`SBUIIconForceTouchViewController` / `SBUIAppIconForceTouchController` /
+`SBUIAction` / `SBUIActionView` hooks, then the
+`SBUIAppIconForceTouchControllerDataProvider.applicationShortcutItems` hook
+after SpringBoard finishes launching. It reconstructs the parent Container row,
+expanded per-container rows, active checkmark, 2pt separator rendering, New
+Container/Settings handlers, biometric switching, and optional app activation.
 `CRNewContainerAlert` is also reconstructed in `CRErrorAlerts.m`, and the
 `createNewContainerWithName:forApplicationWithIdentifier:` return contract was
 corrected to return the created identifier as required by the recovered alert
 handler. U-05 is RESOLVED statically from these bodies.
 
-**Remaining difference:** the CF <1665.15 legacy force-touch hook family is not
-ported. F-14 badge-specific `CRBadgeAction` custom rendering is deliberately
-deferred. The original container-switch success callback includes a BOOL used
-for an old-CF delayed-launch nuance; reconstructed libcrane does not expose that
-reply detail, so this modern path launches immediately after its reconstructed
-success callback. No device or visual comparison has been performed.
+**Remaining difference:** F-14 badge-specific `CRBadgeAction` / per-container
+notification-badge rendering is deliberately deferred. The original
+container-switch success callback includes a BOOL used for an old-CF
+delayed-launch nuance; reconstructed libcrane does not expose that reply detail,
+so the reconstructed menu paths act immediately after their available success
+callback. No device or visual comparison has been performed.
 
 ### D-09 — Choicy provider/runtime core is reconstructed; the per-container editor is absent
 
