@@ -15,6 +15,5 @@ include $(THEOS)/makefiles/common.mk
 cranehelperd_FILES  = CRHelperd.m
 cranehelperd_CFLAGS  = -fobjc-arc -I$(THEOS_PROJECT_DIR)/sources/common
 cranehelperd_FRAMEWORKS = Foundation CoreFoundation Security
-cranehelperd_LIBRARIES  = objc
 
 include $(THEOS_MAKE_PATH)/tool.mk

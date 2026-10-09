@@ -13,8 +13,9 @@ include $(THEOS)/makefiles/common.mk
 CraneSupport_FILES  = CRSupport.m ../common/CRCommon.m
 CraneSupport_CFLAGS  = -fobjc-arc -I$(THEOS_PROJECT_DIR)/sources/common
 CraneSupport_FRAMEWORKS = Foundation CoreFoundation Security CoreData LocalAuthentication
-CraneSupport_PRIVATE_FRAMEWORKS = AppSupport
-CraneSupport_LIBRARIES  = objc crane bsm.0
+# AppSupport is present in the original binary's load commands, but the
+# reconstructed source currently has no AppSupport symbol references.
+CraneSupport_LIBRARIES  = crane bsm.0
 CraneSupport_LDFLAGS += -L$(THEOS_OBJ_DIR)
 
 include $(THEOS_MAKE_PATH)/tweak.mk
