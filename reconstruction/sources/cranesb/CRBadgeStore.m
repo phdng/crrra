@@ -81,6 +81,56 @@ static void CRResetContainerBadge(id self, SEL cmd, NSString *containerID,
  * by the notification save thread, not inferred from the active container. */
 static IMP gCRBadgeQueueSetterOriginal;
 static IMP gCRBadgePrivateSetterOriginal;
+static BOOL CRBadgeRedirectionEnabled(NSString *appID);
+static IMP gCRBadgePublicSetterOriginal;
+
+/* CraneSB 0xA4A0: prefer the source process PID's container cache.
+ * Never replace a missing cache result with the app's currently active ID. */
+static NSString *CRBadgeContainerForConnection(NSXPCConnection *connection)
+{
+    Class cacheClass = NSClassFromString(@"ClientContainerCache");
+    SEL sharedSEL = NSSelectorFromString(@"sharedInstance");
+    SEL activeSEL = NSSelectorFromString(@"activeContainerIdentifierForPid:");
+    if (!connection || !cacheClass ||
+        ![cacheClass respondsToSelector:sharedSEL])
+        return nil;
+    id cache = ((id (*)(id, SEL))objc_msgSend)(cacheClass, sharedSEL);
+    if (![cache respondsToSelector:activeSEL])
+        return nil;
+    pid_t pid = [connection processIdentifier];
+    if (pid <= 0)
+        return nil;
+    id result = ((id (*)(id, SEL, pid_t))objc_msgSend)(cache, activeSEL, pid);
+    return [result isKindOfClass:[NSString class]] ? result : nil;
+}
+
+/* 0xFD9C: public setter uses current XPC caller rather than save-thread ID.
+ * On unknown caller identity, preserve Apple's setter without store mutation. */
+static void CRBadgePublicSet(id self, SEL cmd, NSNumber *number,
+                             NSString *appID, id completion)
+{
+    void (*original)(id, SEL, id, id, id) =
+        (void (*)(id, SEL, id, id, id))gCRBadgePublicSetterOriginal;
+    if (!original)
+        return;
+    if (CRBadgeRedirectionEnabled(appID) &&
+        [number respondsToSelector:@selector(integerValue)]) {
+        SEL currentSEL = NSSelectorFromString(@"currentConnection");
+        NSXPCConnection *connection =
+            [NSXPCConnection respondsToSelector:currentSEL]
+                ? ((id (*)(id, SEL))objc_msgSend)([NSXPCConnection class], currentSEL)
+                : nil;
+        if (connection) {
+            NSString *container = CRBadgeContainerForConnection(connection);
+            if (!container.length)
+                container = @"DEFAULT";
+            CRBadgeStoreSetContainerCount(appID, container,
+                                          [number integerValue]);
+        }
+    }
+    original(self, cmd, number, appID, completion);
+}
+
 
 static BOOL CRBadgeRedirectionEnabled(NSString *appID)
 {
@@ -113,6 +163,33 @@ static NSInteger CRBadgeAggregateCount(NSString *appID)
     return total;
 }
 
+/* 0xBD98/0xBE80: remove only records belonging to the container whose
+ * badge was cleared, using crane_sourceContainerID from the record userInfo. */
+static void CRBadgeRemoveRecordsForContainer(id repository,
+                                              NSString *appID,
+                                              NSString *containerID,
+                                              BOOL queued)
+{
+    NSString *selectorName = queued
+        ? @"_queue_removeNotificationRecordsPassingTest:forBundleIdentifier:"
+        : @"removeNotificationRecordsPassingTest:forBundleIdentifier:";
+    SEL selector = NSSelectorFromString(selectorName);
+    if (![repository respondsToSelector:selector])
+        return;
+    BOOL (^predicate)(id) = ^BOOL(id record) {
+        id info = [record respondsToSelector:@selector(userInfo)]
+            ? ((id (*)(id, SEL))objc_msgSend)(record, @selector(userInfo))
+            : nil;
+        if (![info isKindOfClass:[NSDictionary class]])
+            return NO;
+        id source = info[@"crane_sourceContainerID"] ?: @"DEFAULT";
+        return [source isKindOfClass:[NSString class]] &&
+               [source isEqualToString:containerID];
+    };
+    ((void (*)(id, SEL, id, id))objc_msgSend)(
+        repository, selector, predicate, appID);
+}
+
 static void CRBadgePrivateSet(id self, SEL cmd, NSNumber *number,
                               NSString *appID, id completion, IMP originalIMP)
 {
@@ -131,6 +208,10 @@ static void CRBadgePrivateSet(id self, SEL cmd, NSNumber *number,
         [containerID length] && [number respondsToSelector:@selector(integerValue)]) {
         CRBadgeStoreSetContainerCount(appID, containerID,
                                      [number integerValue]);
+        if ([number isEqualToNumber:@0]) {
+            CRBadgeRemoveRecordsForContainer(self, appID, containerID,
+                                             originalIMP == gCRBadgeQueueSetterOriginal);
+        }
     }
 
     NSNumber *aggregate = @(CRBadgeAggregateCount(appID));
@@ -168,6 +249,11 @@ void CRInitBadgeRepositoryHooks(void)
     if ([repository instancesRespondToSelector:nonQueued])
         MSHookMessageEx(repository, nonQueued, (IMP)CRBadgeNonQueueSet,
                         &gCRBadgePrivateSetterOriginal);
+    SEL publicSEL = NSSelectorFromString(
+        @"setBadgeNumber:forBundleIdentifier:withCompletionHandler:");
+    if ([repository instancesRespondToSelector:publicSEL])
+        MSHookMessageEx(repository, publicSEL, (IMP)CRBadgePublicSet,
+                        &gCRBadgePublicSetterOriginal);
 }
 
 void CRInitBadgeListenerMethods(void)
