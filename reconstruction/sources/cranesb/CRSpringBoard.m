@@ -54,6 +54,7 @@ extern void CRInitApplicationShortcutLateHooks(void);
 extern void CRInitUIMenuHooks(void);
 extern void CRBadgeStoreInitialize(void);
 extern void CRInitBadgeListenerMethods(void);
+extern void CRInitBadgeRepositoryHooks(void);
 
 /* ------------------------------------------------------------------------- */
 /* Globals recovered from the export                                          */
@@ -399,6 +400,7 @@ static void CRInitSpringBoard(void)
     /* Restore CraneSB's per-app badge-count snapshot (0xAE20). */
     CRBadgeStoreInitialize();
     CRInitBadgeListenerMethods();
+    CRInitBadgeRepositoryHooks();
 
     /* +[CraneActivatorManager startIfPossible] dynamically loads Activator and
      * remains a no-op when it is absent, matching the recovered 0x1C580 path. */
