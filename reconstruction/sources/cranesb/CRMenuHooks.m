@@ -255,6 +255,46 @@ static void CROpenCraneSettings(NSString *appID)
     }
 }
 
+/* F-14: read the persisted per-container badge snapshot (0xA860/0xAE20).
+ * F-08 is responsible for producing/updating this file at runtime. */
+static NSInteger CRStoredContainerBadgeCount(NSString *appID,
+                                             NSString *containerID,
+                                             CraneManager *manager)
+{
+    if (!appID.length || !containerID.length)
+        return 0;
+    NSArray *identifiers =
+        [manager containerIdentifiersOfApplicationWithIdentifier:appID];
+    if (![identifiers containsObject:containerID])
+        return 0;
+
+    NSString *path = CRJailbreakRootPath(CR_BADGE_STORE_PATH);
+    NSDictionary *store = [NSDictionary dictionaryWithContentsOfFile:path];
+    NSDictionary *counts = [store isKindOfClass:[NSDictionary class]]
+        ? store[appID] : nil;
+    id number = [counts isKindOfClass:[NSDictionary class]]
+        ? counts[containerID] : nil;
+    NSInteger count = [number respondsToSelector:@selector(integerValue)]
+        ? [number integerValue] : 0;
+    return count > 0 ? count : 0;
+}
+
+static BOOL CRShouldShowContainerBadges(NSString *appID,
+                                       NSDictionary *appSettings,
+                                       CraneManager *manager)
+{
+    id enabled = [manager preferenceValueForKey:
+        CRPref_NotificationsSupportEnabled];
+    if (enabled && ![enabled boolValue])
+        return NO;
+    enabled = [manager preferenceValueForKey:
+        CRPref_ShowContainerNotificationBadges];
+    if (enabled && ![enabled boolValue])
+        return NO;
+    id separate = appSettings[CRAppSetting_SeparateNotificationRegistrationsEnabled];
+    return !separate || [separate boolValue];
+}
+
 static UIMenu *CRBuildReplacementMenu(void) API_AVAILABLE(ios(13.0));
 
 static UIMenu *CRBuildReplacementMenu(void)
@@ -276,6 +316,7 @@ static UIMenu *CRBuildReplacementMenu(void)
         [manager applicationSettingsForApplicationWithIdentifier:appID];
     NSArray *containers = appSettings[CRAppSetting_Containers] ?: @[];
     NSMutableArray<UIMenuElement *> *children = [NSMutableArray new];
+    BOOL showBadges = CRShouldShowContainerBadges(appID, appSettings, manager);
 
     for (NSDictionary *container in containers) {
         NSString *containerID = container[CRCContainer_Identifier];
@@ -311,6 +352,19 @@ static UIMenu *CRBuildReplacementMenu(void)
                  forApplicationWithIdentifier:appID
                 usingBiometricsIfNeededWithSuccessHandler:launch];
         }];
+        if (showBadges) {
+            NSInteger count = CRStoredContainerBadgeCount(appID, containerID,
+                                                         manager);
+            Class badgeClass = NSClassFromString(@"CRBadgeAction");
+            if (count > 0 && badgeClass) {
+                object_setClass(action, badgeClass);
+                CRDynamicObjectSetter(action,
+                    NSSelectorFromString(@"setBadgeText:"),
+                    [NSString stringWithFormat:@"%ld", (long)count]);
+                CRDynamicObjectSetter(action,
+                    NSSelectorFromString(@"setAssociatedApplicationID:"), appID);
+            }
+        }
         [children addObject:action];
     }
 
