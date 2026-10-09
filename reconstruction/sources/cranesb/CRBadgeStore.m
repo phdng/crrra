@@ -6,9 +6,12 @@
  * Notification hooks that call CRBadgeStoreSetContainerCount are not yet wired.
  */
 #import <Foundation/Foundation.h>
+#import <objc/runtime.h>
 #import "CRManager.h"
 #import "CRPaths.h"
 #import "CRCommon.h"
+
+void CRBadgeStoreSetContainerCount(NSString *appID, NSString *containerID, NSInteger count);
 
 static NSMutableDictionary *gCRBadgeStore;
 static NSObject *gCRBadgeStoreLock;
@@ -50,6 +53,41 @@ NSInteger CRBadgeStoreContainerCount(NSString *appID,
         return [value respondsToSelector:@selector(integerValue)]
             ? [value integerValue] : 0;
     }
+}
+
+/* CraneSB 0x10BEC/0x10CB0: notification-listener badge lifecycle RPCs. */
+static void CRSwitchContainerBadges(id self, SEL cmd, NSString *first,
+                                   NSString *second, NSString *appID)
+{
+    (void)self; (void)cmd;
+    if (!first.length || !second.length || !appID.length)
+        return;
+    NSInteger firstCount = CRBadgeStoreContainerCount(appID, first, NO);
+    NSInteger secondCount = CRBadgeStoreContainerCount(appID, second, NO);
+    CRBadgeStoreSetContainerCount(appID, second, firstCount);
+    CRBadgeStoreSetContainerCount(appID, first, secondCount);
+}
+
+static void CRResetContainerBadge(id self, SEL cmd, NSString *containerID,
+                                  NSString *appID)
+{
+    (void)self; (void)cmd;
+    if (containerID.length && appID.length)
+        CRBadgeStoreSetContainerCount(appID, containerID, 0);
+}
+
+void CRInitBadgeListenerMethods(void)
+{
+    Class listener = NSClassFromString(
+        @"UNSUserNotificationServerConnectionListener");
+    if (!listener)
+        return;
+    class_addMethod(listener,
+        NSSelectorFromString(@"crane_switchBadgesOfContainerWithIdentifier:andContainerWithIdentifier:ofApplicationWithIdentifier:"),
+        (IMP)CRSwitchContainerBadges, "v@:@@@");
+    class_addMethod(listener,
+        NSSelectorFromString(@"crane_resetBadgeOfContainerWithIdentifier:ofApplicationWithIdentifier:"),
+        (IMP)CRResetContainerBadge, "v@:@@");
 }
 
 void CRBadgeStoreSetContainerCount(NSString *appID,
