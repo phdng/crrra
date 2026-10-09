@@ -57,6 +57,37 @@ NSInteger CRBadgeStoreContainerCount(NSString *appID,
 }
 
 /* CraneSB 0x10BEC/0x10CB0: notification-listener badge lifecycle RPCs. */
+static NSInteger CRBadgeAggregateCount(NSString *appID);
+
+static void CRBadgeProjectApplicationCount(NSString *appID, BOOL validate)
+{
+    if (!appID.length)
+        return;
+    NSInteger count = CRBadgeAggregateCount(appID);
+    (void)validate; /* Validity checked at the store getter entrypoint. */
+    NSNumber *value = @(count);
+    Class stateClass = NSClassFromString(@"UISApplicationState");
+    SEL initSEL = NSSelectorFromString(@"initWithBundleIdentifier:");
+    SEL setSEL = NSSelectorFromString(@"setBadgeValue:");
+    if (stateClass && [stateClass instancesRespondToSelector:initSEL]) {
+        id state = ((id (*)(id, SEL, id))objc_msgSend)(
+            [stateClass alloc], initSEL, appID);
+        if ([state respondsToSelector:setSEL]) {
+            ((void (*)(id, SEL, id))objc_msgSend)(state, setSEL, value);
+            return;
+        }
+    }
+    Class serviceClass = NSClassFromString(@"FBSSystemService");
+    SEL sharedSEL = NSSelectorFromString(@"sharedService");
+    SEL fallbackSEL = NSSelectorFromString(@"setBadgeValue:forBundleID:");
+    if (![serviceClass respondsToSelector:sharedSEL])
+        return;
+    id service = ((id (*)(id, SEL))objc_msgSend)(serviceClass, sharedSEL);
+    if ([service respondsToSelector:fallbackSEL])
+        ((void (*)(id, SEL, id, id))objc_msgSend)(
+            service, fallbackSEL, value, appID);
+}
+
 static void CRSwitchContainerBadges(id self, SEL cmd, NSString *first,
                                    NSString *second, NSString *appID)
 {
@@ -67,14 +98,17 @@ static void CRSwitchContainerBadges(id self, SEL cmd, NSString *first,
     NSInteger secondCount = CRBadgeStoreContainerCount(appID, second, NO);
     CRBadgeStoreSetContainerCount(appID, second, firstCount);
     CRBadgeStoreSetContainerCount(appID, first, secondCount);
+    CRBadgeProjectApplicationCount(appID, NO);
 }
 
 static void CRResetContainerBadge(id self, SEL cmd, NSString *containerID,
                                   NSString *appID)
 {
     (void)self; (void)cmd;
-    if (containerID.length && appID.length)
+    if (containerID.length && appID.length) {
         CRBadgeStoreSetContainerCount(appID, containerID, 0);
+        CRBadgeProjectApplicationCount(appID, YES);
+    }
 }
 
 /* 0xBB04 / 0xFBB4 / 0xFCA8: the per-container identity is carried
