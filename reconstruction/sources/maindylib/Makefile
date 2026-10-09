@@ -12,6 +12,6 @@ include $(THEOS)/makefiles/common.mk
 Crane_FILES  = CRMainDylib.m ../common/CRCommon.m
 Crane_CFLAGS  = -fobjc-arc -I$(THEOS_PROJECT_DIR)/sources/common
 Crane_FRAMEWORKS = Foundation CoreFoundation LocalAuthentication
-Crane_LIBRARIES  = objc
+Crane_LIBRARIES  = substrate
 
 include $(THEOS_MAKE_PATH)/tweak.mk
