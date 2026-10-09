@@ -26,7 +26,7 @@ Statuses use the required vocabulary. Note the distinction the prompt draws:
 | `cranehelperd` | partial | Registration and class names CONFIRMED_STATIC; **XPC protocol is this project's own** | SOURCE_IMPLEMENTED |
 | `cranehelperd_start` | partial | Only the path is recovered | SOURCE_IMPLEMENTED |
 | `CraneSB.dylib` | partial | Entry dispatch + F-01 environment contract and the core `CraneActivatorManager` listener/event integration are transcribed; menus/notification hooks remain incomplete | SOURCE_IMPLEMENTED (F-01, F-23 core) |
-| `CraneSupport.dylib` | partial | Per-daemon dispatch plus recovered containermanagerd and pkd/PlugInKit hook chains are transcribed; cfprefsd/APNs/keychain/account hooks remain incomplete | SOURCE_IMPLEMENTED (dispatch, F-06 hook core, F-12 server-side core) |
+| `CraneSupport.dylib` | partial | Per-daemon dispatch plus recovered cfprefsd, containermanagerd and pkd/PlugInKit hook chains are transcribed; APNs/keychain/account hooks remain incomplete | SOURCE_IMPLEMENTED (dispatch, F-05/F-06 hook cores, F-12 server-side core) |
 | `CranePrefs` | partial | Root controller + two panes; specifier construction mirrors recovered `0x8D00` | SOURCE_IMPLEMENTED (structure) |
 
 ## 2. Feature status against the specification
@@ -39,7 +39,7 @@ F-IDs refer to `analysis/behavior_specification.md`.
 | F-02 | In-app env + dirs | **Yes** — full transcription | none |
 | F-03 | Container isolation | **Yes** — all four hooks, including the `dlopen`/`dlsym` of `CoreServicesInternal` | `new_unlink`'s missing NULL check is preserved (upstream behaviour) |
 | F-04 | Sandbox-lookup spoofing | **Yes** — full transcription | none |
-| F-05 | Per-container preferences | Partial — redirect condition + filename rewrite CONFIRMED_STATIC; `ClientContainerCache` local cache semantics are now transcribed for CraneSupport | Private cfprefsd method/function ABI and libundirect fallback remain unported; PID→container helper transport is still U-01 |
+| F-05 | Per-container preferences | Partial — `handleSourceMessage`, both `withSourceForDomain` ABI families, `__CFPrefsGetPathForTriplet`, version guards and libundirect fallback are transcribed in `CRCfprefs.m` | PID→container helper transport is still U-01, so runtime redirection cannot be claimed end-to-end; no device test |
 | F-06 | Container resolution | Partial — `ClientContainerCache`, modern `MCMContainerFactory`, legacy `MCMClientConnection`, group-path rewrite, corrupt suppression, PID capture and guarded Crane proxy are transcribed | Reconstructed helperd/libcrane PID→container transport still returns `DEFAULT`; `_populateContainerDirectory:ofType:` body is unavailable; no runtime test |
 | F-07 | Per-container keychain | **Not implemented** | Needs the ~180-function code-signature/Mach-O toolkit; a stub would silently weaken isolation |
 | F-08 | Per-container APNs | **Not implemented** | Depends on F-07-class work plus CraneSB's 40 hooks whose target class is aliased (U-10) |
@@ -66,8 +66,8 @@ F-IDs refer to `analysis/behavior_specification.md`.
 | Features with a complete, transcribed implementation | 5 of 23 (F-02, F-03, F-04, F-18, and F-01's contract) |
 | Features partially implemented | 10 |
 | Features not implemented | 8 |
-| Recovered functions transcribed | Initial 17-function core plus later main-dylib/libroot work, the 42-method `CraneActivatorManager` surface, the containermanagerd/cache/proxy chain, and the pkd/PlugInKit server-side chain; no inflated aggregate 1:1 count is claimed |
-| Reconstruction source | 4899 lines across 11 `.m` and 4 `.h` files |
+| Recovered functions transcribed | Initial 17-function core plus later main-dylib/libroot work, the 42-method `CraneActivatorManager` surface, cfprefsd preference hooks, the containermanagerd/cache/proxy chain, and the pkd/PlugInKit server-side chain; no inflated aggregate 1:1 count is claimed |
+| Reconstruction source | 5451 lines across 12 `.m` and 4 `.h` files |
 | Static consistency audit | 0 failed checks; identifier resolution and brace balance clean |
 | Install-path / configuration artefacts verified identical | 12 of 12 plists, 10 of 10 assets |
 | Binary architectures validated against the original rule | 11 of 11 |
@@ -99,7 +99,7 @@ one. The line drawn here is: **transcribe what was read, declare what was not.**
 
 | To implement | First step | Uncertainty |
 |---|---|---|
-| F-05 prefs redirect | Port `handleSourceMessage`, `withSourceForDomain`, `__CFPrefsGetPathForTriplet` and `ClientContainerCache` with the recovered version/libundirect ABI guards | U-02 resolved; ABI port remains |
+| F-05 prefs redirect | Recover/replace the missing helperd/libcrane PID→container transport and perform device validation; cfprefsd hook/ABI layer is now transcribed | U-01 runtime transport |
 | F-06 containermanagerd | Recover/replace the missing libcrane/helperd PID→container transport and `_populateContainerDirectory:ofType:` semantics; hook/control-flow transcription is now present | U-01 / missing libcrane body |
 | F-12 PlugInKit | Complete the SpringBoard-side `extension_containerIDToAppend` query-tagging path together with notification support | U-10 / F-08 coupling |
 | F-07 keychain | Port or reimplement the embedded `csd_*`/`macho_*`/`pfsec_*` toolkit from the ~180 exported functions | U-03 |

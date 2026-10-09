@@ -80,33 +80,7 @@ static NSSet<NSString *> *CRSecurityAccessGroupsToIgnore(void)
 /* cfprefsd (0xBBFC)                                                           */
 /* ------------------------------------------------------------------------- */
 
-/* U-02 is resolved from BBFC/AB1C/ADF0/B4D0. cfprefsd records the calling
- * bundle identifier + pid, asks ClientContainerCache for that pid's active
- * container, and temporarily stores that container in the thread dictionary
- * while the original source lookup executes. The final triplet hook rewrites
- * only the plist basename to <domain>.c_r_a_n_e.<container>.plist.
- *
- * The private CoreFoundation method/function ABIs vary by OS version and the
- * original also uses libundirect fallbacks. Those hooks are intentionally not
- * installed until that ABI layer is transcribed; installing an approximate
- * function pointer here would be less faithful than leaving F-05 partial. */
-static NSString *CRPreferenceFilenameForDomain(NSString *domain,
-                                                NSString *containerIdentifier)
-{
-    if (domain.length == 0 || containerIdentifier.length == 0)
-        return nil;
-    return [NSString stringWithFormat:@"%@.c_r_a_n_e.%@.plist",
-                                      domain, containerIdentifier];
-}
-
-static void CRInitCfprefsd(void)
-{
-    /* Keep the confirmed pure transformation compiled while the three private
-     * hook entry points (handleSourceMessage, withSourceForDomain and
-     * __CFPrefsGetPathForTriplet) remain an explicit reconstruction gap. */
-    (void)CRPreferenceFilenameForDomain;
-    NSLog(@"[Crane] cfprefsd redirect ABI hooks pending");
-}
+extern void CRInitCfprefsd(void);
 
 /* ------------------------------------------------------------------------- */
 /* containermanagerd (0xCC88)                                                  */

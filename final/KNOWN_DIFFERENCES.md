@@ -42,9 +42,10 @@ and the core `CraneActivatorManager` listener/event flow. Most of the 2651
 exported functions still remain at selector/call-graph/string-constant coverage
 rather than full control-flow transcription.
 
-**Consequence:** F-05, F-08, F-09, F-11, F-14, F-15 (partially),
+**Consequence:** F-08, F-09, F-11, F-14, F-15 (partially),
 F-16 (partially), F-19, F-20, F-21 remain declarations/dispatch or incomplete
-implementations. F-06 now has its recovered containermanagerd hook/cache/proxy
+implementations. F-05 now has its recovered cfprefsd hook/ABI chain transcribed
+but still depends on U-01 PID transport. F-06 now has its recovered containermanagerd hook/cache/proxy
 chain transcribed but still depends on missing libcrane/helperd transport. F-12
 now has its recovered pkd/PlugInKit server-side hook chain
 transcribed, but still depends on the SpringBoard notification-support query-tag
@@ -71,18 +72,26 @@ SpringBoard API that could not be recovered.
 the environment should be is correct; the plumbing that delivers it is absent.
 This is the single largest functional gap.
 
-### D-05 — Per-container preferences are not redirected yet
+### D-05 — cfprefsd hook chain is reconstructed; PID transport remains incomplete
 
 **Original:** `initCfprefsd` captures the client host bundle identifier and PID,
 uses `ClientContainerCache` to resolve a non-default active container, and hooks
-CoreFoundation's source/path resolution. The final triplet hook rewrites the
-plist basename to `<domain>.c_r_a_n_e.<container>.plist`. U-02 is now resolved
-from the decompiled control flow. **Reconstruction:** the pure filename rewrite
-is represented, but the three private cfprefsd hook entry points and their
-version-specific/libundirect ABI shims are not installed yet.
+CoreFoundation's source/path resolution. Explicit-container paths are moved under
+the Crane container. Path-less domains temporarily carry the active container in
+the current thread dictionary so `__CFPrefsGetPathForTriplet` can rewrite the
+plist basename to `<domain>.c_r_a_n_e.<container>.plist`. CoreFoundation 1740–1999
+uses Objective-C hooks with a `libundirect` fallback; CoreFoundation 2000+ hooks
+the recovered shared-cache symbols directly.
 
-**Consequence:** containers still do not have isolated preferences until that
-private ABI layer is ported.
+**Reconstruction:** `CRCfprefs.m` now transcribes that request capture, both
+`withSourceForDomain` ABI families, the version/libundirect selection logic and
+the 0x400-byte triplet-path rewrite. Private XPC PID lookup is runtime-resolved
+to avoid Xcode's unavailable declaration.
+
+**Remaining difference:** `ClientContainerCache` still receives `DEFAULT` from
+the reconstructed helperd/libcrane PID→container transport (U-01), so the hooks
+cannot yet be claimed behaviorally effective end-to-end. Runtime/device testing
+has not been performed.
 
 ### D-06 — Keychain isolation is entirely absent
 
@@ -367,7 +376,7 @@ No runtime testing was possible, so these are untested rather than known-good:
 | Partially implemented | 10 |
 | Fully implemented | 5 (F-02, F-03, F-04, F-18, and F-01's contract) |
 | Whole binaries not reconstructed | 6 of 11 |
-| Function coverage | Initial 17-function core plus later main-dylib/libroot/Activator, containermanagerd/cache/proxy and pkd/PlugInKit transcriptions; no inflated single 1:1 count is claimed |
+| Function coverage | Initial 17-function core plus later main-dylib/libroot/Activator, cfprefsd, containermanagerd/cache/proxy and pkd/PlugInKit transcriptions; no inflated single 1:1 count is claimed |
 | Runtime tests executed | 0 |
 | Visual comparisons performed | 0 |
 
