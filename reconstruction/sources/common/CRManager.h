@@ -70,6 +70,10 @@
 - (id)preferenceValueForKey:(NSString *)key;                              /* [API] */
 - (void)setPreferenceValue:(id)value forKey:(NSString *)key;              /* [API] */
 
+/* ---- observation -------------------------------------------------------- */
+- (void)addObserver:(id)observer;                                          /* [API] */
+- (void)removeObserver:(id)observer;                                       /* [API] */
+
 /* ---- registry ----------------------------------------------------------- */
 - (BOOL)isApplicationSupportedByCrane:(NSString *)appID;                 /* [API] */
 - (NSArray<NSString *> *)identifiersOfAllSupportedApplications;          /* [API] */

@@ -82,6 +82,7 @@ static NSString *CRRootfulPath(NSString *path)
 @property (nonatomic, strong) NSMutableDictionary *containerPaths;
 @property (nonatomic, strong) id lastError;
 @property (nonatomic, strong) id unsandboxHandler;
+@property (nonatomic, strong) NSHashTable *observers;
 @property (nonatomic, strong) dispatch_queue_t queue;
 @end
 
@@ -102,6 +103,7 @@ static NSString *CRRootfulPath(NSString *path)
     if ((self = [super init])) {
         _applications = [NSMutableDictionary new];
         _containerPaths = [NSMutableDictionary new];
+        _observers = [NSHashTable weakObjectsHashTable];
         _queue = dispatch_queue_create("com.opa334.crane.manager", DISPATCH_QUEUE_SERIAL);
     }
     return self;
@@ -125,6 +127,31 @@ static NSString *CRRootfulPath(NSString *path)
         [defaults setObject:value forKey:key];
     else
         [defaults removeObjectForKey:key];
+}
+
+/* ---- observation -------------------------------------------------------- */
+
+/* addObserver:/removeObserver: are CONFIRMED_STATIC CraneManager selectors.
+ * The original observer callback protocol is not recoverable from the current
+ * evidence, so retain only weak membership semantics here rather than invent a
+ * notification selector. This is sufficient for callers that temporarily
+ * unregister around their own writes, as CranePrefs does. */
+- (void)addObserver:(id)observer
+{
+    if (!observer)
+        return;
+    @synchronized(self.observers) {
+        [self.observers addObject:observer];
+    }
+}
+
+- (void)removeObserver:(id)observer
+{
+    if (!observer)
+        return;
+    @synchronized(self.observers) {
+        [self.observers removeObject:observer];
+    }
 }
 
 /* ---- registry ----------------------------------------------------------- */
