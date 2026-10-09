@@ -155,7 +155,7 @@ Summary:
 | F-10 | Game Center | per-container `associatedGameCenterAccount`; the switch is appended only when F-09 is on | CONFIRMED_STATIC |
 | F-11 | Device identifier | non-default containers spoof to the container ID by default; the default container's change persists system-wide | CORROBORATED |
 | F-12 | Plug-in enumeration | 10 `PKDServer` hooks + `crane_activeContainerID` | CONFIRMED_STATIC |
-| F-13 | Selection UI | 4 global switches gate the menu; 2 `UIMenu` initialiser variants chosen at runtime | CORROBORATED (layout INFERRED) |
+| F-13 | Selection UI | recovered modern menu has one action per container, active `checkmark`, optional New Container, Settings, active-container subtitle and CF>=1854 child reversal; 2 `UIMenu` initialiser variants chosen at runtime | CONFIRMED_STATIC / CORROBORATED |
 | F-14 | Badges | per container, persisted to `BadgeStore.plist` | CONFIRMED_STATIC |
 | F-15 | Settings UI | 8 groups; exact specifier order in `Root.plist` | CONFIRMED_STATIC |
 | F-16 | Container lifecycle | create/rename/delete/wipe/default/move/copy/size/unknown-reconcile | API CONFIRMED_STATIC, layout UNKNOWN |
@@ -186,7 +186,7 @@ Per binary: CraneSB 113, CraneSupport 48, CranePrefs 1, main dylib 0 direct
 | Per-application pane | 14 conditional rows; see `tests/ui_comparison.md` §2.2 | CONFIRMED_STATIC |
 | Credits | ZipArchive + MiniZip licenses, then 11 per-language credit groups | CONFIRMED_STATIC |
 | Active Container sheet | one row per container + checkmark on the active one | INFERRED |
-| App long-press menu | container rows, separator, New Container, Settings | INFERRED (U-05) |
+| App long-press menu | modern UIMenu: container actions with active `checkmark`; optional New Container; Settings; non-expanded outer `CRSubtitleMenu` subtitle = active short container name and icon `square.grid.2x2`; CF >=1854 reverses children | CONFIRMED_STATIC |
 | Error alert | `CRErrorAlert` with title/message/actions; can require a passcode and reappear after unlock | CONFIRMED_STATIC (mechanism) / UNKNOWN (appearance) |
 
 Typography, colours, insets, control sizes and row heights: **UNKNOWN for every
@@ -237,7 +237,6 @@ Highest impact:
 |---|---|---|
 | U-01 | the cranehelperd XPC interface | F-19, and the honest interoperability of any rebuild |
 | U-04 | container on-disk layout and identifier generation | F-16, F-17 |
-| U-05 | the selection-menu layout | F-13 |
 | U-06 | backup archive, encryption and keychain dump formats | F-07, F-17 |
 | U-19 | the `postinst` that picks between the two app bundles | packaging (BLOCKED — needs the original `.deb`) |
 

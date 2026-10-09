@@ -296,12 +296,14 @@ usingBiometricsIfNeededWithSuccessHandler:(dispatch_block_t)handler
     return path;
 }
 
-- (void)createNewContainerWithName:(NSString *)name
+- (NSString *)createNewContainerWithName:(NSString *)name
             forApplicationWithIdentifier:(NSString *)appID
 {
+    NSString *identifier = [[NSUUID UUID] UUIDString];
     [self createNewContainerWithName:name
-                      andIdentifier:[[NSUUID UUID] UUIDString]
+                      andIdentifier:identifier
             forApplicationWithIdentifier:appID];
+    return identifier;
 }
 
 - (void)createNewContainerWithName:(NSString *)name

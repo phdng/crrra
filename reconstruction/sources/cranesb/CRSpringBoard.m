@@ -11,7 +11,7 @@
  *   crane_containerToRedirectTo (0x1B360)       -> CRContainerToRedirectTo
  *   the eight preference predicates             -> CR*Enabled accessors
  *   crane_initChoicyIntegration (0x1BBB8)       -> CRInitChoicyIntegration
- *   CRBadgeAction / CRSubtitleMenu               -> declared
+ *   CRSubtitleMenu / modern application menus    -> CRMenuHooks.m
  *   CraneActivatorManager (0x1C4D4..0x1E284)     -> CRActivator.m
  *
  * NOT implemented here, with the reason recorded rather than guessed:
@@ -19,9 +19,8 @@
  *     the selectors are recovered but the target class of each is aliased in
  *     the decompilation, so the hooks could not be attributed to classes
  *     without inventing them (U-10);
- *   * the app-shortcut menu cell layout (U-05) - the row arrangement is only
- *     knowable from a screenshot or from reading the _configureCell hooks,
- *     neither of which is available here;
+ *   * the pre-UIMenu (iOS 11/12) force-touch shortcut path remains unported;
+ *     the modern UIMenu layout/hooks are transcribed in CRMenuHooks.m;
  *   * the badge view constraint maths behind initCRBadgeContextMenuActionView
  *     (0x7F58) beyond the property additions;
  *   * CRNewContainerAlert (InitFunc_1) remains incomplete; CRErrorAlert and
@@ -50,6 +49,8 @@ extern void CRPresentDaemonError(id brokenDaemons, NSError *error,
 extern void CRPresentMainDylibNotLoadedError(NSString *appName);
 extern void CRPresentApsdRegistrationError(NSString *appID);
 extern void CRPresentPkdRegistrationError(NSString *appID);
+extern void CRInitApplicationShortcutHooks(void);
+extern void CRInitUIMenuHooks(void);
 
 /* ------------------------------------------------------------------------- */
 /* Globals recovered from the export                                          */
@@ -422,7 +423,7 @@ static void CRInitSpringBoard(void)
 
     (void)sbIconController;
 
-    /* CONFIRMED_STATIC: on CF >= 1665.15 (iOS 15+) the original installs the
+    /* CONFIRMED_STATIC: on CF >= 1665.15 (iOS 13-era+) the original installs the
      * runningboardd error-alert hooks; on older systems it loads the icon
      * bundle and does the Choicy integration instead. The inversion is
      * reproduced as read from the decompilation (U-07). */
@@ -444,10 +445,11 @@ static void CRInitSpringBoard(void)
                                     CFNotificationSuspensionBehaviorDeliverImmediately);
 
     if (CRAppShortcutEnabled())
-        NSLog(@"[Crane] app shortcuts enabled");
+        CRInitApplicationShortcutHooks();
 
-    /* initNotificationSupport / initCRBadgeContextMenuActionView /
-     * initUIMenuHooks are not implemented - see the file header. */
+    /* initNotificationSupport / initCRBadgeContextMenuActionView remain
+     * separate gaps; the recovered modern UIMenu replacement path is wired. */
+    CRInitUIMenuHooks();
 }
 
 static void CRDidFinishLaunching(CFNotificationCenterRef center, void *observer,

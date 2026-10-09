@@ -218,7 +218,7 @@ initUIMenuHooks();
 ```
 
 Version gate note: the branch is **inverted** relative to its name —
-`initRunningboarddErrorAlertHooks()` runs on *newer* CF (≥1665.15, iOS 15+),
+`initRunningboarddErrorAlertHooks()` runs on *newer* CF (≥1665.15, iOS 13-era+),
 while the icon-bundle load plus Choicy integration runs on *older* CF. Read
 literally from the pseudocode; the *intent* of that inversion is UNKNOWN.
 
@@ -291,7 +291,14 @@ else
 
 `SBUIAppIconForceTouchControllerDataProvider.applicationShortcutItems` is
 hooked and `craneContainersApplicationShortcutItems` added — this is the
-long-press / force-touch container menu.
+long-press / force-touch container menu. Reading `crane_replacementMenu`
+(0x137FC), `configureCellHook` (0x13508), the three `_configureCell` wrappers,
+and `_interfaceActionGroupForActions:` resolves U-05 statically: the modern
+menu uses one action per container, an active-row `checkmark`, optional New
+Container, Settings, and a `CRSubtitleMenu` whose subtitle is the active short
+container name; the non-expanded child array reverses on CF >=1854.0. The
+modern path is transcribed in `reconstruction/sources/cranesb/CRMenuHooks.m`;
+the pre-UIMenu force-touch branch remains separate.
 
 ### Badge view — `initCRBadgeContextMenuActionView` (0x7F58)
 

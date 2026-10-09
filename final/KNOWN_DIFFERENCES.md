@@ -147,23 +147,36 @@ its apsd/server half is source-transcribed.
 each of the 40 `CraneSB` hooks is aliased in the decompilation (U-10), so they
 cannot be attributed to classes without inventing them.
 
-### D-08 — No container-selection UI
+### D-08 — Modern container-selection UIMenu is reconstructed; legacy force-touch and badge decoration remain
 
-**Original:** 16 `SBUIActionView` hooks, 1
-`SBUIAppIconForceTouchControllerDataProvider` hook, 2 `UIMenu` initialiser
-variants, the `com.opa334.crane.*` menu identifier family, and
-`CRBadgeAction`/`CRSubtitleMenu`.
+**Original:** the modern path injects a placeholder `SBSApplicationShortcutItem`,
+then replaces it through one of two `UIMenu` initializer hooks. The recovered
+`crane_replacementMenu` creates one action per container using the short display
+name, adds an active `checkmark`, optionally adds New Container, and adds
+Settings. In non-expanded mode Settings is wrapped separately and the outer
+`CRSubtitleMenu` carries the active container name as subtitle with
+`square.grid.2x2`; CF >=1854.0 reverses the children array. Private context-menu
+cell hooks preserve/render that subtitle. Older systems use the separate
+`SBUIAppIconForceTouch*` / `SBUIActionView` family. Container rows may become
+`CRBadgeAction`s when F-14 notification badges are enabled.
 
-**Reconstruction:** none of it. The UIMenu identifier constants are defined in
-`CRPaths.h` but nothing creates a menu.
+**Reconstruction:** `CRMenuHooks.m` now transcribes the modern UIMenu-era path:
+placeholder injection and app-id capture, both initializer variants,
+`SBSApplicationShortcutItem` section/system classification, container switching
+through the biometric manager method, active checkmark, optional New Container,
+Settings/Shuffle URL handling, launch-on-selection, subtitle-preserving UIMenu
+copies, three `_configureCell` variants and `_interfaceActionGroupForActions:`.
+`CRNewContainerAlert` is also reconstructed in `CRErrorAlerts.m`, and the
+`createNewContainerWithName:forApplicationWithIdentifier:` return contract was
+corrected to return the created identifier as required by the recovered alert
+handler. U-05 is RESOLVED statically from these bodies.
 
-**Consequence:** long-pressing an app icon shows no container list. Container
-selection is only reachable through the settings UI's Active Container sheet.
-
-**Why:** the row arrangement (order, subtitle text, checkmark placement,
-separators) is U-05 — it is only knowable from the `_configureCell:forElement:`
-hook bodies or from a screenshot, and neither was available. Guessing a layout
-would have produced something that *looks* right and cannot be checked.
+**Remaining difference:** the CF <1665.15 legacy force-touch hook family is not
+ported. F-14 badge-specific `CRBadgeAction` custom rendering is deliberately
+deferred. The original container-switch success callback includes a BOOL used
+for an old-CF delayed-launch nuance; reconstructed libcrane does not expose that
+reply detail, so this modern path launches immediately after its reconstructed
+success callback. No device or visual comparison has been performed.
 
 ### D-09 — Choicy provider/runtime core is reconstructed; the per-container editor is absent
 
@@ -301,14 +314,18 @@ the affected daemons and then relaunches SpringBoard.
 
 **Reconstruction:** `CRErrorAlerts.m` now transcribes that runtime class,
 associated storage, configure/reappear behavior, daemon-name formatting, five
-presenters, close/restart actions and the iOS 15+ listener bridge without private
+presenters, close/restart actions and the CF >=1665.15 listener bridge without private
 SpringBoard headers. `CRApplyEnvironmentChanges` now invokes the recovered
 libSandy and daemon/insurance presenters instead of merely logging those
 fail-open errors. `CraneSB` now links Substrate explicitly because the original
 binary imports `_MSHookMessageEx`.
 
-**Remaining difference:** `CRNewContainerAlert` (InitFunc_1) is still absent.
-The launch-injection verification path at 0x18238/0x194EC/0x19608 is not wired
+`CRNewContainerAlert` (InitFunc_1) is now also reconstructed with its retained
+`applicationID`, text field, Create/Launch action, active-container switch and
+optional app launch.
+
+**Remaining difference:** the launch-injection verification path at
+0x18238/0x194EC/0x19608 is not wired
 because the original `fetchActiveContainerIDForProcessWithPid:reply:` block ABI
 includes status information not represented by the reconstructed U-01 helper
 protocol. The original `injectionFixupError` producer is also not reconstructed,
@@ -334,11 +351,11 @@ the localization tables (204 keys), and the specifier order from `Root.plist`.
 
 The three `__mod_init_func` constructors of `CraneSB` (0x9684, 0x9E08, 0x1BC70)
 run in address order, i.e. `CRErrorAlert` and `CRNewContainerAlert` are created
-before `crane_initSpringBoard`. The reconstruction still has one constructor,
-but it now calls `CRInitErrorAlerts()` before `CRInitSpringBoard()`, preserving
-the recovered ordering dependency for `CRErrorAlert`. `CRNewContainerAlert`
-remains absent, so only the InitFunc_1 half of the original constructor ordering
-is still unreproduced.
+before `crane_initSpringBoard`. The reconstruction still has one physical
+constructor, but `CRInitErrorAlerts()` now creates both runtime alert classes
+before `CRInitSpringBoard()`, preserving the observable InitFunc_0/InitFunc_1
+ordering dependency. The remaining difference here is structural constructor
+layout rather than a known alert-class availability difference.
 
 ### D-23 — Activator core and icon ABI are reconstructed; observer refresh remains partial
 
@@ -483,11 +500,11 @@ No runtime testing was possible, so these are untested rather than known-good:
 
 | Category | Count |
 |---|---:|
-| Whole subsystems absent (F-07, F-13, F-17, F-22, F-14) | 5 |
-| Partially implemented | 13 |
+| Whole subsystems absent (F-07, F-14, F-17, F-22) | 4 |
+| Partially implemented | 14 |
 | Fully implemented | 5 (F-02, F-03, F-04, F-18, and F-01's contract) |
 | Whole binaries not reconstructed | 6 of 11 |
-| Function coverage | Initial 17-function core plus later main-dylib/libroot/Activator, cfprefsd, accountsd/Core Data, lsd/device-ID, apsd token/topic isolation, Choicy override provider, self-verification/error alerts, containermanagerd/cache/proxy and pkd/PlugInKit transcriptions; no inflated single 1:1 count is claimed |
+| Function coverage | Initial 17-function core plus later main-dylib/libroot/Activator, cfprefsd, accountsd/Core Data, lsd/device-ID, apsd token/topic isolation, Choicy override provider, self-verification/new-container alerts, modern container-selection menus, containermanagerd/cache/proxy and pkd/PlugInKit transcriptions; no inflated single 1:1 count is claimed |
 | Runtime tests executed | 0 |
 | Visual comparisons performed | 0 |
 

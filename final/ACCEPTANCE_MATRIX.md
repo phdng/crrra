@@ -38,7 +38,7 @@ No row can be anything above PARTIAL — BUILD ONLY, because no CI run exists.
 | B-1 | Every discovered feature has a requirement ID | 23 features, F-01…F-23 | PASS |
 | B-2 | Every known hook has a documented contract | `analysis/hook_reconstruction.md`, `analysis/hooks_index.csv` — 162 registrations | PASS (CONFIRMED_STATIC) |
 | B-3 | Configuration keys and state transitions documented | `analysis/preference_schema.md` — 8 global + 7 per-app keys, 6 notifications, 10 file paths | PASS |
-| B-4 | Initialization and lifecycle sufficiently understood | `analysis/hook_reconstruction.md` §2–4; 3 module constructors + per-process entry points | PASS for ` Crane.dylib`, `CraneSupport`; PARTIAL for `CraneSB` (U-05, U-07, U-10) |
+| B-4 | Initialization and lifecycle sufficiently understood | `analysis/hook_reconstruction.md` §2–4; 3 module constructors + per-process entry points | PASS for ` Crane.dylib`, `CraneSupport`; PARTIAL for `CraneSB` (U-07, U-10) |
 | B-5 | Feature interactions tested or marked unresolved | 11 interaction edges documented in `behavior_specification.md` §5; all NOT_TESTED | PARTIAL — documented, not tested |
 | B-6 | No inferred behaviour presented as confirmed | Every clause carries a class; 3 inferences promoted to CONFIRMED_STATIC during analysis (U-12, U-14, U-16) with the resolving evidence attached | PASS |
 
@@ -74,7 +74,7 @@ No row can be anything above PARTIAL — BUILD ONLY, because no CI run exists.
 | E-1 | Every core feature has at least one positive test | PASS — 76 tests specified across 23 features (`tests/functional_tests.md`) |
 | E-2 | Enable/disable states both tested | PASS at specification level (F-01 tests 1–4 cover the 2×2 of container × spoofing; F-03-6 and F-04-4 cover disabled) |
 | E-3 | Persistence and lifecycle tests | SPECIFIED — T-F02-4, T-F15-4, T-F16-1 |
-| E-4 | Critical edge cases tested or reasons recorded | PASS — reasons recorded for the untestable (D-01, U-05, U-01) |
+| E-4 | Critical edge cases tested or reasons recorded | PASS — reasons recorded for the untestable (D-01, U-01 and remaining runtime-only UI differences) |
 | E-5 | No unresolved critical failure hidden by an overall pass | **PASS** — the overall status is PARTIAL — BUILD ONLY; the 9 expected-failure tests are named individually in `tests/functional_tests.md` |
 | E-6 | Results associated with the correct revision | N/A — no results exist |
 
@@ -105,7 +105,7 @@ No row can be anything above PARTIAL — BUILD ONLY, because no CI run exists.
 | F-10 | Game Center | CONFIRMED_STATIC (SB 0x1B45C, Prefs 0x8D00) | PARTIAL | NOT_TESTED | NOT_TESTED | NOT_TESTED | NOT_TESTED | PARTIAL — BUILD ONLY |
 | F-11 | Device identifier | CORROBORATED (Support 0xD7D8) | PARTIAL | NOT_TESTED | NOT_TESTED | NOT_TESTED | NOT_TESTED | PARTIAL — BUILD ONLY |
 | F-12 | Plug-in enumeration | CONFIRMED_STATIC (Support 0xF2B4) | PARTIAL — dispatch only | NOT_TESTED | NOT_TESTED | NOT_TESTED | NOT_TESTED | PARTIAL — BUILD ONLY |
-| F-13 | Container selection UI | CORROBORATED (SB 0x145B8/0x1497C/0x14CE0) | NOT_IMPLEMENTED (D-08) | NOT_TESTED | NOT_TESTED | NOT_TESTED | NOT_TESTED | PARTIAL — BUILD ONLY |
+| F-13 | Container selection UI | CONFIRMED_STATIC / CORROBORATED (SB 0x137FC/0x13508/0x145B8/0x15E20) | PARTIAL — modern UIMenu path transcribed; legacy force-touch/badge decoration absent | NOT_TESTED | NOT_TESTED | NOT_TESTED | NOT_TESTED | PARTIAL — BUILD ONLY |
 | F-14 | Badges | CONFIRMED_STATIC (SB 0x7F58) | NOT_IMPLEMENTED | NOT_TESTED | NOT_TESTED | NOT_TESTED | NOT_TESTED | PARTIAL — BUILD ONLY |
 | F-15 | Settings UI | CONFIRMED_STATIC (Root.plist, Credits.plist, 34 classes) | PARTIAL — 2 of 3 controllers (D-18) | NOT_TESTED | NOT_TESTED | NOT_TESTED | NOT_TESTED | PARTIAL — BUILD ONLY |
 | F-16 | Container lifecycle | CONFIRMED_STATIC (API) / UNKNOWN (layout) | PARTIAL (U-04) | NOT_TESTED | NOT_TESTED | NOT_TESTED | NOT_TESTED | PARTIAL — BUILD ONLY |

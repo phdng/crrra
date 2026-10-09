@@ -101,7 +101,7 @@ reconstruction. They are retained so a future implementation can be held to them
 | T-F13-1 | long-press a supported app icon | container submenu appears | NOT_TESTED — expected FAIL (D-08) |
 | T-F13-2 | select a container, relaunch | the app shows that container's data | NOT_TESTED |
 | T-F13-3 | toggle each of the 5 global switches | the menu changes accordingly | NOT_TESTED |
-| T-F13-4 | run on iOS 15+ and on iOS 14 | both `UIMenu` initialiser variants handled without crashing | NOT_TESTED |
+| T-F13-4 | run on OS versions exposing each recovered `UIMenu` initializer family | both initializer variants handled without crashing | NOT_TESTED |
 | T-F13-5 | select "New Container" | a container is created and selected | NOT_TESTED |
 
 ### F-14 to F-19

@@ -234,8 +234,8 @@ The rows below are **required actions**, not results. None has been performed.
 | PARTIAL — FUNCTIONAL | Implement the 9 absent subsystems; the highest-value first steps are listed per-feature in `reconstruction/IMPLEMENTATION_STATUS.md` §5 |
 
 Most of the implementation work does **not** need a device or a new export.
-U-02 is now resolved by reading the existing cfprefsd decompilation. U-03, U-05
-and most of U-06 can likewise be closed from exports already in this repository.
+U-02 and U-05 are now resolved by reading the existing cfprefsd and CraneSB
+decompilations. U-03 and most of U-06 can likewise be closed from exports already in this repository.
 Only U-01 (the cranehelperd XPC interface) genuinely requires a new export.
 
 ## 12. Artifact index

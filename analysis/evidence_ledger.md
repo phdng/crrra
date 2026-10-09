@@ -124,7 +124,7 @@ see `analysis/runtime_observations.md`.
 | The cfprefsd redirect condition | resolved from `BBFC.c`, `ADF0.c`, `AB1C.c`, `B4D0.c` + `ClientContainerCache` call sites | U-02 RESOLVED |
 | The securityd patch's failure behaviour | export exists, not read line by line | U-03 |
 | Container on-disk metadata format and identifier generation | no export for libcrane | U-04 |
-| The selection-menu visual layout | needs a screenshot | U-05 |
+| The selection-menu typography/insets/visual geometry | no screenshot/device capture; semantic row order/subtitle/checkmark behavior is now statically resolved (U-05) | visual-only remainder |
 | Backup archive/encryption/keychain formats | no export for libcrane/cranehelperd | U-06 |
 | The app-bundle selection `postinst` | no `.deb` in the tree | U-19 (BLOCKED) |
 | Every runtime behaviour | no device | `analysis/runtime_observations.md` |

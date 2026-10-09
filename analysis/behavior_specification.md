@@ -437,23 +437,32 @@ Menu identifiers are fixed: `com.opa334.crane.containers`,
 `com.opa334.crane.application-container`,
 `com.opa334.crane-container[%@]`.
 
-Implementation hooks `SBUIActionView` (16 selectors) and
-`SBUIAppIconForceTouchControllerDataProvider.applicationShortcutItems`, plus
-`UIMenu`'s two initialiser variants selected by
+The implementation has two OS families. The legacy pre-UIMenu path hooks
+`SBUIActionView`/force-touch controller classes; the modern path hooks
+`SBSApplicationShortcutItem`, `SBIconView`, private context-menu list views and
+one of two `UIMenu` initialiser variants selected by
 `instancesRespondToSelector:` at runtime.
 
-**Uncertainty.** The exact cell layout (row order, subtitle text, checkmark
-placement) is **UNKNOWN** from static evidence; it would require reading the
-`_configureCell:forElement:section:` hooks in detail and, ideally, a
-screenshot. Recorded as U-05. The artwork in `Crane.bundle/Icons`
-(`ContainersIcon`, `AddIcon`, `SelectedContainerCheckmark`, `SettingsIcon`)
-constrains it: a containers row, an add row, a checkmark for the selected
-container, and a settings row.
+**Modern UIMenu layout (CONFIRMED_STATIC).** `crane_replacementMenu`
+(0x137FC), the three `_configureCell...` hooks and
+`_interfaceActionGroupForActions:` resolve the former U-05 uncertainty. The
+menu contains one action per container using its short display name; the active
+container alone carries the `checkmark` SF Symbol. If enabled, `NEW_CONTAINER`
+comes after the container actions. With `expandContainersShortcutEnabled`, the
+`SETTINGS` gear action follows directly and the result is an inline `CONTAINER`
+menu. Without expansion, Settings is wrapped in the inline
+`crane-settings-wrapper`; the outer `CRSubtitleMenu` has title `CONTAINER`,
+subtitle equal to the active container's short display name and icon
+`square.grid.2x2`. On CF >=1854.0 that non-expanded children array is reversed
+before construction. The context-menu cell hooks propagate `CRSubtitleMenu`'s
+subtitle into the private action view. U-05 is therefore RESOLVED from static
+evidence; typography/insets remain unobserved because no screenshot/device test
+exists.
 
 **Acceptance tests.** `T-F13-1` long-press shows the container submenu for a
 supported app. `T-F13-2` selecting a container and relaunching shows that
 container's data. `T-F13-3` the four global switches each change the menu.
-`T-F13-4` no crash on both UIMenu initialiser variants (iOS 15+ and earlier).
+`T-F13-4` no crash on both recovered UIMenu initialiser variants.
 **Status: NOT_TESTED.**
 
 ### F-14 Badge count per container
@@ -865,7 +874,7 @@ Invariants observed statically:
 | F-10 | Game Center | launch | `gameCenterSupportEnabled` | per-container identity | SB 0x1B45C, Prefs 0x8D00 | CONFIRMED_STATIC |
 | F-11 | Device identifier | `lsd` lookup | `useContainerIdentifierAsDeviceIdentifier` | identifier spoofed | Support 0xD7D8, `DEVICE_IDENTIFIER_DESCRIPTION` | CORROBORATED |
 | F-12 | Plug-in enumeration | `pkd` query | `notificationsSupportEnabled` | extension isolated | Support 0xF2B4 | CONFIRMED_STATIC |
-| F-13 | Container selection UI | long-press app icon | 5 global switches | menu with containers | SB 0x145B8/0x1497C/0x14CE0 | CORROBORATED (layout INFERRED) |
+| F-13 | Container selection UI | long-press app icon | 5 global switches | per-container actions, active checkmark, optional New Container, Settings, active-container subtitle | SB 0x137FC/0x13508/0x145B8/0x1497C/0x15E20/0x16598 | CONFIRMED_STATIC / CORROBORATED |
 | F-14 | Badges | notification/app state | `showContainerNotificationBadgesEnabled`, `showContainerInNotificationTitleEnabled` | per-container badge | SB 0x7F58, `BadgeStore.plist` | CONFIRMED_STATIC |
 | F-15 | Settings UI | open Settings → Crane | all switches | 8 groups of rows | `Root.plist`, `Credits.plist` | CONFIRMED_STATIC |
 | F-16 | Container lifecycle | settings actions | — | create/rename/delete/wipe/default | `CraneManager` selectors | CONFIRMED_STATIC (API) / UNKNOWN (layout) |

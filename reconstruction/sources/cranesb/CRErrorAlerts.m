@@ -22,6 +22,7 @@
 
 #import "CRManager.h"
 #import "CRPaths.h"
+#import "CRPreferences.h"
 #import "CRCommon.h"
 
 @interface NSObject (CraneErrorAlertRuntime)
@@ -31,6 +32,9 @@
 - (void)deactivateForButton;
 - (void)activateAlertItem:(id)item;
 - (void)exitAndRelaunch:(BOOL)relaunch;
+- (void)openApplication:(NSString *)appID
+            withOptions:(id)options
+             completion:(id)completion;
 @end
 
 @interface UIAlertAction (CraneErrorAlertPrivate)
@@ -156,10 +160,132 @@ static BOOL CRErrorAlertReappearsAfterUnlock(id self, SEL _cmd)
         NSSelectorFromString(@"crane_reappearsAfterUnlock"));
 }
 
+static id CRNewContainerAlertApplicationID(id self, SEL _cmd)
+{
+    (void)_cmd;
+    return objc_getAssociatedObject(
+        self,
+        (const void *)&CRNewContainerAlertApplicationID);
+}
+
+static void CRNewContainerAlertSetApplicationID(id self,
+                                                 SEL _cmd,
+                                                 id value)
+{
+    (void)_cmd;
+    objc_setAssociatedObject(
+        self,
+        (const void *)&CRNewContainerAlertApplicationID,
+        value,
+        OBJC_ASSOCIATION_RETAIN_NONATOMIC);
+}
+
+static void CRNewContainerAlertConfigure(id self,
+                                         SEL _cmd,
+                                         BOOL requirePasscode,
+                                         BOOL requirePasscodeForActions)
+{
+    (void)_cmd;
+    (void)requirePasscode;
+    (void)requirePasscodeForActions;
+
+    UIAlertController *controller = [self alertController];
+    if (!controller)
+        return;
+
+    controller.title = CRLocalize(@"NEW_CONTAINER");
+    controller.message = @"";
+    [controller addTextFieldWithConfigurationHandler:
+        ^(__unused UITextField *textField) {}];
+
+    NSString *primaryKey =
+        CRPrefBool(CRPref_LaunchAppOnContainerSelection) ? @"LAUNCH" : @"CREATE";
+    __weak id weakAlert = self;
+    __weak UIAlertController *weakController = controller;
+    UIAlertAction *primary =
+        [UIAlertAction actionWithTitle:CRLocalize(primaryKey)
+                                 style:UIAlertActionStyleDefault
+                               handler:^(__unused UIAlertAction *action) {
+        NSString *name = weakController.textFields.firstObject.text;
+        if (!name.length)
+            return;
+
+        NSString *appID = [weakAlert valueForKey:@"applicationID"];
+        CraneManager *manager = CraneManager.sharedManager;
+        NSString *containerID =
+            [manager createNewContainerWithName:name
+                    forApplicationWithIdentifier:appID];
+        [weakAlert deactivateForButton];
+
+        if (!containerID)
+            return;
+        [manager setActiveContainerIdentifier:containerID
+                     forApplicationWithIdentifier:appID];
+
+        if (CRPrefBool(CRPref_LaunchAppOnContainerSelection)) {
+            Class serviceClass = NSClassFromString(@"FBSOpenApplicationService");
+            id service = [serviceClass new];
+            if ([service respondsToSelector:
+                    NSSelectorFromString(@"openApplication:withOptions:completion:")]) {
+                [service openApplication:appID withOptions:nil completion:nil];
+            }
+        }
+    }];
+    [controller addAction:primary];
+
+    UIAlertAction *cancel =
+        [UIAlertAction actionWithTitle:CRLocalize(@"CANCEL")
+                                 style:UIAlertActionStyleCancel
+                               handler:^(__unused UIAlertAction *action) {
+        [weakAlert deactivateForButton];
+    }];
+    [controller addAction:cancel];
+}
+
+static void CRInitNewContainerAlert(void)
+{
+    if (NSClassFromString(@"CRNewContainerAlert"))
+        return;
+
+    Class alertItemClass = NSClassFromString(@"SBAlertItem");
+    if (!alertItemClass)
+        return;
+
+    Class cls = objc_allocateClassPair(alertItemClass,
+                                       "CRNewContainerAlert",
+                                       0);
+    if (!cls)
+        return;
+
+    objc_property_attribute_t attributes[] = {
+        { "T", "@\"NSString\"" },
+        { "&", "" },
+        { "N", "" },
+    };
+    class_addProperty(cls, "applicationID", attributes, 3);
+    class_addMethod(cls,
+                    NSSelectorFromString(@"applicationID"),
+                    (IMP)CRNewContainerAlertApplicationID,
+                    "@@:");
+    class_addMethod(cls,
+                    NSSelectorFromString(@"setApplicationID:"),
+                    (IMP)CRNewContainerAlertSetApplicationID,
+                    "v@:@");
+    objc_registerClassPair(cls);
+
+    MSHookMessageEx(cls,
+                    NSSelectorFromString(
+                        @"configure:requirePasscodeForActions:"),
+                    (IMP)CRNewContainerAlertConfigure,
+                    NULL);
+}
+
 void CRInitErrorAlerts(void)
 {
-    if (NSClassFromString(@"CRErrorAlert"))
+    if (NSClassFromString(@"CRErrorAlert")) {
+        CRInitNewContainerAlert();
         return;
+    }
 
     Class alertItemClass = NSClassFromString(@"SBAlertItem");
     if (!alertItemClass)
@@ -238,6 +364,8 @@ void CRInitErrorAlerts(void)
                     NSSelectorFromString(@"reappearsAfterUnlock"),
                     (IMP)CRErrorAlertReappearsAfterUnlock,
                     NULL);
+
+    CRInitNewContainerAlert();
 }
 
 /* ------------------------------------------------------------------------- */
@@ -271,6 +399,17 @@ static void CRActivateErrorAlert(id alert)
             [controller activateAlertItem:alert];
         }
     });
+}
+
+void CRPresentNewContainerAlert(NSString *appID)
+{
+    Class cls = NSClassFromString(@"CRNewContainerAlert");
+    if (!cls || !appID.length)
+        return;
+
+    id alert = [cls new];
+    [alert setValue:appID forKey:@"applicationID"];
+    CRActivateErrorAlert(alert);
 }
 
 static UIAlertAction *CRCloseAction(id alert)
@@ -557,7 +696,7 @@ void CRPresentPkdRegistrationError(NSString *appID)
 }
 
 /* ------------------------------------------------------------------------- */
-/* iOS 15+ user-notification listener bridge                                 */
+/* CF >=1665.15 user-notification listener bridge                            */
 /* ------------------------------------------------------------------------- */
 
 static IMP gOrigListenerShouldAcceptConnection;

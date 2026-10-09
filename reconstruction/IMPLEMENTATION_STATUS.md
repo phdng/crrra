@@ -47,14 +47,14 @@ F-IDs refer to `analysis/behavior_specification.md`.
 | F-10 | Game Center | Structure only | Account storage model unknown (U-06) |
 | F-11 | Device identifier | Partial — LSD protocol extension, type-0 per-container UUID spoofing, helperd-only cache getter/setter, vendor-key derivation and `_LSDeviceIdentifierCache`/persona fallback are transcribed in `CRLsd.m`; reconstructed manager now uses the confirmed `customDeviceIdentifier` key | App-side PID→container routing remains U-01; reconstructed helperd still stores identifiers in `NSUserDefaults` instead of invoking the recovered lsd extension; no runtime test |
 | F-12 | Plug-in enumeration | Partial — `PKDPlugIn` active-container state, four enable hooks, Transaction rule consumption, PKDatabase query wrappers, plug-in termination and reload handling are transcribed | SpringBoard notification-support hooks that append `extension_containerIDToAppend` as `crane_containerID` are still part of unresolved F-08/U-10; no runtime test |
-| F-13 | Container selection UI | **Not implemented** | Cell layout needs a screenshot or the `_configureCell` hooks (U-05) |
+| F-13 | Container selection UI | Partial — modern UIMenu-era path is transcribed in `CRMenuHooks.m`: placeholder shortcut injection, app-id capture, both UIMenu initializer variants, one action per container, active `checkmark`, active-container subtitle, Settings/New Container actions, biometric switching, launch-on-selection and context-menu subtitle propagation | Legacy CF <1665.15 force-touch (`SBUIAppIconForceTouch*` / `SBUIActionView`) path remains unported; F-14 `CRBadgeAction` decoration is deferred; reconstructed manager does not expose the original success-handler BOOL/delay nuance; no runtime/visual test |
 | F-14 | Badges | **Not implemented** | Depends on F-08 |
 | F-15 | Settings UI | Partial | Plists reproduced exactly; 2 of 3 panes implemented; backup/restore, Choicy pane and suggestions absent |
 | F-16 | Container lifecycle | Partial — CRUD present in `CraneManager`, on-disk layout INFERRED | Layout/identifier format unknown (U-04) |
 | F-17 | Backup / restore | **Not implemented** | Archive and encryption format unknown (U-06) |
 | F-18 | Biometric gate | **Yes** — full transcription | none |
 | F-19 | cranehelperd XPC | Partial | Own protocol; incompatible with the original daemon (U-01) |
-| F-20 | Self-verification | Partial — `CRErrorAlert` runtime class, associated properties, configure/reappear hooks, daemon string formatting, libSandy/daemon/main-dylib/apsd/pkd presenters, restart/close actions and the iOS 15+ `UNSUserNotificationServerConnectionListener` bridge are transcribed in `CRErrorAlerts.m`; launch redirection now invokes the recovered libSandy/daemon alerts | Launch injection-check reply ABI/transport remains U-01; `CRNewContainerAlert` and the original injection-fixup error producer remain unported; no runtime test |
+| F-20 | Self-verification | Partial — `CRErrorAlert` and `CRNewContainerAlert` runtime classes, associated properties, configure/reappear hooks, daemon string formatting, libSandy/daemon/main-dylib/apsd/pkd presenters, restart/close actions and the CF >=1665.15 listener bridge are transcribed in `CRErrorAlerts.m`; launch redirection invokes the recovered libSandy/daemon alerts and the New Container menu path now uses the recovered alert flow | Launch injection-check reply ABI/transport remains U-01; the original injection-fixup error producer remains unported; no runtime test |
 | F-21 | Choicy integration | Partial — rootless-aware Choicy load/registration plus all 6 `CraneChoicyOverwriteProvider` methods are transcribed with exact return ABI, per-container gate, nested override parsing, bitmask `7`, and `" Crane"` allow-list preservation | Reconstructed CranePrefs still lacks the per-container Choicy configuration editor (`CRPContainerChoicyOverwriteListController`); no runtime test |
 | F-22 | Shortcuts / Siri | **Not implemented** | No source for `CraneIntentHandlerShared` (U-08) |
 | F-23 | Activator | Partial — dynamic load, listener/event registration, name parsing, switch/abort callbacks, metadata and app-icon generation are transcribed | `generateIconImageWithInfo:` is now recovered as a four-double HFA from both arm64 slices; remaining gap is the reconstructed `CraneManager` observer-dispatch semantics plus runtime testing |
@@ -64,10 +64,10 @@ F-IDs refer to `analysis/behavior_specification.md`.
 | Measure | Value |
 |---|---|
 | Features with a complete, transcribed implementation | 5 of 23 (F-02, F-03, F-04, F-18, and F-01's contract) |
-| Features partially implemented | 13 |
-| Features not implemented | 5 |
-| Recovered functions transcribed | Initial 17-function core plus later main-dylib/libroot work, the 42-method `CraneActivatorManager` surface, cfprefsd preferences, accountsd/Core Data isolation, lsd/device-ID isolation, apsd token/topic isolation, Choicy override provider, self-verification/error alerts, containermanagerd/cache/proxy, and pkd/PlugInKit chains; no inflated aggregate 1:1 count is claimed |
-| Reconstruction source | 8129 lines across 16 `.m` and 4 `.h` files |
+| Features partially implemented | 14 |
+| Features not implemented | 4 |
+| Recovered functions transcribed | Initial 17-function core plus later main-dylib/libroot work, the 42-method `CraneActivatorManager` surface, cfprefsd preferences, accountsd/Core Data isolation, lsd/device-ID isolation, apsd token/topic isolation, Choicy override provider, self-verification/new-container alerts, modern container-selection menus, containermanagerd/cache/proxy, and pkd/PlugInKit chains; no inflated aggregate 1:1 count is claimed |
+| Reconstruction source | 9051 lines across 17 `.m` and 4 `.h` files |
 | Static consistency audit | 0 failed checks; identifier resolution and brace balance clean |
 | Install-path / configuration artefacts verified identical | 12 of 12 plists, 10 of 10 assets |
 | Binary architectures validated against the original rule | 11 of 11 |
@@ -104,7 +104,7 @@ one. The line drawn here is: **transcribe what was read, declare what was not.**
 | F-12 PlugInKit | Complete the SpringBoard-side `extension_containerIDToAppend` query-tagging path together with notification support | U-10 / F-08 coupling |
 | F-07 keychain | Port or reimplement the embedded `csd_*`/`macho_*`/`pfsec_*` toolkit from the ~180 exported functions | U-03 |
 | F-08 notifications | Resolve/port CraneSB `initNotificationSupport` producer/routing/title/badge hooks; CraneSupport/apsd side is now transcribed | U-10, plus U-01 for the apsd CraneSB-loaded health gate |
-| F-13 menu | Read `CraneSB` `_configureCell:` hooks, or take one screenshot | U-05 |
+| F-13 menu | Port the legacy CF <1665.15 force-touch hooks and, separately, F-14 badge decoration; modern UIMenu layout is statically resolved and transcribed | legacy private SpringBoard surface / F-14 coupling |
 | F-15 settings UI | Read the remaining `CRP*` classes in the existing `CranePrefs` export | — |
 | F-16/F-17 storage and backup | Export `libcrane.dylib`; read `CRPBackupOperation`/`CRPKeychainManager` | U-04, U-06 |
 | F-19 XPC | Export `cranehelperd` | U-01 |

@@ -217,7 +217,7 @@ variants + `CRBadgeAction`/`CRSubtitleMenu`.
 
 | Property | Value | Evidence |
 |---|---|---|
-| Entry points | `SBUIAppIconForceTouchControllerDataProvider.applicationShortcutItems` (iOS 14.0–15.x) and the `SBUIActionView` path (iOS 16+) | CONFIRMED_STATIC |
+| Entry points | modern CF >=1665.15 path: `SBSApplicationShortcutItem` + `SBIconView.applicationShortcutItems`/context-menu hooks; legacy CF <1665.15 path: `SBUIAppIconForceTouch*` + `SBUIActionView` | CONFIRMED_STATIC |
 | Menu identifier | `com.opa334.crane.containers` | CONFIRMED_STATIC |
 | Gate | `applicationShortcutEnabled` | CONFIRMED_STATIC |
 | Row identifier | `com.opa334.crane-container.%@` | CONFIRMED_STATIC |
@@ -228,14 +228,15 @@ variants + `CRBadgeAction`/`CRSubtitleMenu`.
 | Hide for apps with no containers | `onlyShowIfContainersExistEnabled` | CONFIRMED_STATIC |
 | Launch after selection | `launchApplicationOnContainerSelectionEnabled` | CONFIRMED_STATIC |
 | Confirm before launch | `alwaysAskBeforeLaunchEnabled` → `SET_ACTIVE_CONTAINER_DESCRIPTION` = `Set Active Container to "%@"` | CONFIRMED_STATIC |
-| Row layout, order, subtitle text, checkmark style | UNKNOWN | UNKNOWN (U-05) |
+| Modern UIMenu layout/order | one action per container; active row uses SF Symbol `checkmark`; optional New Container follows; expanded mode ends with Settings; non-expanded mode wraps Settings, uses `CRSubtitleMenu` subtitle = active short container name + `square.grid.2x2`, and reverses children on CF >=1854.0 | CONFIRMED_STATIC — `137FC`, `13508`, `16598` |
 | Icon set | `ContainersIcon`, `AddIcon`, `SelectedContainerCheckmark`, `SettingsIcon` (@2x and @3x, byte-identical to the original) | CONFIRMED_STATIC |
 
-The **menu is built by string identifier, not by class**, which makes those
-identifiers part of the observable contract: an external Choicy configuration or
-Shortcut that references `com.opa334.crane.new-container-action` would break if
-the identifiers changed. They are reproduced verbatim in
-`reconstruction/sources/common/CRPaths.h`.
+The legacy force-touch and modern UIMenu paths use related but not identical
+identifier families. Modern `crane_replacementMenu` uses each container ID
+itself as the action identifier plus `crane-new-container-action`,
+`crane-settings-action`, and `crane-settings-wrapper`; the older branch carries
+the `com.opa334.crane.*` identifiers listed above. These literals are observable
+integration contracts and must not be normalized across the two OS families.
 
 ## 9. Badge view
 

@@ -99,7 +99,7 @@
 - (void)setActiveContainerIdentifier:(NSString *)containerID
              forApplicationWithIdentifier:(NSString *)appID
 usingBiometricsIfNeededWithSuccessHandler:(dispatch_block_t)handler;      /* [API] */
-- (void)createNewContainerWithName:(NSString *)name
+- (NSString *)createNewContainerWithName:(NSString *)name
             forApplicationWithIdentifier:(NSString *)appID;              /* [API] */
 - (void)createNewContainerWithName:(NSString *)name
                     andIdentifier:(NSString *)identifier

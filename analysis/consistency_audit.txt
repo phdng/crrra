@@ -40,9 +40,9 @@ all 23 feature test counts appear in SPECIFICATION   PASS  []
 behavior_specification defines F-01..F-23            PASS  23 features
 ACCEPTANCE_MATRIX covers all 23 features             PASS  matrix=23 spec=23
 SPECIFICATION covers all 23 features                 PASS  spec=23
-uncertainty register: RESOLVED rollup matches rows   PASS  resolved=4
-uncertainty register: OPEN rollup matches open rows  PASS  table rows=16 blocked=1 open=15 stated=15
-uncertainty register: every U-nn accounted for       PASS  open=15 resolved=4
+uncertainty register: RESOLVED rollup matches rows   PASS  resolved=5
+uncertainty register: OPEN rollup matches open rows  PASS  table rows=15 blocked=1 open=14 stated=14
+uncertainty register: every U-nn accounted for       PASS  open=14 resolved=5
 uncertainty register: main + resolved tables cover U-01..U-20 PASS
 uncertainty register: BLOCKED rollup matches rows    PASS  blocked=1
 no unnegated passed-status claim in analysis/environment_report.md PASS
