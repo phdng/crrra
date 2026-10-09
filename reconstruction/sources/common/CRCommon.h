@@ -81,7 +81,7 @@ typedef void (^CRBiometricHandler)(void);
  * with an en.lproj NSDictionary fallback. */
 extern NSString *CRLocalize(NSString *key);
 
-/* Crane 0x6BE0 - mkdir -p, errors ignored. */
+/* Crane 0x6BE0 - mkdir -p with mode 0755, uid/gid 501; errors ignored. */
 extern void CRCreateDirectoryIfNotExists(NSString *path);
 
 /* Crane 0x6E08 + 0x6F40 - LAContext biometrics; runs `handler` even when

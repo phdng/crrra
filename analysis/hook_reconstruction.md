@@ -54,8 +54,9 @@ Pure C, no Objective-C classes. Two hook groups: a mandatory
 
 * Init: `InitFunc_0` at 0x65D0 (`__DATA,__mod_init_func`)
 * Registration: `HCHookFunctions(table, count)` at 0x7360 — the libhooker
-  shim, which forwards to `MSHookFunction` in triples of
-  `{original, hook, orig_storage}`
+  shim. The recovered table uses **32-byte records**
+  `{original, hook, orig_storage, reserved=0}`; the Substrate fallback passes
+  the first three words to `MSHookFunction` and advances by four QWORDs.
 * Registered **only** when `getenv("CRANE_SPOOF_SANDBOX_LOOKUPS") != NULL`
 * Hook: `sandbox_container_path_for_pid_hook` at 0x6564
 

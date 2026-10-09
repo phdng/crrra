@@ -44,13 +44,19 @@
 /* Hook table                                                                */
 /* ------------------------------------------------------------------------- */
 
-/* Struct as laid out by the recovered code: three 8-byte words per entry,
- * consumed as {original, hook, original_storage} by HCHookFunctions. */
+/* Struct as laid out by the recovered code: four 8-byte words per entry.
+ * HCHookFunctions consumes the first three as {original, hook,
+ * original_storage} and advances by 32 bytes; the fourth word is reserved and
+ * explicitly zeroed at every recovered registration site. */
 struct CRHookEntry {
     void *original;
     void *hook;
     void *originalStorage;
+    void *reserved;
 };
+
+_Static_assert(sizeof(struct CRHookEntry) == 32,
+               "CRHookEntry must preserve the recovered 32-byte stride");
 
 static struct CRHookEntry _crHookTable[16];
 static unsigned _crHookCount = 0;
@@ -101,7 +107,7 @@ static int CRNewReaddirR(DIR *dirp, struct dirent *entry, struct dirent **result
     int rc;
     do {
         rc = ((int (*)(DIR *, struct dirent *, struct dirent **))org_readdir_r)(dirp, entry, result);
-    } while (rc == 0 && *result &&
+    } while (result && rc == 0 && *result &&
              strstr((const char *)*result + CR_DIRENT_D_NAME_OFFSET,
                     CR_CONTAINERS_DIR_TRAILER.UTF8String));
     return rc;
@@ -141,14 +147,17 @@ static void CRInitProtection(struct CRHookEntry *table, unsigned *count)
     table[0].original = (void *)&unlink;
     table[0].hook = (void *)CRNewUnlink;
     table[0].originalStorage = (void *)&org_unlink;
+    table[0].reserved = NULL;
 
     table[1].original = (void *)&readdir;
     table[1].hook = (void *)CRNewReaddir;
     table[1].originalStorage = (void *)&org_readdir;
+    table[1].reserved = NULL;
 
     table[2].original = (void *)&readdir_r;
     table[2].hook = (void *)CRNewReaddirR;
     table[2].originalStorage = (void *)&org_readdir_r;
+    table[2].reserved = NULL;
 
     *count += 3;
 
@@ -160,6 +169,7 @@ static void CRInitProtection(struct CRHookEntry *table, unsigned *count)
             table[3].original = sym;
             table[3].hook = (void *)CRNewURLEnumeratorGetNextURL;
             table[3].originalStorage = (void *)&org_URLEnumeratorGetNextURL;
+            table[3].reserved = NULL;
             ++*count;
         }
     }
@@ -170,8 +180,9 @@ static void CRInitProtection(struct CRHookEntry *table, unsigned *count)
 /* ------------------------------------------------------------------------- */
 
 /* Upstream prefers libhooker when `__LHHookFunctions` is present and otherwise
- * falls back to MSHookFunction triples. Reproduced so the dylib works on both
- * Substrate and ElleKit installs. */
+ * falls back to MSHookFunction using the first three words of each 32-byte
+ * hook-table record. Reproduced so the dylib works on both Substrate and
+ * ElleKit installs. */
 typedef void (*CRLHHookFunctionsFn)(void);
 
 static int CRHookFunctions(struct CRHookEntry *table, int count)
@@ -244,6 +255,7 @@ static void CRInitFunc(void)
         _crHookTable[count].original = (void *)&sandbox_container_path_for_pid;
         _crHookTable[count].hook = (void *)CRSandboxContainerPathForPidHook;
         _crHookTable[count].originalStorage = (void *)&org_sandbox_container_path_for_pid;
+        _crHookTable[count].reserved = NULL;
         count = 1;
         unsetenv(CR_ENV_SPOOF_SANDBOX_LOOKUPS.UTF8String);
     }

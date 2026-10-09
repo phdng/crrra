@@ -55,13 +55,19 @@ NSString *CRLocalize(NSString *key)
 
 void CRCreateDirectoryIfNotExists(NSString *path)
 {
-    if (!path.length)
-        return;
     NSFileManager *fm = NSFileManager.defaultManager;
-    BOOL isDirectory = NO;
-    if ([fm fileExistsAtPath:path isDirectory:&isDirectory])
+    if ([fm fileExistsAtPath:path])
         return;
-    [fm createDirectoryAtPath:path withIntermediateDirectories:YES attributes:nil error:NULL];
+
+    NSDictionary *attributes = @{
+        NSFilePosixPermissions: @0755,
+        NSFileOwnerAccountID: @501,
+        NSFileGroupOwnerAccountID: @501,
+    };
+    [fm createDirectoryAtPath:path
+  withIntermediateDirectories:YES
+                   attributes:attributes
+                        error:NULL];
 }
 
 /* Crane 0x6E08 + 0x6F40 --------------------------------------------------- */

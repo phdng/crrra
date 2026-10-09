@@ -129,7 +129,9 @@ container.
    `<container>`, `<container>/tmp`, `<container>/Library`,
    `<container>/Library/Caches`, `<container>/Library/Preferences`,
    `<container>/Library/SplashBoard`, `<container>/Documents`,
-   `<container>/SystemData`; then `setenv` `CFFIXED_USER_HOME`, `HOME`
+   `<container>/SystemData`. Missing directories are created recursively with
+   POSIX mode `0755`, owner uid `501`, group gid `501`; then `setenv`
+   `CFFIXED_USER_HOME`, `HOME`
    (overwrite=1) and `TMPDIR = <container>/tmp`.
 3. Else if `CRANE_PROTECT_CONTAINERS == "1"`: register the protection hooks.
 4. If `CRANE_SPOOF_SANDBOX_LOOKUPS` was present: register the
