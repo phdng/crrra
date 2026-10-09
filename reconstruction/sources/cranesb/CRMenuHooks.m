@@ -1303,6 +1303,51 @@ static id CRMenuInitWithOverrideChildren(id self,
     return result;
 }
 
+/* F-14: badge presentation on the existing private action view. Unlike
+ * object_setClass on UIKit's private view, this keeps the view's runtime
+ * layout intact across iOS versions; live badge data still requires F-08. */
+static char kCRMenuBadgeLabelKey;
+static void CRApplyBadgeToCell(id cell, id element)
+{
+    id actionView = CRDynamicObjectGetter(cell, NSSelectorFromString(@"actionView"));
+    if (![actionView isKindOfClass:[UIView class]])
+        return;
+    UIView *view = (UIView *)actionView;
+    UILabel *label = objc_getAssociatedObject(view, &kCRMenuBadgeLabelKey);
+    Class badgeClass = NSClassFromString(@"CRBadgeAction");
+    BOOL isBadge = badgeClass && [element isKindOfClass:badgeClass];
+    NSString *badgeText = isBadge
+        ? CRDynamicObjectGetter(element, NSSelectorFromString(@"badgeText"))
+        : nil;
+    if (![badgeText isKindOfClass:[NSString class]] || !badgeText.length) {
+        label.hidden = YES;
+        return;
+    }
+    if (!label) {
+        label = [[UILabel alloc] initWithFrame:CGRectZero];
+        label.translatesAutoresizingMaskIntoConstraints = NO;
+        label.font = [UIFont boldSystemFontOfSize:12.0];
+        label.textAlignment = NSTextAlignmentCenter;
+        label.textColor = [UIColor whiteColor];
+        label.backgroundColor = [UIColor systemRedColor];
+        label.layer.cornerRadius = 10.0;
+        label.clipsToBounds = YES;
+        [view addSubview:label];
+        [NSLayoutConstraint activateConstraints:@[
+            [label.centerYAnchor constraintEqualToAnchor:view.centerYAnchor],
+            [label.trailingAnchor constraintEqualToAnchor:view.trailingAnchor
+                                                 constant:-16.0],
+            [label.heightAnchor constraintGreaterThanOrEqualToConstant:20.0],
+            [label.widthAnchor constraintGreaterThanOrEqualToConstant:20.0]
+        ]];
+        objc_setAssociatedObject(view, &kCRMenuBadgeLabelKey,
+                                 label, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
+    }
+    label.text = badgeText;
+    label.hidden = NO;
+    [label sizeToFit];
+}
+
 static void CRApplySubtitleToCell(id cell, id element)
 {
     if (![element isKindOfClass:CRSubtitleMenu.class])
@@ -1331,6 +1376,7 @@ static void CRConfigureCellLong(id self,
         original(self, _cmd, cell, collectionView,
                  indexPath, element, section, size);
     CRApplySubtitleToCell(cell, element);
+    CRApplyBadgeToCell(cell, element);
 }
 
 static void CRConfigureCellSize(id self,
@@ -1346,6 +1392,7 @@ static void CRConfigureCellSize(id self,
     if (original)
         original(self, _cmd, cell, element, section, size);
     CRApplySubtitleToCell(cell, element);
+    CRApplyBadgeToCell(cell, element);
 }
 
 static void CRConfigureCellSimple(id self,
@@ -1360,6 +1407,7 @@ static void CRConfigureCellSimple(id self,
     if (original)
         original(self, _cmd, cell, element, section);
     CRApplySubtitleToCell(cell, element);
+    CRApplyBadgeToCell(cell, element);
 }
 
 static id CRInterfaceActionGroup(id self, SEL _cmd, NSArray *elements)
