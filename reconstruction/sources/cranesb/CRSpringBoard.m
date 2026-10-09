@@ -52,6 +52,7 @@ extern void CRPresentPkdRegistrationError(NSString *appID);
 extern void CRInitApplicationShortcutHooks(void);
 extern void CRInitApplicationShortcutLateHooks(void);
 extern void CRInitUIMenuHooks(void);
+extern void CRBadgeStoreInitialize(void);
 
 /* ------------------------------------------------------------------------- */
 /* Globals recovered from the export                                          */
@@ -393,6 +394,9 @@ static void CRKeychainMigrationSucceeded(CFNotificationCenterRef center, void *o
 static void CRInitSpringBoard(void)
 {
     hasFinishedLaunching = NO;
+
+    /* Restore CraneSB's per-app badge-count snapshot (0xAE20). */
+    CRBadgeStoreInitialize();
 
     /* +[CraneActivatorManager startIfPossible] dynamically loads Activator and
      * remains a no-op when it is absent, matching the recovered 0x1C580 path. */

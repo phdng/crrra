@@ -49,6 +49,9 @@ static NSString *const kLegacyPreferencesType =
     @"com.opa334.crane.open-preferences";
 
 extern void CRPresentNewContainerAlert(NSString *appID);
+extern NSInteger CRBadgeStoreContainerCount(NSString *appID,
+                                           NSString *containerID,
+                                           BOOL validateContainer);
 
 static id CRDynamicObjectGetter(id object, SEL selector)
 {
@@ -263,19 +266,8 @@ static NSInteger CRStoredContainerBadgeCount(NSString *appID,
 {
     if (!appID.length || !containerID.length)
         return 0;
-    NSArray *identifiers =
-        [manager containerIdentifiersOfApplicationWithIdentifier:appID];
-    if (![identifiers containsObject:containerID])
-        return 0;
-
-    NSString *path = CRJailbreakRootPath(CR_BADGE_STORE_PATH);
-    NSDictionary *store = [NSDictionary dictionaryWithContentsOfFile:path];
-    NSDictionary *counts = [store isKindOfClass:[NSDictionary class]]
-        ? store[appID] : nil;
-    id number = [counts isKindOfClass:[NSDictionary class]]
-        ? counts[containerID] : nil;
-    NSInteger count = [number respondsToSelector:@selector(integerValue)]
-        ? [number integerValue] : 0;
+    (void)manager;
+    NSInteger count = CRBadgeStoreContainerCount(appID, containerID, YES);
     return count > 0 ? count : 0;
 }
 
