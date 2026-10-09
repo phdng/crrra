@@ -940,6 +940,9 @@ static NSArray *CRLegacyContainerShortcutItems(id self)
         [manager applicationSettingsForApplicationWithIdentifier:appID];
     NSArray *containers = settings[CRAppSetting_Containers] ?: @[];
     NSMutableArray *items = [NSMutableArray new];
+    BOOL showBadges = CRShouldShowContainerBadges(appID, settings, manager);
+    BOOL rightToLeft = [UIApplication sharedApplication].userInterfaceLayoutDirection ==
+        UIUserInterfaceLayoutDirectionRightToLeft;
 
     for (NSDictionary *container in containers) {
         NSString *containerID = container[CRCContainer_Identifier];
@@ -953,8 +956,18 @@ static NSArray *CRLegacyContainerShortcutItems(id self)
         NSString *type =
             [kLegacyContainerTypePrefix
                 stringByAppendingString:containerID];
+        NSString *subtitle = nil;
+        if (showBadges) {
+            NSInteger count = CRStoredContainerBadgeCount(appID, containerID,
+                                                         manager);
+            if (count > 0) {
+                subtitle = rightToLeft
+                    ? [NSString stringWithFormat:@"⬤ %ld", (long)count]
+                    : [NSString stringWithFormat:@"%ld ⬤", (long)count];
+            }
+        }
         id item = CRLegacyNewShortcutItem(
-            title ?: containerID, nil, type, appID);
+            title ?: containerID, subtitle, type, appID);
         if (item)
             [items addObject:item];
     }
