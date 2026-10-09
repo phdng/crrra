@@ -129,7 +129,7 @@ static NSMutableDictionary *CRApplyEnvironmentChanges(NSMutableDictionary *envir
          * requested, and only when the app opted in. */
         if ([appSettings[CRAppSetting_ContainerProtectionEnabled] boolValue]) {
             NSMutableDictionary *env = [environment mutableCopy] ?: [NSMutableDictionary new];
-            env[CR_ENV_PROTECT_CONTAINERS] = CR_ENV_PROTECT_VALUE;
+            env[CR_ENV_PROTECT_CONTAINERS] = @"1";
             return env;
         }
         return environment;
@@ -156,7 +156,8 @@ static NSMutableDictionary *CRApplyEnvironmentChanges(NSMutableDictionary *envir
     __block BOOL connectionWorks = NO;
     dispatch_semaphore_t sem = dispatch_semaphore_create(0);
 
-    id proxy = [manager cranehelperdGlobalSyncRemoteObjectProxy];
+    id<CRHelperServiceProtocol> proxy =
+        (id<CRHelperServiceProtocol>)[manager cranehelperdGlobalSyncRemoteObjectProxy];
     if ([proxy respondsToSelector:@selector(verifyCraneInsuranceAndReply:)]) {
         [proxy verifyCraneInsuranceAndReply:^(BOOL works, NSString *daemons,
                                               NSError *error, BOOL connWorks) {
@@ -174,7 +175,7 @@ static NSMutableDictionary *CRApplyEnvironmentChanges(NSMutableDictionary *envir
 
     if (insuranceOK && !lastError) {
         if ([appSettings[CRAppSetting_SpoofSandboxLookupsEnabled] boolValue])
-            env[CR_ENV_SPOOF_SANDBOX_LOOKUPS] = CR_ENV_PROTECT_VALUE;
+            env[CR_ENV_SPOOF_SANDBOX_LOOKUPS] = @"1";
         env[CR_ENV_CONTAINER_IDENTIFIER] = activeContainer;
         return env;
     }
@@ -341,12 +342,12 @@ static void CRInitSpringBoard(void)
 
     CFNotificationCenterAddObserver(CFNotificationCenterGetLocalCenter(), NULL,
                                     CRDidFinishLaunching,
-                                    UIApplicationDidFinishLaunchingNotification,
+                                    (__bridge CFStringRef)UIApplicationDidFinishLaunchingNotification,
                                     NULL,
                                     CFNotificationSuspensionBehaviorDeliverImmediately);
     CFNotificationCenterAddObserver(CFNotificationCenterGetDarwinNotifyCenter(), NULL,
                                     CRKeychainMigrationSucceeded,
-                                    CR_NOTIFICATION_MIGRATION_SUCCEEDED,
+                                    (__bridge CFStringRef)CR_NOTIFICATION_MIGRATION_SUCCEEDED,
                                     NULL,
                                     CFNotificationSuspensionBehaviorDeliverImmediately);
 

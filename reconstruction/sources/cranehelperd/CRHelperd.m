@@ -127,7 +127,7 @@ extern xpc_connection_t CRXPCConnectionCreateMachService(const char *name,
 #pragma mark - Global service
 
 @protocol CRHGlobalServiceProtocol <NSObject>
-- (void)verifyCraneInsuranceWithReply:(void (^)(BOOL works, NSString *brokenDaemons, NSError *error, BOOL connectionWorks))reply;
+- (void)verifyCraneInsuranceAndReply:(void (^)(BOOL works, NSString *brokenDaemons, NSError *error, BOOL connectionWorks))reply;
 - (void)verifySupportLoadedIntoProcessNamed:(NSString *)name reply:(void (^)(BOOL loaded))reply;
 - (void)fetchActiveContainerIDForProcessWithPid:(pid_t)pid reply:(void (^)(NSString *containerID))reply;
 - (void)reloadApplicationWithIdentifier:(NSString *)appID;
@@ -153,7 +153,7 @@ extern xpc_connection_t CRXPCConnectionCreateMachService(const char *name,
 
 @implementation CRHGlobalServiceDelegate
 
-- (void)verifyCraneInsuranceWithReply:(void (^)(BOOL, NSString *, NSError *, BOOL))reply
+- (void)verifyCraneInsuranceAndReply:(void (^)(BOOL, NSString *, NSError *, BOOL))reply
 {
     /* "Insurance" is Crane's self-check: CraneSupport.dylib must be present in
      * every daemon that participates in redirection, CraneSB.dylib in
@@ -250,9 +250,9 @@ extern xpc_connection_t CRXPCConnectionCreateMachService(const char *name,
     return [NSXPCInterface interfaceWithProtocol:protocol];
 }
 
-- (void)verifyCraneInsuranceWithReply:(void (^)(BOOL, NSString *, NSError *, BOOL))reply
+- (void)verifyCraneInsuranceAndReply:(void (^)(BOOL, NSString *, NSError *, BOOL))reply
 {
-    [self.delegate verifyCraneInsuranceWithReply:reply];
+    [self.delegate verifyCraneInsuranceAndReply:reply];
 }
 
 - (void)verifySupportLoadedIntoProcessNamed:(NSString *)name reply:(void (^)(BOOL))reply

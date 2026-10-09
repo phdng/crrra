@@ -36,7 +36,7 @@
 /* The XPC interface of this reconstruction's own cranehelperd.
  * NOT the original's - see the provenance note above. */
 @protocol CRHelperServiceProtocol <NSObject>
-- (void)verifyCraneInsuranceWithReply:(void (^)(BOOL works, NSString *brokenDaemons, NSError *error, BOOL connectionWorks))reply;
+- (void)verifyCraneInsuranceAndReply:(void (^)(BOOL works, NSString *brokenDaemons, NSError *error, BOOL connectionWorks))reply;
 - (void)verifySupportLoadedIntoProcessNamed:(NSString *)name reply:(void (^)(BOOL loaded))reply;
 - (void)fetchActiveContainerIDForProcessWithPid:(pid_t)pid reply:(void (^)(NSString *containerID))reply;
 - (void)reloadApplicationWithIdentifier:(NSString *)appID;
