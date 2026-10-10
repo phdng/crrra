@@ -57,14 +57,13 @@ NSInteger CRBadgeStoreContainerCount(NSString *appID,
 }
 
 /* CraneSB 0x10BEC/0x10CB0: notification-listener badge lifecycle RPCs. */
-static NSInteger CRBadgeAggregateCount(NSString *appID);
+static NSInteger CRBadgeAggregateCount(NSString *appID, BOOL validate);
 
 static void CRBadgeProjectApplicationCount(NSString *appID, BOOL validate)
 {
     if (!appID.length)
         return;
-    NSInteger count = CRBadgeAggregateCount(appID);
-    (void)validate; /* Validity checked at the store getter entrypoint. */
+    NSInteger count = CRBadgeAggregateCount(appID, validate);
     NSNumber *value = @(count);
     Class stateClass = NSClassFromString(@"UISApplicationState");
     SEL initSEL = NSSelectorFromString(@"initWithBundleIdentifier:");
@@ -186,14 +185,23 @@ static BOOL CRBadgeRedirectionEnabled(NSString *appID)
 
 /* 0xAA00/0xAB44: preserve the negative-only fallback when positive
  * badge counts sum to zero (e.g. special system badge sentinel values). */
-static NSInteger CRBadgeAggregateCount(NSString *appID)
+static NSInteger CRBadgeAggregateCount(NSString *appID, BOOL validate)
 {
-    NSArray *containers = [CraneManager.sharedManager
-        containerIdentifiersOfApplicationWithIdentifier:appID];
+    if (!appID.length)
+        return 0;
+    CRBadgeStoreInitialize();
+    NSDictionary *snapshot;
+    @synchronized (gCRBadgeStoreLock) {
+        id appCounts = gCRBadgeStore[appID];
+        snapshot = [appCounts isKindOfClass:[NSDictionary class]]
+            ? [appCounts copy] : @{};
+    }
     NSInteger positive = 0;
     NSInteger negative = 0;
-    for (NSString *identifier in containers) {
-        NSInteger count = CRBadgeStoreContainerCount(appID, identifier, NO);
+    for (id identifier in snapshot) {
+        if (![identifier isKindOfClass:[NSString class]])
+            continue;
+        NSInteger count = CRBadgeStoreContainerCount(appID, identifier, validate);
         if (count >= 0)
             positive += count;
         else
@@ -253,7 +261,7 @@ static void CRBadgePrivateSet(id self, SEL cmd, NSNumber *number,
         }
     }
 
-    NSNumber *aggregate = @(CRBadgeAggregateCount(appID));
+    NSNumber *aggregate = @(CRBadgeAggregateCount(appID, YES));
     original(self, cmd, aggregate, appID, completion);
 }
 
