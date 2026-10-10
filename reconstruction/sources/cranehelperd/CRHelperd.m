@@ -386,7 +386,7 @@ int main(int argc, char *argv[], char *envp[])
                         if (reply) {
                             xpc_dictionary_set_bool(reply, "alive", true);
                             xpc_connection_send_message(peer, reply);
-                            xpc_release(reply);
+                            /* ARC manages Objective-C-backed XPC objects. */
                         }
                     });
                     xpc_connection_resume(peer);
@@ -417,7 +417,7 @@ int main(int argc, char *argv[], char *envp[])
                         if (reply) {
                             xpc_dictionary_set_bool(reply, "alive", true);
                             xpc_connection_send_message(peer, reply);
-                            xpc_release(reply);
+                            /* ARC manages Objective-C-backed XPC objects. */
                         }
                     });
                     xpc_connection_resume(peer);
