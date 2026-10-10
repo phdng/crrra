@@ -357,6 +357,10 @@ static void CRHandleHealthPing(xpc_connection_t peer, xpc_object_t message)
     const char *operation = xpc_dictionary_get_string(message, "operation");
     if (!operation || strcmp(operation, "ping") != 0)
         return;
+    /* A version match is compatibility checking, not client authorization. */
+    const char *protocol = xpc_dictionary_get_string(message, "protocol");
+    if (!protocol || strcmp(protocol, "crane-reconstruction-ping-v1") != 0)
+        return;
     xpc_object_t reply = xpc_dictionary_create_reply(message);
     if (!reply)
         return;

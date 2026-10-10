@@ -566,6 +566,7 @@ usingBiometricsIfNeededWithSuccessHandler:(dispatch_block_t)handler
     xpc_object_t request = xpc_dictionary_create(NULL, NULL, 0);
     if (request) {
         xpc_dictionary_set_string(request, "operation", "ping");
+        xpc_dictionary_set_string(request, "protocol", "crane-reconstruction-ping-v1");
         xpc_connection_send_message_with_reply(connection, request,
             dispatch_get_global_queue(QOS_CLASS_UTILITY, 0),
             ^(xpc_object_t response) {
