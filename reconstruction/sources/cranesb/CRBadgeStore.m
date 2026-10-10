@@ -16,6 +16,7 @@ void CRBadgeStoreSetContainerCount(NSString *appID, NSString *containerID, NSInt
 
 static NSMutableDictionary *gCRBadgeStore;
 static NSObject *gCRBadgeStoreLock;
+static void CRBadgeStoreReconcileContainerKeys(void);
 
 static NSString *CRBadgeStorePath(void)
 {
@@ -31,7 +32,39 @@ void CRBadgeStoreInitialize(void)
             [NSDictionary dictionaryWithContentsOfFile:CRBadgeStorePath()];
         gCRBadgeStore = [saved isKindOfClass:[NSDictionary class]]
             ? [saved mutableCopy] : [NSMutableDictionary new];
+        CRBadgeStoreReconcileContainerKeys();
     });
+}
+
+/* 0xB00C/0xB688: discard stored entries for containers that no longer
+ * exist. Keep apps whose container registry is unavailable untouched, so a
+ * transient manager failure does not destroy persisted badge data. */
+static void CRBadgeStoreReconcileContainerKeys(void)
+{
+    CraneManager *manager = CraneManager.sharedManager;
+    BOOL changed = NO;
+    NSDictionary *snapshot = [gCRBadgeStore copy];
+    for (id appID in snapshot) {
+        id counts = snapshot[appID];
+        if (![appID isKindOfClass:[NSString class]] ||
+            ![counts isKindOfClass:[NSDictionary class]])
+            continue;
+        NSArray *validIDs =
+            [manager containerIdentifiersOfApplicationWithIdentifier:appID];
+        if (![validIDs isKindOfClass:[NSArray class]] || !validIDs.count)
+            continue;
+        NSMutableDictionary *updated = [counts mutableCopy];
+        for (id containerID in counts) {
+            if (![validIDs containsObject:containerID])
+                [updated removeObjectForKey:containerID];
+        }
+        if (updated.count != [counts count]) {
+            gCRBadgeStore[appID] = [updated copy];
+            changed = YES;
+        }
+    }
+    if (changed)
+        [gCRBadgeStore writeToFile:CRBadgeStorePath() atomically:YES];
 }
 
 NSInteger CRBadgeStoreContainerCount(NSString *appID,
