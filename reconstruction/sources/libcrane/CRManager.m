@@ -521,6 +521,34 @@ usingBiometricsIfNeededWithSuccessHandler:(dispatch_block_t)handler
  * compatibility with the original daemon or its NSXPC protocol. */
 - (BOOL)cranehelperdConnectionWorks
 {
+    /* On the main thread, use a short-lived cached result and schedule
+     * one probe on a worker. An unknown/expired result fails closed. */
+    static NSDate *lastProbe;
+    static BOOL cachedAlive;
+    static BOOL probeInFlight;
+    if ([NSThread isMainThread]) {
+        BOOL result = NO;
+        @synchronized([CraneManager class]) {
+            NSTimeInterval age = lastProbe ?
+                -[lastProbe timeIntervalSinceNow] : -1.0;
+            BOOL fresh = age >= 0.0 && age < 5.0;
+            if (fresh)
+                result = cachedAlive;
+            if (!fresh && !probeInFlight) {
+                probeInFlight = YES;
+                dispatch_async(dispatch_get_global_queue(QOS_CLASS_UTILITY, 0), ^{
+                    BOOL aliveNow = [[CraneManager sharedManager]
+                        cranehelperdConnectionWorks];
+                    @synchronized([CraneManager class]) {
+                        cachedAlive = aliveNow;
+                        lastProbe = [NSDate date];
+                        probeInFlight = NO;
+                    }
+                });
+            }
+        }
+        return result;
+    }
     /* The callback may arrive after timeout. Keep its result in heap-backed
      * block storage and only read it after a successful semaphore wait. */
     __block BOOL alive = NO;
