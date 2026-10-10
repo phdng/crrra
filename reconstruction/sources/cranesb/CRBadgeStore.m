@@ -36,6 +36,21 @@ void CRBadgeStoreInitialize(void)
     });
 }
 
+/* 0xB00C: LSApplicationProxy reports whether a bundle is installed.
+ * Unknown API/class state must never be treated as proof of uninstall. */
+static BOOL CRBadgeApplicationConfirmedUninstalled(NSString *appID)
+{
+    Class proxyClass = NSClassFromString(@"LSApplicationProxy");
+    SEL lookupSEL = NSSelectorFromString(@"applicationProxyForIdentifier:");
+    if (!proxyClass || ![proxyClass respondsToSelector:lookupSEL])
+        return NO;
+    id proxy = ((id (*)(id, SEL, id))objc_msgSend)(proxyClass, lookupSEL, appID);
+    SEL installedSEL = NSSelectorFromString(@"isInstalled");
+    if (!proxy || ![proxy respondsToSelector:installedSEL])
+        return NO;
+    return !((BOOL (*)(id, SEL))objc_msgSend)(proxy, installedSEL);
+}
+
 /* 0xB00C/0xB688: discard stored entries for containers that no longer
  * exist. Keep apps whose container registry is unavailable untouched, so a
  * transient manager failure does not destroy persisted badge data. */
@@ -49,6 +64,11 @@ static void CRBadgeStoreReconcileContainerKeys(void)
         if (![appID isKindOfClass:[NSString class]] ||
             ![counts isKindOfClass:[NSDictionary class]])
             continue;
+        if (CRBadgeApplicationConfirmedUninstalled(appID)) {
+            [gCRBadgeStore removeObjectForKey:appID];
+            changed = YES;
+            continue;
+        }
         NSArray *validIDs =
             [manager containerIdentifiersOfApplicationWithIdentifier:appID];
         if (![validIDs isKindOfClass:[NSArray class]] || !validIDs.count)
