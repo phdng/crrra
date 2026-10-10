@@ -324,8 +324,38 @@ static void CRBadgeSaveRecord(id self, SEL cmd, id record,
 
 /* 0xFF30 and 0x10050 wrap the same synchronous queue save context,
  * but their native selector argument lists are distinct. */
+static NSString *CRBadgeSourceForRecord(id record, NSString *appID);
+static IMP gCRBadgeOuterSaveOriginal;
 static IMP gCRBadgeSaveRevisionOriginal;
 static IMP gCRBadgeSaveOptionsOriginal;
+
+/* CraneSB 0xF254: outer save path. This establishes the source context
+ * while the original synchronous call executes; the separate foreground
+ * queue propagation is not yet reconstructed. */
+static void CRBadgeOuterSave(id self, SEL cmd, id record, BOOL repost,
+                             NSString *appID, id completion)
+{
+    void (*original)(id, SEL, id, BOOL, id, id) =
+        (void (*)(id, SEL, id, BOOL, id, id))gCRBadgeOuterSaveOriginal;
+    if (!original)
+        return;
+    NSString *container = CRBadgeSourceForRecord(record, appID);
+    NSMutableDictionary *threadInfo = [NSThread currentThread].threadDictionary;
+    NSString *key = @"saveNotification_containerID";
+    id previous = threadInfo[key];
+    if (container)
+        threadInfo[key] = container;
+    @try {
+        original(self, cmd, record, repost, appID, completion);
+    } @finally {
+        if (container) {
+            if (previous)
+                threadInfo[key] = previous;
+            else
+                [threadInfo removeObjectForKey:key];
+        }
+    }
+}
 
 static NSString *CRBadgeSourceForRecord(id record, NSString *appID)
 {
@@ -395,6 +425,11 @@ void CRInitBadgeRepositoryHooks(void)
         repository = NSClassFromString(@"UNCLocalNotificationRepository");
     if (!repository)
         return;
+    SEL outerSEL = NSSelectorFromString(
+        @"saveNotificationRecord:shouldRepost:forBundleIdentifier:withCompletionHandler:");
+    if ([repository instancesRespondToSelector:outerSEL])
+        MSHookMessageEx(repository, outerSEL, (IMP)CRBadgeOuterSave,
+                        &gCRBadgeOuterSaveOriginal);
     SEL saveSEL = NSSelectorFromString(
         @"_queue_saveNotificationRecord:withOptions:forBundleIdentifier:");
     if ([repository instancesRespondToSelector:saveSEL])
