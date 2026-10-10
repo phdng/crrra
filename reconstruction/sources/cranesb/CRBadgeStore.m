@@ -763,8 +763,101 @@ static void CRBadgeInvalidateToken(id self, SEL cmd, NSString *appID)
     original(self, cmd, appID);
 }
 
+/* 0xDA30/0xDF68: route token requests to a container-specific APNS
+ * topic. Scope origin on the calling thread for synchronous callbacks. */
+static IMP gCRBadgeRequestTokenOriginal;
+
+static void CRBadgeRequestToken(id self, SEL cmd, NSString *appID,
+                                id completion)
+{
+    void (*original)(id, SEL, id, id) =
+        (void (*)(id, SEL, id, id))gCRBadgeRequestTokenOriginal;
+    if (!original)
+        return;
+    if (!CRBadgeRedirectionEnabled(appID)) {
+        original(self, cmd, appID, completion);
+        return;
+    }
+    SEL currentSEL = NSSelectorFromString(@"_currentConnection");
+    id connection = [self respondsToSelector:currentSEL]
+        ? ((id (*)(id, SEL))objc_msgSend)(self, currentSEL) : nil;
+    NSString *container = CRBadgeContainerForConnection(connection);
+    if (!container.length) {
+        original(self, cmd, appID, completion);
+        return;
+    }
+    NSString *topic = [NSString stringWithFormat:
+        @"%@.c_r_a_n_e.%@", appID, container];
+    NSMutableDictionary *context = [NSThread currentThread].threadDictionary;
+    NSString *key = @"crane_requestOriginContainerID";
+    id previous = context[key];
+    context[key] = container;
+    /* 0xDF68: older UNCLocal listener implementations keep a source
+     * description indexed by the original bundle ID. Temporarily alias it
+     * under the encoded topic while the original request runs. */
+    NSMutableDictionary *descriptions = nil;
+    id sourceDescription = nil;
+    BOOL aliasInstalled = NO;
+    @try {
+        id mapping = [self valueForKey:@"_bundleIdentifierToSourceDescription"];
+        if ([mapping isKindOfClass:[NSMutableDictionary class]]) {
+            id candidate = mapping[appID];
+            if (candidate && !mapping[topic]) {
+                descriptions = mapping;
+                sourceDescription = candidate;
+                descriptions[topic] = sourceDescription;
+                aliasInstalled = YES;
+            }
+        }
+    } @catch (NSException *exception) {
+        (void)exception;
+    }
+    @try {
+        original(self, cmd, topic, completion);
+    } @finally {
+        if (aliasInstalled && descriptions[topic] == sourceDescription)
+            [descriptions removeObjectForKey:topic];
+        if (previous)
+            context[key] = previous;
+        else
+            [context removeObjectForKey:key];
+    }
+}
+
+/* 0xDE54: the notification source description lookup is a class method.
+ * Convert encoded topics back to their original bundle ID before lookup. */
+static IMP gCRBadgeSourceDescriptionOriginal;
+
+static id CRBadgeSourceDescription(id self, SEL cmd, NSString *bundleID)
+{
+    id (*original)(id, SEL, id) =
+        (id (*)(id, SEL, id))gCRBadgeSourceDescriptionOriginal;
+    if (!original)
+        return nil;
+    if ([bundleID isKindOfClass:[NSString class]] &&
+        [bundleID containsString:@".c_r_a_n_e."]) {
+        NSString *base = [[bundleID componentsSeparatedByString:
+            @".c_r_a_n_e."] firstObject];
+        if (base.length)
+            bundleID = base;
+    }
+    return original(self, cmd, bundleID);
+}
+
 void CRInitBadgeListenerMethods(void)
 {
+    Class descriptionClass = NSClassFromString(
+        @"UNSNotificationSourceDescription");
+    if (!descriptionClass)
+        descriptionClass = NSClassFromString(
+            @"UNCNotificationSourceDescription");
+    SEL descriptionSEL = NSSelectorFromString(
+        @"sourceDescriptionWithBundleIdentifier:");
+    if (descriptionClass &&
+        [descriptionClass respondsToSelector:descriptionSEL])
+        MSHookMessageEx(object_getClass(descriptionClass), descriptionSEL,
+                        (IMP)CRBadgeSourceDescription,
+                        &gCRBadgeSourceDescriptionOriginal);
     Class remoteClass = NSClassFromString(@"UNSRemoteNotificationServer");
     if (!remoteClass)
         remoteClass = NSClassFromString(@"UNCRemoteNotificationServer");
@@ -783,6 +876,12 @@ void CRInitBadgeListenerMethods(void)
     if (!tokenListener)
         tokenListener = NSClassFromString(
             @"UNSUserNotificationServerConnectionListener");
+    SEL requestSEL = NSSelectorFromString(
+        @"requestTokenForRemoteNotificationsForBundleIdentifier:withCompletionHandler:");
+    if (tokenListener &&
+        [tokenListener instancesRespondToSelector:requestSEL])
+        MSHookMessageEx(tokenListener, requestSEL, (IMP)CRBadgeRequestToken,
+                        &gCRBadgeRequestTokenOriginal);
     SEL invalidateSEL = NSSelectorFromString(
         @"invalidateTokenForRemoteNotificationsForBundleIdentifier:");
     if (tokenListener &&
