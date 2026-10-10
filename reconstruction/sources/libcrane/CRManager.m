@@ -521,6 +521,8 @@ usingBiometricsIfNeededWithSuccessHandler:(dispatch_block_t)handler
  * compatibility with the original daemon or its NSXPC protocol. */
 - (BOOL)cranehelperdConnectionWorks
 {
+    /* The callback may arrive after timeout. Keep its result in heap-backed
+     * block storage and only read it after a successful semaphore wait. */
     __block BOOL alive = NO;
     dispatch_semaphore_t done = dispatch_semaphore_create(0);
     xpc_connection_t connection = CRManagerXPCConnectionCreateMachService(
@@ -541,11 +543,15 @@ usingBiometricsIfNeededWithSuccessHandler:(dispatch_block_t)handler
                     alive = xpc_dictionary_get_bool(response, "alive");
                 dispatch_semaphore_signal(done);
             });
-        dispatch_semaphore_wait(done,
+        long waitResult = dispatch_semaphore_wait(done,
             dispatch_time(DISPATCH_TIME_NOW, (int64_t)(2 * NSEC_PER_SEC)));
+        BOOL received = waitResult == 0;
+        BOOL result = received && alive;
+        xpc_connection_cancel(connection);
+        return result;
     }
     xpc_connection_cancel(connection);
-    return alive;
+    return NO;
 }
 
 - (id)cranehelperdGlobalSyncRemoteObjectProxy { return nil; }
