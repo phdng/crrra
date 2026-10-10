@@ -571,12 +571,61 @@ void CRInitBadgeRepositoryHooks(void)
                         &gCRBadgePublicSetterOriginal);
 }
 
+/* 0x104AC/0x1235C: attach source container to incoming request content.
+ * The DEFAULT container deliberately carries no extra metadata. */
+static IMP gCRBadgeAddRequestsOriginal;
+
+static void CRBadgeAddRequests(id self, SEL cmd, NSArray *requests,
+                               NSString *appID, id completion)
+{
+    void (*original)(id, SEL, id, id, id) =
+        (void (*)(id, SEL, id, id, id))gCRBadgeAddRequestsOriginal;
+    if (!original)
+        return;
+    if (CRBadgeRedirectionEnabled(appID) &&
+        [requests isKindOfClass:[NSArray class]]) {
+        SEL currentSEL = NSSelectorFromString(@"currentConnection");
+        NSXPCConnection *connection =
+            [NSXPCConnection respondsToSelector:currentSEL]
+                ? ((id (*)(id, SEL))objc_msgSend)(
+                    [NSXPCConnection class], currentSEL) : nil;
+        NSString *container = CRBadgeContainerForConnection(connection);
+        if (container.length && ![container isEqualToString:@"DEFAULT"]) {
+            for (id request in requests) {
+                if (![request respondsToSelector:@selector(content)])
+                    continue;
+                id content = ((id (*)(id, SEL))objc_msgSend)(
+                    request, @selector(content));
+                if (![content respondsToSelector:@selector(userInfo)])
+                    continue;
+                id info = ((id (*)(id, SEL))objc_msgSend)(
+                    content, @selector(userInfo));
+                if (![info isKindOfClass:[NSDictionary class]])
+                    continue;
+                NSMutableDictionary *tagged = [info mutableCopy];
+                tagged[@"crane_sourceContainerID"] = container;
+                @try {
+                    [content setValue:[tagged copy] forKey:@"_userInfo"];
+                } @catch (NSException *exception) {
+                    (void)exception;
+                }
+            }
+        }
+    }
+    original(self, cmd, requests, appID, completion);
+}
+
 void CRInitBadgeListenerMethods(void)
 {
     Class listener = NSClassFromString(
         @"UNSUserNotificationServerConnectionListener");
     if (!listener)
         return;
+    SEL addSEL = NSSelectorFromString(
+        @"_addNotificationRequests:forBundleIdentifier:withCompletionHandler:");
+    if ([listener instancesRespondToSelector:addSEL])
+        MSHookMessageEx(listener, addSEL, (IMP)CRBadgeAddRequests,
+                        &gCRBadgeAddRequestsOriginal);
     class_addMethod(listener,
         NSSelectorFromString(@"crane_switchBadgesOfContainerWithIdentifier:andContainerWithIdentifier:ofApplicationWithIdentifier:"),
         (IMP)CRSwitchContainerBadges, "v@:@@@");
