@@ -366,6 +366,24 @@ static void CRHandleHealthPing(xpc_connection_t peer, xpc_object_t message)
     /* ARC manages the XPC reply. This is not caller authentication. */
 }
 
+/* Shared peer lifecycle: credentials are metadata sanity checks only. */
+static void CRAcceptHealthPeer(xpc_connection_t peer)
+{
+    if (xpc_connection_get_pid(peer) <= 0 ||
+        xpc_connection_get_euid(peer) == (uid_t)-1) {
+        xpc_connection_cancel(peer);
+        return;
+    }
+    xpc_connection_set_event_handler(peer, ^(xpc_object_t message) {
+        if (xpc_get_type(message) == XPC_TYPE_ERROR) {
+            xpc_connection_cancel(peer);
+            return;
+        }
+        CRHandleHealthPing(peer, message);
+    });
+    xpc_connection_resume(peer);
+}
+
 #pragma mark - main
 
 int main(int argc, char *argv[], char *envp[])
@@ -390,18 +408,7 @@ int main(int argc, char *argv[], char *envp[])
                 ^(xpc_object_t event) {
                     if (xpc_get_type(event) != XPC_TYPE_CONNECTION)
                         return;
-                    xpc_connection_t peer = (xpc_connection_t)event;
-                    /* Reject invalid peer metadata before activating it.
-                     * PID/UID are not authorization credentials. */
-                    if (xpc_connection_get_pid(peer) <= 0 ||
-                        xpc_connection_get_euid(peer) == (uid_t)-1) {
-                        xpc_connection_cancel(peer);
-                        return;
-                    }
-                    xpc_connection_set_event_handler(peer, ^(xpc_object_t message) {
-                        CRHandleHealthPing(peer, message);
-                    });
-                    xpc_connection_resume(peer);
+                    CRAcceptHealthPeer((xpc_connection_t)event);
                 });
             xpc_connection_resume(prefsConn);
         } else {
@@ -416,18 +423,7 @@ int main(int argc, char *argv[], char *envp[])
                 ^(xpc_object_t event) {
                     if (xpc_get_type(event) != XPC_TYPE_CONNECTION)
                         return;
-                    xpc_connection_t peer = (xpc_connection_t)event;
-                    /* Reject invalid peer metadata before activating it.
-                     * PID/UID are not authorization credentials. */
-                    if (xpc_connection_get_pid(peer) <= 0 ||
-                        xpc_connection_get_euid(peer) == (uid_t)-1) {
-                        xpc_connection_cancel(peer);
-                        return;
-                    }
-                    xpc_connection_set_event_handler(peer, ^(xpc_object_t message) {
-                        CRHandleHealthPing(peer, message);
-                    });
-                    xpc_connection_resume(peer);
+                    CRAcceptHealthPeer((xpc_connection_t)event);
                 });
             xpc_connection_resume(globalConn);
         } else {
