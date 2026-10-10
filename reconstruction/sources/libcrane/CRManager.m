@@ -554,33 +554,52 @@ usingBiometricsIfNeededWithSuccessHandler:(dispatch_block_t)handler
     /* The callback may arrive after timeout. Keep its result in heap-backed
      * block storage and only read it after a successful semaphore wait. */
     __block BOOL alive = NO;
+    __block BOOL completed = NO;
+    NSObject *completionLock = [NSObject new];
     dispatch_semaphore_t done = dispatch_semaphore_create(0);
     xpc_connection_t connection = CRManagerXPCConnectionCreateMachService(
         CR_HELPERD_MACH_SERVICE.UTF8String, NULL, 0);
     if (!connection)
         return NO;
     xpc_connection_set_event_handler(connection, ^(xpc_object_t event) {
-        (void)event;
+        if (xpc_get_type(event) != XPC_TYPE_ERROR)
+            return;
+        @synchronized(completionLock) {
+            if (!completed) {
+                completed = YES;
+                dispatch_semaphore_signal(done);
+            }
+        }
     });
     xpc_connection_resume(connection);
     xpc_object_t request = xpc_dictionary_create(NULL, NULL, 0);
     if (request) {
         xpc_dictionary_set_string(request, "operation", "ping");
-        xpc_dictionary_set_string(request, "protocol", "crane-reconstruction-ping-v1");
+        xpc_dictionary_set_string(request, "protocol", CR_HELPERD_PING_PROTOCOL_V1);
         xpc_connection_send_message_with_reply(connection, request,
             dispatch_get_global_queue(QOS_CLASS_UTILITY, 0),
             ^(xpc_object_t response) {
+                BOOL replyAlive = NO;
                 if (xpc_get_type(response) == XPC_TYPE_DICTIONARY) {
                     const char *protocol = xpc_dictionary_get_string(response, "protocol");
-                    alive = protocol && strcmp(protocol, "crane-reconstruction-ping-v1") == 0 &&
+                    replyAlive = protocol && strcmp(protocol, CR_HELPERD_PING_PROTOCOL_V1) == 0 &&
                         xpc_dictionary_get_bool(response, "alive");
                 }
-                dispatch_semaphore_signal(done);
+                @synchronized(completionLock) {
+                    if (!completed) {
+                        alive = replyAlive;
+                        completed = YES;
+                        dispatch_semaphore_signal(done);
+                    }
+                }
             });
         long waitResult = dispatch_semaphore_wait(done,
             dispatch_time(DISPATCH_TIME_NOW, (int64_t)(2 * NSEC_PER_SEC)));
-        BOOL received = waitResult == 0;
-        BOOL result = received && alive;
+        BOOL result;
+        @synchronized(completionLock) {
+            result = waitResult == 0 && alive;
+            completed = YES; /* Ignore callbacks arriving after timeout. */
+        }
         xpc_connection_cancel(connection);
         return result;
     }
