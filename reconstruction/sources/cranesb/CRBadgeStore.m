@@ -120,15 +120,19 @@ static void CRBadgeStoreReconcileContainerKeys(void)
         NSNumber *iconCount = CRBadgeExistingIconCount(appID);
         if (iconCount && [validIDs containsObject:@"DEFAULT"]) {
             NSInteger storedPositive = 0;
-            for (id countValue in [counts allValues]) {
+            for (id countValue in [updated allValues]) {
                 if ([countValue respondsToSelector:@selector(integerValue)]) {
                     NSInteger count = [countValue integerValue];
                     if (count > 0)
                         storedPositive += count;
                 }
             }
-            if (storedPositive != [iconCount integerValue])
-                updated[@"DEFAULT"] = iconCount;
+            if (storedPositive != [iconCount integerValue]) {
+                if ([iconCount integerValue] == 0)
+                    [updated removeObjectForKey:@"DEFAULT"];
+                else
+                    updated[@"DEFAULT"] = iconCount;
+            }
         }
         if (![updated isEqualToDictionary:counts]) {
             gCRBadgeStore[appID] = [updated copy];
