@@ -844,6 +844,59 @@ static id CRBadgeSourceDescription(id self, SEL cmd, NSString *bundleID)
     return original(self, cmd, bundleID);
 }
 
+/* 0xE698: normalize a Crane APNS topic for the legacy app-description
+ * lookup, without modifying the installed-bundle-identifier collection. */
+static IMP gCRBadgeAppDescriptionOriginal;
+
+static id CRBadgeAppDescription(id self, SEL cmd, NSString *bundleID)
+{
+    id (*original)(id, SEL, id) =
+        (id (*)(id, SEL, id))gCRBadgeAppDescriptionOriginal;
+    if (!original)
+        return nil;
+    if ([bundleID isKindOfClass:[NSString class]] &&
+        [bundleID containsString:@".c_r_a_n_e."]) {
+        NSString *base = [[bundleID componentsSeparatedByString:
+            @".c_r_a_n_e."] firstObject];
+        if (base.length)
+            bundleID = base;
+    }
+    return original(self, cmd, bundleID);
+}
+
+/* 0xEBA0: report an APNS topic per non-default container in addition
+ * to the existing topics returned by the notification server. */
+static IMP gCRBadgeAllTopicsOriginal;
+
+static id CRBadgeAllTopics(id self, SEL cmd, NSString *appID)
+{
+    id (*original)(id, SEL, id) =
+        (id (*)(id, SEL, id))gCRBadgeAllTopicsOriginal;
+    if (!original)
+        return nil;
+    id topics = original(self, cmd, appID);
+    if (!CRBadgeRedirectionEnabled(appID))
+        return topics;
+    NSArray *identifiers = [CraneManager.sharedManager
+        containerIdentifiersOfApplicationWithIdentifier:appID];
+    if (![topics respondsToSelector:@selector(mutableCopy)] ||
+        ![identifiers isKindOfClass:[NSArray class]] || identifiers.count < 2)
+        return topics;
+    id expanded = [topics mutableCopy];
+    if (![expanded respondsToSelector:@selector(addObject:)])
+        return topics;
+    for (id identifier in identifiers) {
+        if (![identifier isKindOfClass:[NSString class]] ||
+            ![identifier length] ||
+            [identifier isEqualToString:@"DEFAULT"])
+            continue;
+        NSString *topic = [NSString stringWithFormat:
+            @"%@.c_r_a_n_e.%@", appID, identifier];
+        [expanded addObject:topic];
+    }
+    return expanded;
+}
+
 void CRInitBadgeListenerMethods(void)
 {
     Class descriptionClass = NSClassFromString(
@@ -861,6 +914,18 @@ void CRInitBadgeListenerMethods(void)
     Class remoteClass = NSClassFromString(@"UNSRemoteNotificationServer");
     if (!remoteClass)
         remoteClass = NSClassFromString(@"UNCRemoteNotificationServer");
+    SEL allTopicsSEL = NSSelectorFromString(
+        @"_queue_allTopicsForApplication:");
+    if (remoteClass && [remoteClass instancesRespondToSelector:allTopicsSEL])
+        MSHookMessageEx(remoteClass, allTopicsSEL,
+                        (IMP)CRBadgeAllTopics, &gCRBadgeAllTopicsOriginal);
+    SEL appDescriptionSEL = NSSelectorFromString(
+        @"_queue_appDescriptionForBundleIdentifier:");
+    if (remoteClass &&
+        [remoteClass instancesRespondToSelector:appDescriptionSEL])
+        MSHookMessageEx(remoteClass, appDescriptionSEL,
+                        (IMP)CRBadgeAppDescription,
+                        &gCRBadgeAppDescriptionOriginal);
     SEL receiveSEL = NSSelectorFromString(
         @"_queue_connection:didReceiveToken:forTopic:identifier:");
     if (remoteClass && [remoteClass instancesRespondToSelector:receiveSEL])
