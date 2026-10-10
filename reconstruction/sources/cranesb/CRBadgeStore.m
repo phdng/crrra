@@ -655,8 +655,104 @@ static void CRBadgeSaveRequest(id self, SEL cmd, id request, BOOL repost,
     original(self, cmd, request, repost, appID, completion);
 }
 
+/* 0x10350/0x1FF68/0x1FF7C: recover the APNS topic separator
+ * verbatim; only rewrite messages with a valid nonempty suffix. */
+static IMP gCRBadgeDeliverMessageOriginal;
+static void CRBadgeDeliverMessage(id self, SEL cmd, id message)
+{
+    void (*original)(id, SEL, id) =
+        (void (*)(id, SEL, id))gCRBadgeDeliverMessageOriginal;
+    if (!original)
+        return;
+    SEL topicSEL = @selector(topic);
+    SEL setTopicSEL = NSSelectorFromString(@"setTopic:");
+    SEL userInfoSEL = @selector(userInfo);
+    SEL setUserInfoSEL = NSSelectorFromString(@"setUserInfo:");
+    if ([message respondsToSelector:topicSEL] &&
+        [message respondsToSelector:setTopicSEL] &&
+        [message respondsToSelector:userInfoSEL] &&
+        [message respondsToSelector:setUserInfoSEL]) {
+        id topic = ((id (*)(id, SEL))objc_msgSend)(message, topicSEL);
+        if ([topic isKindOfClass:[NSString class]]) {
+            NSString *separator = @".c_r_a_n_e.";
+            NSArray *parts = [topic componentsSeparatedByString:separator];
+            if (parts.count > 1) {
+                /* 0x1FF7C uses firstObject/lastObject, not the substring
+                 * after the first separator, for repeated separators. */
+                NSString *base = [parts firstObject];
+                NSString *container = [parts lastObject];
+                id info = ((id (*)(id, SEL))objc_msgSend)(
+                    message, userInfoSEL);
+                if (base.length && container.length &&
+                    [info isKindOfClass:[NSDictionary class]]) {
+                    NSMutableDictionary *tagged = [info mutableCopy];
+                    if (![container isEqualToString:@"DEFAULT"])
+                        tagged[@"crane_sourceContainerID"] = container;
+                    else
+                        [tagged removeObjectForKey:@"crane_sourceContainerID"];
+                    ((void (*)(id, SEL, id))objc_msgSend)(
+                        message, setTopicSEL, base);
+                    ((void (*)(id, SEL, id))objc_msgSend)(
+                        message, setUserInfoSEL, [tagged copy]);
+                }
+            }
+        }
+    }
+    original(self, cmd, message);
+}
+
+/* 0xE2C4: a token delivered for a Crane-specific topic is reported
+ * to the notification server under its original bundle topic. */
+static IMP gCRBadgeReceiveTokenOriginal;
+
+static void CRBadgeReceiveToken(id self, SEL cmd, id connection, id token,
+                                NSString *topic, id identifier)
+{
+    void (*original)(id, SEL, id, id, id, id) =
+        (void (*)(id, SEL, id, id, id, id))gCRBadgeReceiveTokenOriginal;
+    if (!original)
+        return;
+    NSString *base = topic;
+    NSString *separator = @".c_r_a_n_e.";
+    if ([topic isKindOfClass:[NSString class]] &&
+        [topic containsString:separator]) {
+        base = [[topic componentsSeparatedByString:separator] firstObject];
+        if (base.length) {
+            /* Original 0xE2C4 keeps its token-needed queue in sync. */
+            @try {
+                id needed = [self valueForKey:@"_bundleIdentifiersNeedingToken"];
+                if ([needed respondsToSelector:@selector(containsObject:)] &&
+                    [needed containsObject:topic] &&
+                    [needed respondsToSelector:@selector(removeObject:)] &&
+                    [needed respondsToSelector:@selector(addObject:)]) {
+                    [needed removeObject:topic];
+                    [needed addObject:base];
+                }
+            } @catch (NSException *exception) {
+                (void)exception;
+            }
+        } else {
+            base = topic;
+        }
+    }
+    original(self, cmd, connection, token, base, identifier);
+}
+
 void CRInitBadgeListenerMethods(void)
 {
+    Class remoteClass = NSClassFromString(@"UNSRemoteNotificationServer");
+    if (!remoteClass)
+        remoteClass = NSClassFromString(@"UNCRemoteNotificationServer");
+    SEL receiveSEL = NSSelectorFromString(
+        @"_queue_connection:didReceiveToken:forTopic:identifier:");
+    if (remoteClass && [remoteClass instancesRespondToSelector:receiveSEL])
+        MSHookMessageEx(remoteClass, receiveSEL, (IMP)CRBadgeReceiveToken,
+                        &gCRBadgeReceiveTokenOriginal);
+    Class apsClass = NSClassFromString(@"APSConnection");
+    SEL deliverSEL = NSSelectorFromString(@"_deliverMessage:");
+    if (apsClass && [apsClass instancesRespondToSelector:deliverSEL])
+        MSHookMessageEx(apsClass, deliverSEL, (IMP)CRBadgeDeliverMessage,
+                        &gCRBadgeDeliverMessageOriginal);
     Class listener = NSClassFromString(
         @"UNSUserNotificationServerConnectionListener");
     if (!listener)
