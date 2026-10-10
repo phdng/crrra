@@ -615,12 +615,57 @@ static void CRBadgeAddRequests(id self, SEL cmd, NSArray *requests,
     original(self, cmd, requests, appID, completion);
 }
 
+/* 0x1072C: the single-request save path carries the same source
+ * metadata as the bulk add path; preserve BOOL shouldRepost ABI. */
+static IMP gCRBadgeSaveRequestOriginal;
+
+static void CRBadgeSaveRequest(id self, SEL cmd, id request, BOOL repost,
+                               NSString *appID, id completion)
+{
+    void (*original)(id, SEL, id, BOOL, id, id) =
+        (void (*)(id, SEL, id, BOOL, id, id))gCRBadgeSaveRequestOriginal;
+    if (!original)
+        return;
+    if (CRBadgeRedirectionEnabled(appID) &&
+        [request respondsToSelector:@selector(content)]) {
+        SEL currentSEL = NSSelectorFromString(@"currentConnection");
+        NSXPCConnection *connection =
+            [NSXPCConnection respondsToSelector:currentSEL]
+                ? ((id (*)(id, SEL))objc_msgSend)(
+                    [NSXPCConnection class], currentSEL) : nil;
+        NSString *container = CRBadgeContainerForConnection(connection);
+        if (container.length && ![container isEqualToString:@"DEFAULT"]) {
+            id content = ((id (*)(id, SEL))objc_msgSend)(
+                request, @selector(content));
+            if ([content respondsToSelector:@selector(userInfo)]) {
+                id info = ((id (*)(id, SEL))objc_msgSend)(
+                    content, @selector(userInfo));
+                if ([info isKindOfClass:[NSDictionary class]]) {
+                    NSMutableDictionary *tagged = [info mutableCopy];
+                    tagged[@"crane_sourceContainerID"] = container;
+                    @try {
+                        [content setValue:[tagged copy] forKey:@"_userInfo"];
+                    } @catch (NSException *exception) {
+                        (void)exception;
+                    }
+                }
+            }
+        }
+    }
+    original(self, cmd, request, repost, appID, completion);
+}
+
 void CRInitBadgeListenerMethods(void)
 {
     Class listener = NSClassFromString(
         @"UNSUserNotificationServerConnectionListener");
     if (!listener)
         return;
+    SEL saveRequestSEL = NSSelectorFromString(
+        @"_saveNotificationRequest:shouldRepost:forBundleIdentifier:withCompletionHandler:");
+    if ([listener instancesRespondToSelector:saveRequestSEL])
+        MSHookMessageEx(listener, saveRequestSEL, (IMP)CRBadgeSaveRequest,
+                        &gCRBadgeSaveRequestOriginal);
     SEL addSEL = NSSelectorFromString(
         @"_addNotificationRequests:forBundleIdentifier:withCompletionHandler:");
     if ([listener instancesRespondToSelector:addSEL])
