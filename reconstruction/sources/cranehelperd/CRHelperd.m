@@ -357,6 +357,10 @@ static void CRHandleHealthPing(xpc_connection_t peer, xpc_object_t message)
     const char *operation = xpc_dictionary_get_string(message, "operation");
     if (!operation || strcmp(operation, "ping") != 0)
         return;
+    /* Basic peer metadata sanity check; a PID is NOT authorization. */
+    pid_t peerPID = xpc_connection_get_pid(peer);
+    if (peerPID <= 0)
+        return;
     xpc_object_t reply = xpc_dictionary_create_reply(message);
     if (!reply)
         return;
