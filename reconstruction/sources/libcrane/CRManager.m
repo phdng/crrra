@@ -518,7 +518,15 @@ usingBiometricsIfNeededWithSuccessHandler:(dispatch_block_t)handler
 
 - (id)cranehelperdGlobalSyncRemoteObjectProxy { return nil; }
 - (id)cranehelperdGlobalAsyncRemoteObjectProxy { return nil; }
-- (BOOL)isDylibLoaded { return CRIsDylibLoaded(CR_MAIN_DYLIB_FILTER_PLIST) || YES; }
+/* A filter plist is not a dylib and must not be passed to dlopen().
+ * This is an installation-presence check, not proof of injection into a
+ * particular process.  Never report success unconditionally. */
+- (BOOL)isDylibLoaded
+{
+    NSString *filterPath = CRJailbreakRootPath(CR_MAIN_DYLIB_FILTER_PLIST);
+    return filterPath.length &&
+        [[NSFileManager defaultManager] fileExistsAtPath:filterPath];
+}
 
 /* ---- Game Center (INFERRED; see U-06 for the data model) ---------------- */
 

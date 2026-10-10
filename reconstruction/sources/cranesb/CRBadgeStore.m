@@ -897,6 +897,225 @@ static id CRBadgeAllTopics(id self, SEL cmd, NSString *appID)
     return expanded;
 }
 
+/* 0xE448/0xE4DC: eligibility checks operate on the underlying
+ * application's topic, not the Crane-encoded container topic. */
+static NSString *CRBadgeOriginalTopic(id topic)
+{
+    if (![topic isKindOfClass:[NSString class]])
+        return topic;
+    NSString *separator = @".c_r_a_n_e.";
+    if (![topic containsString:separator])
+        return topic;
+    return [[topic componentsSeparatedByString:separator] firstObject];
+}
+
+static IMP gCRBadgeContentAvailableOriginal;
+static BOOL CRBadgeContentAvailable(id self, SEL cmd, id topic)
+{
+    BOOL (*original)(id, SEL, id) =
+        (BOOL (*)(id, SEL, id))gCRBadgeContentAvailableOriginal;
+    return original ? original(self, cmd, CRBadgeOriginalTopic(topic)) : NO;
+}
+
+static IMP gCRBadgeBackgroundRefreshOriginal;
+static BOOL CRBadgeBackgroundRefresh(id self, SEL cmd, id topic)
+{
+    BOOL (*original)(id, SEL, id) =
+        (BOOL (*)(id, SEL, id))gCRBadgeBackgroundRefreshOriginal;
+    return original ? original(self, cmd, CRBadgeOriginalTopic(topic)) : NO;
+}
+
+/* 0xE570/0xE604: legacy notification eligibility queries also
+ * resolve encoded Crane topics as the underlying application. */
+static IMP gCRBadgeUserNotificationEnabledOriginal;
+static BOOL CRBadgeUserNotificationEnabled(id self, SEL cmd, id topic)
+{
+    BOOL (*original)(id, SEL, id) =
+        (BOOL (*)(id, SEL, id))gCRBadgeUserNotificationEnabledOriginal;
+    return original ? original(self, cmd, CRBadgeOriginalTopic(topic)) : NO;
+}
+
+static IMP gCRBadgeApplicationForegroundOriginal;
+static BOOL CRBadgeApplicationForeground(id self, SEL cmd, id topic)
+{
+    BOOL (*original)(id, SEL, id) =
+        (BOOL (*)(id, SEL, id))gCRBadgeApplicationForegroundOriginal;
+    return original ? original(self, cmd, CRBadgeOriginalTopic(topic)) : NO;
+}
+
+/* 0xDEEC/0xE94C: isolate Crane's membership behavior to a subclass
+ * of the mutable set used for installed bundle IDs. */
+static Class gCRBadgeResolvingSetClass;
+static IMP gCRBadgeSetContainsOriginal;
+
+static BOOL CRBadgeSetContainsObject(id self, SEL cmd, id object)
+{
+    BOOL (*original)(id, SEL, id) =
+        (BOOL (*)(id, SEL, id))gCRBadgeSetContainsOriginal;
+    return original ? original(self, cmd, CRBadgeOriginalTopic(object)) : NO;
+}
+
+static IMP gCRBadgeInitializeRemoteOriginal;
+static void CRBadgeInitializeRemote(id self, SEL cmd)
+{
+    void (*original)(id, SEL) =
+        (void (*)(id, SEL))gCRBadgeInitializeRemoteOriginal;
+    if (!original)
+        return;
+    original(self, cmd);
+    if (!gCRBadgeResolvingSetClass)
+        return;
+    @try {
+        id installed = [self valueForKey:@"_installedBundleIdentifiers"];
+        Class base = class_getSuperclass(gCRBadgeResolvingSetClass);
+        if (installed && object_getClass(installed) == base)
+            object_setClass(installed, gCRBadgeResolvingSetClass);
+    } @catch (NSException *exception) {
+        (void)exception;
+    }
+}
+
+static void CRBadgePrepareResolvingSet(void)
+{
+    Class base = objc_getClass("__NSSetM");
+    SEL containsSEL = @selector(containsObject:);
+    if (!base || ![base instancesRespondToSelector:containsSEL])
+        return;
+    Method containsMethod = class_getInstanceMethod(base, containsSEL);
+    if (!containsMethod)
+        return;
+    gCRBadgeSetContainsOriginal = method_getImplementation(containsMethod);
+    const char *containsTypes = method_getTypeEncoding(containsMethod);
+    if (!gCRBadgeSetContainsOriginal || !containsTypes)
+        return;
+    Class subclass = NSClassFromString(@"CRCraneResolvingSet");
+    if (!subclass) {
+        subclass = objc_allocateClassPair(base, "CRCraneResolvingSet", 0);
+        if (!subclass)
+            return;
+        if (!class_addMethod(subclass, containsSEL,
+                             (IMP)CRBadgeSetContainsObject, containsTypes)) {
+            objc_disposeClassPair(subclass);
+            return;
+        }
+        objc_registerClassPair(subclass);
+    }
+    if (class_getSuperclass(subclass) == base)
+        gCRBadgeResolvingSetClass = subclass;
+}
+
+/* 0xEDF4/0xBE18: enforce per-container notification permission on the
+ * remote server's incoming message path before forwarding to the system. */
+static IMP gCRBadgeIncomingMessageOriginal;
+
+static void CRBadgeIncomingMessage(id self, SEL cmd, id connection, id message)
+{
+    void (*original)(id, SEL, id, id) =
+        (void (*)(id, SEL, id, id))gCRBadgeIncomingMessageOriginal;
+    if (!original)
+        return;
+    SEL topicSEL = @selector(topic);
+    SEL infoSEL = @selector(userInfo);
+    if ([message respondsToSelector:topicSEL] &&
+        [message respondsToSelector:infoSEL]) {
+        id topic = ((id (*)(id, SEL))objc_msgSend)(message, topicSEL);
+        if (CRBadgeRedirectionEnabled(topic)) {
+            id info = ((id (*)(id, SEL))objc_msgSend)(message, infoSEL);
+            if ([info isKindOfClass:[NSDictionary class]]) {
+                id source = info[@"crane_sourceContainerID"];
+                if (!source)
+                    source = @"DEFAULT";
+                if ([source isKindOfClass:[NSString class]]) {
+                    NSDictionary *settings = [[CraneManager sharedManager]
+                        containerSettingsForContainerWithIdentifier:source
+                        ofApplicationWithIdentifier:topic];
+                    id allowed = [settings objectForKey:@"notificationsAllowed"];
+                    if (allowed && [allowed respondsToSelector:@selector(boolValue)] &&
+                        ![allowed boolValue])
+                        return;
+                }
+            }
+        }
+    }
+    original(self, cmd, connection, message);
+}
+
+/* 0xEF84/0xF094 and 0xB7B8: scope container metadata around the
+ * synchronous original notification mutation call. pkd verification remains
+ * unported; without it only explicit existing metadata is propagated. */
+static NSString *CRBadgeMutationContainer(id request, id appID)
+{
+    /* 0xBA6C: absent source metadata belongs to DEFAULT only when
+     * notification redirection is enabled for the target application. */
+    if (!CRBadgeRedirectionEnabled(appID))
+        return nil;
+    if (![request respondsToSelector:@selector(content)])
+        return @"DEFAULT";
+    id content = ((id (*)(id, SEL))objc_msgSend)(request, @selector(content));
+    if (![content respondsToSelector:@selector(userInfo)])
+        return @"DEFAULT";
+    id info = ((id (*)(id, SEL))objc_msgSend)(content, @selector(userInfo));
+    if (![info isKindOfClass:[NSDictionary class]])
+        return @"DEFAULT";
+    id source = info[@"crane_sourceContainerID"];
+    if (!source)
+        return @"DEFAULT";
+    return [source isKindOfClass:[NSString class]] && [source length]
+        ? source : nil;
+}
+
+static IMP gCRBadgeModifyPushOriginal;
+static void CRBadgeModifyPush(id self, SEL cmd, id request, id appID,
+                              id message, BOOL enforcePushType)
+{
+    void (*original)(id, SEL, id, id, id, BOOL) =
+        (void (*)(id, SEL, id, id, id, BOOL))gCRBadgeModifyPushOriginal;
+    if (!original)
+        return;
+    NSString *container = CRBadgeMutationContainer(request, appID);
+    NSMutableDictionary *context = [NSThread currentThread].threadDictionary;
+    NSString *key = @"extension_containerIDToAppend";
+    id previous = context[key];
+    if (container)
+        context[key] = container;
+    @try {
+        original(self, cmd, request, appID, message, enforcePushType);
+    } @finally {
+        if (container) {
+            if (previous)
+                context[key] = previous;
+            else
+                [context removeObjectForKey:key];
+        }
+    }
+}
+
+static IMP gCRBadgeModifyLegacyOriginal;
+static void CRBadgeModifyLegacy(id self, SEL cmd, id request, id appID,
+                                id message)
+{
+    void (*original)(id, SEL, id, id, id) =
+        (void (*)(id, SEL, id, id, id))gCRBadgeModifyLegacyOriginal;
+    if (!original)
+        return;
+    NSString *container = CRBadgeMutationContainer(request, appID);
+    NSMutableDictionary *context = [NSThread currentThread].threadDictionary;
+    NSString *key = @"extension_containerIDToAppend";
+    id previous = context[key];
+    if (container)
+        context[key] = container;
+    @try {
+        original(self, cmd, request, appID, message);
+    } @finally {
+        if (container) {
+            if (previous)
+                context[key] = previous;
+            else
+                [context removeObjectForKey:key];
+        }
+    }
+}
+
 void CRInitBadgeListenerMethods(void)
 {
     Class descriptionClass = NSClassFromString(
@@ -914,6 +1133,57 @@ void CRInitBadgeListenerMethods(void)
     Class remoteClass = NSClassFromString(@"UNSRemoteNotificationServer");
     if (!remoteClass)
         remoteClass = NSClassFromString(@"UNCRemoteNotificationServer");
+    if (NSClassFromString(@"UNSUserNotificationServerConnectionListener")) {
+        CRBadgePrepareResolvingSet();
+        SEL initRemoteSEL = NSSelectorFromString(
+            @"_queue_didCompleteInitialization");
+        if (gCRBadgeResolvingSetClass && remoteClass &&
+            [remoteClass instancesRespondToSelector:initRemoteSEL])
+            MSHookMessageEx(remoteClass, initRemoteSEL,
+                            (IMP)CRBadgeInitializeRemote,
+                            &gCRBadgeInitializeRemoteOriginal);
+    }
+    SEL modifyPushSEL = NSSelectorFromString(
+        @"_queue_tryToModifyNotificationRequest:bundleIdentifier:message:enforcePushType:");
+    if (remoteClass && [remoteClass instancesRespondToSelector:modifyPushSEL])
+        MSHookMessageEx(remoteClass, modifyPushSEL, (IMP)CRBadgeModifyPush,
+                        &gCRBadgeModifyPushOriginal);
+    SEL modifyLegacySEL = NSSelectorFromString(
+        @"_queue_tryToModifyNotificationRequest:bundleIdentifier:message:");
+    if (remoteClass && [remoteClass instancesRespondToSelector:modifyLegacySEL])
+        MSHookMessageEx(remoteClass, modifyLegacySEL, (IMP)CRBadgeModifyLegacy,
+                        &gCRBadgeModifyLegacyOriginal);
+    SEL incomingSEL = NSSelectorFromString(
+        @"connection:didReceiveIncomingMessage:");
+    if (remoteClass && [remoteClass instancesRespondToSelector:incomingSEL])
+        MSHookMessageEx(remoteClass, incomingSEL,
+                        (IMP)CRBadgeIncomingMessage,
+                        &gCRBadgeIncomingMessageOriginal);
+    SEL contentAvailableSEL = NSSelectorFromString(
+        @"_queue_isContentAvailableRemoteNotificationSupportedForBundleIdentifier:");
+    if (remoteClass &&
+        [remoteClass instancesRespondToSelector:contentAvailableSEL])
+        MSHookMessageEx(remoteClass, contentAvailableSEL,
+                        (IMP)CRBadgeContentAvailable,
+                        &gCRBadgeContentAvailableOriginal);
+    SEL refreshSEL = NSSelectorFromString(
+        @"_queue_isBackgroundAppRefreshAllowedForBundleIdentifier:");
+    if (remoteClass && [remoteClass instancesRespondToSelector:refreshSEL])
+        MSHookMessageEx(remoteClass, refreshSEL,
+                        (IMP)CRBadgeBackgroundRefresh,
+                        &gCRBadgeBackgroundRefreshOriginal);
+    SEL enabledSEL = NSSelectorFromString(
+        @"_queue_isUserNotificationEnabledForApplication:");
+    if (remoteClass && [remoteClass instancesRespondToSelector:enabledSEL])
+        MSHookMessageEx(remoteClass, enabledSEL,
+                        (IMP)CRBadgeUserNotificationEnabled,
+                        &gCRBadgeUserNotificationEnabledOriginal);
+    SEL foregroundSEL = NSSelectorFromString(
+        @"_queue_isApplicationForeground:");
+    if (remoteClass && [remoteClass instancesRespondToSelector:foregroundSEL])
+        MSHookMessageEx(remoteClass, foregroundSEL,
+                        (IMP)CRBadgeApplicationForeground,
+                        &gCRBadgeApplicationForegroundOriginal);
     SEL allTopicsSEL = NSSelectorFromString(
         @"_queue_allTopicsForApplication:");
     if (remoteClass && [remoteClass instancesRespondToSelector:allTopicsSEL])

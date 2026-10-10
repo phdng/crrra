@@ -367,17 +367,65 @@ int main(int argc, char *argv[], char *envp[])
          * abort this one; KeepAlive means launchd will restart us anyway. */
         xpc_connection_t prefsConn =
             CRXPCConnectionCreateMachService(CR_HELPERD_PREFS_MACH_SERVICE.UTF8String,
-                                             NULL, 0);
-        xpc_connection_set_event_handler(prefsConn,
-            ^(xpc_connection_t c) { xpc_connection_resume(c); });
-        xpc_connection_resume(prefsConn);
+                                             NULL, XPC_CONNECTION_MACH_SERVICE_LISTENER);
+        if (prefsConn) {
+            xpc_connection_set_event_handler(prefsConn,
+                ^(xpc_object_t event) {
+                    if (xpc_get_type(event) != XPC_TYPE_CONNECTION)
+                        return;
+                    xpc_connection_t peer = (xpc_connection_t)event;
+                    xpc_connection_set_event_handler(peer, ^(xpc_object_t message) {
+                        /* Reconstruction-only health probe. No privileged operation
+                         * is exposed by this minimal request/reply path. */
+                        if (xpc_get_type(message) != XPC_TYPE_DICTIONARY)
+                            return;
+                        const char *operation = xpc_dictionary_get_string(message, "operation");
+                        if (!operation || strcmp(operation, "ping") != 0)
+                            return;
+                        xpc_object_t reply = xpc_dictionary_create_reply(message);
+                        if (reply) {
+                            xpc_dictionary_set_bool(reply, "alive", true);
+                            xpc_connection_send_message(peer, reply);
+                            xpc_release(reply);
+                        }
+                    });
+                    xpc_connection_resume(peer);
+                });
+            xpc_connection_resume(prefsConn);
+        } else {
+            NSLog(@"Crane helper: preferences XPC service creation failed");
+        }
 
         xpc_connection_t globalConn =
             CRXPCConnectionCreateMachService(CR_HELPERD_MACH_SERVICE.UTF8String,
-                                             NULL, 0);
-        xpc_connection_set_event_handler(globalConn,
-            ^(xpc_connection_t c) { xpc_connection_resume(c); });
-        xpc_connection_resume(globalConn);
+                                             NULL, XPC_CONNECTION_MACH_SERVICE_LISTENER);
+        if (globalConn) {
+            xpc_connection_set_event_handler(globalConn,
+                ^(xpc_object_t event) {
+                    if (xpc_get_type(event) != XPC_TYPE_CONNECTION)
+                        return;
+                    xpc_connection_t peer = (xpc_connection_t)event;
+                    xpc_connection_set_event_handler(peer, ^(xpc_object_t message) {
+                        /* Reconstruction-only health probe. No privileged operation
+                         * is exposed by this minimal request/reply path. */
+                        if (xpc_get_type(message) != XPC_TYPE_DICTIONARY)
+                            return;
+                        const char *operation = xpc_dictionary_get_string(message, "operation");
+                        if (!operation || strcmp(operation, "ping") != 0)
+                            return;
+                        xpc_object_t reply = xpc_dictionary_create_reply(message);
+                        if (reply) {
+                            xpc_dictionary_set_bool(reply, "alive", true);
+                            xpc_connection_send_message(peer, reply);
+                            xpc_release(reply);
+                        }
+                    });
+                    xpc_connection_resume(peer);
+                });
+            xpc_connection_resume(globalConn);
+        } else {
+            NSLog(@"Crane helper: global XPC service creation failed");
+        }
 
         dispatch_main();
     }

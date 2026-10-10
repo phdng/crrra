@@ -53,6 +53,9 @@
 
 #define CR_UI_BUNDLE_PATH               @"/Library/Application Support/Crane.bundle"
 #define CR_ICON_BUNDLE_PATH             @"/Library/Application Support/Crane.bundle/Icons"
+/* The leading space in " Crane.plist" is intentional: the recovered
+ * package layout and reconstruction/Makefile stage the main tweak pair
+ * under that exact filename. Do not normalize it to "Crane.plist". */
 #define CR_MAIN_DYLIB_FILTER_PLIST      @"/Library/MobileSubstrate/DynamicLibraries/ Crane.plist"
 #define CR_HELPERD_BIN                  @"/usr/local/libexec/cranehelperd"
 #define CR_HELPERD_START_BIN            @"/usr/local/bin/cranehelperd_start"
