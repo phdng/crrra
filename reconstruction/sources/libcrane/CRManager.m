@@ -33,6 +33,12 @@
 #import "CRCommon.h"
 
 #include <notify.h>
+#include <xpc/xpc.h>
+/* Match the private symbol spelling used by the reconstructed helperd;
+ * the public iOS SDK marks this Mach-service entrypoint unavailable. */
+extern xpc_connection_t CRManagerXPCConnectionCreateMachService(
+    const char *name, dispatch_queue_t targetq, uint64_t flags)
+    __asm("_xpc_connection_create_mach_service");
 
 /* ------------------------------------------------------------------------- */
 /* CraneManager                                                               */
@@ -511,9 +517,35 @@ usingBiometricsIfNeededWithSuccessHandler:(dispatch_block_t)handler
         reply(CR_DEFAULT_CONTAINER_IDENTIFIER);
 }
 
+/* Reconstruction-specific low-level health probe. This does not establish
+ * compatibility with the original daemon or its NSXPC protocol. */
 - (BOOL)cranehelperdConnectionWorks
 {
-    return NO; /* [INFERRED] this build has no daemon client yet - see U-01. */
+    __block BOOL alive = NO;
+    dispatch_semaphore_t done = dispatch_semaphore_create(0);
+    xpc_connection_t connection = CRManagerXPCConnectionCreateMachService(
+        CR_HELPERD_MACH_SERVICE.UTF8String, NULL, 0);
+    if (!connection)
+        return NO;
+    xpc_connection_set_event_handler(connection, ^(xpc_object_t event) {
+        (void)event;
+    });
+    xpc_connection_resume(connection);
+    xpc_object_t request = xpc_dictionary_create(NULL, NULL, 0);
+    if (request) {
+        xpc_dictionary_set_string(request, "operation", "ping");
+        xpc_connection_send_message_with_reply(connection, request,
+            dispatch_get_global_queue(QOS_CLASS_UTILITY, 0),
+            ^(xpc_object_t response) {
+                if (xpc_get_type(response) == XPC_TYPE_DICTIONARY)
+                    alive = xpc_dictionary_get_bool(response, "alive");
+                dispatch_semaphore_signal(done);
+            });
+        dispatch_semaphore_wait(done,
+            dispatch_time(DISPATCH_TIME_NOW, (int64_t)(2 * NSEC_PER_SEC)));
+    }
+    xpc_connection_cancel(connection);
+    return alive;
 }
 
 - (id)cranehelperdGlobalSyncRemoteObjectProxy { return nil; }
