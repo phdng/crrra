@@ -366,14 +366,11 @@ static void CRHandleHealthPing(xpc_connection_t peer, xpc_object_t message)
     /* ARC manages the XPC reply. This is not caller authentication. */
 }
 
-/* Shared peer lifecycle: credentials are metadata sanity checks only. */
+/* The iOS SDK marks xpc_connection_get_pid unavailable. Do not use
+ * desktop-only credential APIs here; this ping-only listener makes no
+ * authorization claim and must not expose privileged operations. */
 static void CRAcceptHealthPeer(xpc_connection_t peer)
 {
-    if (xpc_connection_get_pid(peer) <= 0 ||
-        xpc_connection_get_euid(peer) == (uid_t)-1) {
-        xpc_connection_cancel(peer);
-        return;
-    }
     xpc_connection_set_event_handler(peer, ^(xpc_object_t message) {
         if (xpc_get_type(message) == XPC_TYPE_ERROR) {
             xpc_connection_cancel(peer);
