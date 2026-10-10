@@ -279,6 +279,49 @@ static void CRBadgeNonQueueSet(id self, SEL cmd, NSNumber *number,
                       gCRBadgePrivateSetterOriginal);
 }
 
+/* 0xBF00/0x10138: preserve container identity for the duration of the
+ * repository's synchronous save path, including its badge setter calls.
+ * The source ID belongs to record.userInfo; never infer active container. */
+static IMP gCRBadgeSaveRecordOriginal;
+
+static void CRBadgeSaveRecord(id self, SEL cmd, id record,
+                              id options, NSString *appID)
+{
+    void (*original)(id, SEL, id, id, id) =
+        (void (*)(id, SEL, id, id, id))gCRBadgeSaveRecordOriginal;
+    if (!original)
+        return;
+
+    id info = [record respondsToSelector:@selector(userInfo)]
+        ? ((id (*)(id, SEL))objc_msgSend)(record, @selector(userInfo))
+        : nil;
+    NSString *containerID = nil;
+    if ([info isKindOfClass:[NSDictionary class]] && appID.length) {
+        id source = info[@"crane_sourceContainerID"];
+        if ([source isKindOfClass:[NSString class]] && [source length])
+            containerID = source;
+        else if (CRBadgeRedirectionEnabled(appID))
+            containerID = @"DEFAULT";
+    }
+    if (!containerID) {
+        original(self, cmd, record, options, appID);
+        return;
+    }
+
+    NSMutableDictionary *threadInfo = [NSThread currentThread].threadDictionary;
+    NSString *key = @"saveNotification_containerID";
+    id previous = threadInfo[key];
+    threadInfo[key] = containerID;
+    @try {
+        original(self, cmd, record, options, appID);
+    } @finally {
+        if (previous)
+            threadInfo[key] = previous;
+        else
+            [threadInfo removeObjectForKey:key];
+    }
+}
+
 void CRInitBadgeRepositoryHooks(void)
 {
     Class repository = NSClassFromString(@"UNSNotificationRepository");
@@ -286,6 +329,11 @@ void CRInitBadgeRepositoryHooks(void)
         repository = NSClassFromString(@"UNCLocalNotificationRepository");
     if (!repository)
         return;
+    SEL saveSEL = NSSelectorFromString(
+        @"_queue_saveNotificationRecord:withOptions:forBundleIdentifier:");
+    if ([repository instancesRespondToSelector:saveSEL])
+        MSHookMessageEx(repository, saveSEL, (IMP)CRBadgeSaveRecord,
+                        &gCRBadgeSaveRecordOriginal);
     SEL queued = NSSelectorFromString(
         @"_queue_setBadgeNumber:forBundleIdentifier:withCompletionHandler:");
     SEL nonQueued = NSSelectorFromString(
