@@ -22,6 +22,9 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
+      - name: Verify XPC ping source contract
+        run: python3 reconstruction/tools/check_xpc_ping_contract.py
+
       - name: Set up Theos
         uses: waruhachi/theos-action@v2.6.3
         with:
