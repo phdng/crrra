@@ -738,6 +738,31 @@ static void CRBadgeReceiveToken(id self, SEL cmd, id connection, id token,
     original(self, cmd, connection, token, base, identifier);
 }
 
+/* 0xDC5C/0xE194: encode token invalidation per originating container.
+ * The source is resolved from the listener's current XPC connection. */
+static IMP gCRBadgeInvalidateTokenOriginal;
+
+static void CRBadgeInvalidateToken(id self, SEL cmd, NSString *appID)
+{
+    void (*original)(id, SEL, id) =
+        (void (*)(id, SEL, id))gCRBadgeInvalidateTokenOriginal;
+    if (!original)
+        return;
+    if (CRBadgeRedirectionEnabled(appID)) {
+        SEL currentSEL = NSSelectorFromString(@"_currentConnection");
+        id connection = [self respondsToSelector:currentSEL]
+            ? ((id (*)(id, SEL))objc_msgSend)(self, currentSEL) : nil;
+        NSString *container = CRBadgeContainerForConnection(connection);
+        if (container.length) {
+            NSString *topic = [NSString stringWithFormat:
+                @"%@.c_r_a_n_e.%@", appID, container];
+            original(self, cmd, topic);
+            return;
+        }
+    }
+    original(self, cmd, appID);
+}
+
 void CRInitBadgeListenerMethods(void)
 {
     Class remoteClass = NSClassFromString(@"UNSRemoteNotificationServer");
@@ -753,6 +778,18 @@ void CRInitBadgeListenerMethods(void)
     if (apsClass && [apsClass instancesRespondToSelector:deliverSEL])
         MSHookMessageEx(apsClass, deliverSEL, (IMP)CRBadgeDeliverMessage,
                         &gCRBadgeDeliverMessageOriginal);
+    Class tokenListener = NSClassFromString(
+        @"UNSUserNotificationServerRemoteNotificationConnectionListener");
+    if (!tokenListener)
+        tokenListener = NSClassFromString(
+            @"UNSUserNotificationServerConnectionListener");
+    SEL invalidateSEL = NSSelectorFromString(
+        @"invalidateTokenForRemoteNotificationsForBundleIdentifier:");
+    if (tokenListener &&
+        [tokenListener instancesRespondToSelector:invalidateSEL])
+        MSHookMessageEx(tokenListener, invalidateSEL,
+                        (IMP)CRBadgeInvalidateToken,
+                        &gCRBadgeInvalidateTokenOriginal);
     Class listener = NSClassFromString(
         @"UNSUserNotificationServerConnectionListener");
     if (!listener)
