@@ -407,6 +407,10 @@ int main(int argc, char *argv[], char *envp[])
         if (prefsConn) {
             xpc_connection_set_event_handler(prefsConn,
                 ^(xpc_object_t event) {
+                    if (xpc_get_type(event) == XPC_TYPE_ERROR) {
+                        NSLog(@"Crane helper: preferences XPC listener error");
+                        return;
+                    }
                     if (xpc_get_type(event) != XPC_TYPE_CONNECTION)
                         return;
                     CRAcceptHealthPeer((xpc_connection_t)event);
@@ -422,6 +426,10 @@ int main(int argc, char *argv[], char *envp[])
         if (globalConn) {
             xpc_connection_set_event_handler(globalConn,
                 ^(xpc_object_t event) {
+                    if (xpc_get_type(event) == XPC_TYPE_ERROR) {
+                        NSLog(@"Crane helper: global XPC listener error");
+                        return;
+                    }
                     if (xpc_get_type(event) != XPC_TYPE_CONNECTION)
                         return;
                     CRAcceptHealthPeer((xpc_connection_t)event);
