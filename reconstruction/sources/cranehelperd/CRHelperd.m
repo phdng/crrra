@@ -349,6 +349,23 @@ extern xpc_connection_t CRXPCConnectionCreateMachService(const char *name,
 
 @end
 
+/* The two Mach listeners share one non-privileged request allowlist. */
+static void CRHandleHealthPing(xpc_connection_t peer, xpc_object_t message)
+{
+    if (xpc_get_type(message) != XPC_TYPE_DICTIONARY)
+        return;
+    const char *operation = xpc_dictionary_get_string(message, "operation");
+    if (!operation || strcmp(operation, "ping") != 0)
+        return;
+    xpc_object_t reply = xpc_dictionary_create_reply(message);
+    if (!reply)
+        return;
+    xpc_dictionary_set_bool(reply, "alive", true);
+    xpc_dictionary_set_string(reply, "protocol", "crane-reconstruction-ping-v1");
+    xpc_connection_send_message(peer, reply);
+    /* ARC manages the XPC reply. This is not caller authentication. */
+}
+
 #pragma mark - main
 
 int main(int argc, char *argv[], char *envp[])
@@ -375,20 +392,7 @@ int main(int argc, char *argv[], char *envp[])
                         return;
                     xpc_connection_t peer = (xpc_connection_t)event;
                     xpc_connection_set_event_handler(peer, ^(xpc_object_t message) {
-                        /* Reconstruction-only health probe. No privileged operation
-                         * is exposed by this minimal request/reply path. */
-                        if (xpc_get_type(message) != XPC_TYPE_DICTIONARY)
-                            return;
-                        const char *operation = xpc_dictionary_get_string(message, "operation");
-                        if (!operation || strcmp(operation, "ping") != 0)
-                            return;
-                        xpc_object_t reply = xpc_dictionary_create_reply(message);
-                        if (reply) {
-                            xpc_dictionary_set_bool(reply, "alive", true);
-                            xpc_dictionary_set_string(reply, "protocol", "crane-reconstruction-ping-v1");
-                            xpc_connection_send_message(peer, reply);
-                            /* ARC manages Objective-C-backed XPC objects. */
-                        }
+                        CRHandleHealthPing(peer, message);
                     });
                     xpc_connection_resume(peer);
                 });
@@ -407,20 +411,7 @@ int main(int argc, char *argv[], char *envp[])
                         return;
                     xpc_connection_t peer = (xpc_connection_t)event;
                     xpc_connection_set_event_handler(peer, ^(xpc_object_t message) {
-                        /* Reconstruction-only health probe. No privileged operation
-                         * is exposed by this minimal request/reply path. */
-                        if (xpc_get_type(message) != XPC_TYPE_DICTIONARY)
-                            return;
-                        const char *operation = xpc_dictionary_get_string(message, "operation");
-                        if (!operation || strcmp(operation, "ping") != 0)
-                            return;
-                        xpc_object_t reply = xpc_dictionary_create_reply(message);
-                        if (reply) {
-                            xpc_dictionary_set_bool(reply, "alive", true);
-                            xpc_dictionary_set_string(reply, "protocol", "crane-reconstruction-ping-v1");
-                            xpc_connection_send_message(peer, reply);
-                            /* ARC manages Objective-C-backed XPC objects. */
-                        }
+                        CRHandleHealthPing(peer, message);
                     });
                     xpc_connection_resume(peer);
                 });
