@@ -322,6 +322,72 @@ static void CRBadgeSaveRecord(id self, SEL cmd, id record,
     }
 }
 
+/* 0xFF30 and 0x10050 wrap the same synchronous queue save context,
+ * but their native selector argument lists are distinct. */
+static IMP gCRBadgeSaveRevisionOriginal;
+static IMP gCRBadgeSaveOptionsOriginal;
+
+static NSString *CRBadgeSourceForRecord(id record, NSString *appID)
+{
+    id info = [record respondsToSelector:@selector(userInfo)]
+        ? ((id (*)(id, SEL))objc_msgSend)(record, @selector(userInfo))
+        : nil;
+    if (![info isKindOfClass:[NSDictionary class]] || !appID.length)
+        return nil;
+    id source = info[@"crane_sourceContainerID"];
+    if ([source isKindOfClass:[NSString class]] && [source length])
+        return source;
+    return CRBadgeRedirectionEnabled(appID) ? @"DEFAULT" : nil;
+}
+
+static void CRBadgeSaveRevision(id self, SEL cmd, id record, id revision,
+                                BOOL repost, id options, NSString *appID)
+{
+    void (*original)(id, SEL, id, id, BOOL, id, id) =
+        (void (*)(id, SEL, id, id, BOOL, id, id))gCRBadgeSaveRevisionOriginal;
+    if (!original)
+        return;
+    NSString *container = CRBadgeSourceForRecord(record, appID);
+    NSMutableDictionary *dict = [NSThread currentThread].threadDictionary;
+    id previous = dict[@"saveNotification_containerID"];
+    if (container)
+        dict[@"saveNotification_containerID"] = container;
+    @try {
+        original(self, cmd, record, revision, repost, options, appID);
+    } @finally {
+        if (container) {
+            if (previous)
+                dict[@"saveNotification_containerID"] = previous;
+            else
+                [dict removeObjectForKey:@"saveNotification_containerID"];
+        }
+    }
+}
+
+static void CRBadgeSaveOptions(id self, SEL cmd, id record, BOOL repost,
+                               id options, NSString *appID)
+{
+    void (*original)(id, SEL, id, BOOL, id, id) =
+        (void (*)(id, SEL, id, BOOL, id, id))gCRBadgeSaveOptionsOriginal;
+    if (!original)
+        return;
+    NSString *container = CRBadgeSourceForRecord(record, appID);
+    NSMutableDictionary *dict = [NSThread currentThread].threadDictionary;
+    id previous = dict[@"saveNotification_containerID"];
+    if (container)
+        dict[@"saveNotification_containerID"] = container;
+    @try {
+        original(self, cmd, record, repost, options, appID);
+    } @finally {
+        if (container) {
+            if (previous)
+                dict[@"saveNotification_containerID"] = previous;
+            else
+                [dict removeObjectForKey:@"saveNotification_containerID"];
+        }
+    }
+}
+
 void CRInitBadgeRepositoryHooks(void)
 {
     Class repository = NSClassFromString(@"UNSNotificationRepository");
@@ -334,6 +400,16 @@ void CRInitBadgeRepositoryHooks(void)
     if ([repository instancesRespondToSelector:saveSEL])
         MSHookMessageEx(repository, saveSEL, (IMP)CRBadgeSaveRecord,
                         &gCRBadgeSaveRecordOriginal);
+    SEL revisionSEL = NSSelectorFromString(
+        @"_queue_saveNotificationRecord:targetRevisionNumber:shouldRepost:withOptions:forBundleIdentifier:");
+    if ([repository instancesRespondToSelector:revisionSEL])
+        MSHookMessageEx(repository, revisionSEL, (IMP)CRBadgeSaveRevision,
+                        &gCRBadgeSaveRevisionOriginal);
+    SEL optionsSEL = NSSelectorFromString(
+        @"_queue_saveNotificationRecord:shouldRepost:withOptions:forBundleIdentifier:");
+    if ([repository instancesRespondToSelector:optionsSEL])
+        MSHookMessageEx(repository, optionsSEL, (IMP)CRBadgeSaveOptions,
+                        &gCRBadgeSaveOptionsOriginal);
     SEL queued = NSSelectorFromString(
         @"_queue_setBadgeNumber:forBundleIdentifier:withCompletionHandler:");
     SEL nonQueued = NSSelectorFromString(
