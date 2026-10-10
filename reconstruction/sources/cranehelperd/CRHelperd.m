@@ -357,10 +357,6 @@ static void CRHandleHealthPing(xpc_connection_t peer, xpc_object_t message)
     const char *operation = xpc_dictionary_get_string(message, "operation");
     if (!operation || strcmp(operation, "ping") != 0)
         return;
-    /* Basic peer metadata sanity check; a PID is NOT authorization. */
-    pid_t peerPID = xpc_connection_get_pid(peer);
-    if (peerPID <= 0)
-        return;
     xpc_object_t reply = xpc_dictionary_create_reply(message);
     if (!reply)
         return;
@@ -395,6 +391,13 @@ int main(int argc, char *argv[], char *envp[])
                     if (xpc_get_type(event) != XPC_TYPE_CONNECTION)
                         return;
                     xpc_connection_t peer = (xpc_connection_t)event;
+                    /* Reject invalid peer metadata before activating it.
+                     * PID/UID are not authorization credentials. */
+                    if (xpc_connection_get_pid(peer) <= 0 ||
+                        xpc_connection_get_euid(peer) == (uid_t)-1) {
+                        xpc_connection_cancel(peer);
+                        return;
+                    }
                     xpc_connection_set_event_handler(peer, ^(xpc_object_t message) {
                         CRHandleHealthPing(peer, message);
                     });
@@ -414,6 +417,13 @@ int main(int argc, char *argv[], char *envp[])
                     if (xpc_get_type(event) != XPC_TYPE_CONNECTION)
                         return;
                     xpc_connection_t peer = (xpc_connection_t)event;
+                    /* Reject invalid peer metadata before activating it.
+                     * PID/UID are not authorization credentials. */
+                    if (xpc_connection_get_pid(peer) <= 0 ||
+                        xpc_connection_get_euid(peer) == (uid_t)-1) {
+                        xpc_connection_cancel(peer);
+                        return;
+                    }
                     xpc_connection_set_event_handler(peer, ^(xpc_object_t message) {
                         CRHandleHealthPing(peer, message);
                     });
