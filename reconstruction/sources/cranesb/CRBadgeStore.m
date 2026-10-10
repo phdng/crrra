@@ -17,6 +17,7 @@ void CRBadgeStoreSetContainerCount(NSString *appID, NSString *containerID, NSInt
 static NSMutableDictionary *gCRBadgeStore;
 static NSObject *gCRBadgeStoreLock;
 static void CRBadgeStoreReconcileContainerKeys(void);
+static BOOL CRBadgeRedirectionEnabled(NSString *appID);
 
 static NSString *CRBadgeStorePath(void)
 {
@@ -51,6 +52,34 @@ static BOOL CRBadgeApplicationConfirmedUninstalled(NSString *appID)
     return !((BOOL (*)(id, SEL))objc_msgSend)(proxy, installedSEL);
 }
 
+/* 0xA658: read current icon badge without initializing the badge store.
+ * A missing private API returns nil, not a fabricated count of zero. */
+static NSNumber *CRBadgeExistingIconCount(NSString *appID)
+{
+    Class stateClass = NSClassFromString(@"UISApplicationState");
+    SEL initSEL = NSSelectorFromString(@"initWithBundleIdentifier:");
+    SEL getSEL = NSSelectorFromString(@"badgeValue");
+    id value = nil;
+    if (stateClass && [stateClass instancesRespondToSelector:initSEL]) {
+        id state = ((id (*)(id, SEL, id))objc_msgSend)(
+            [stateClass alloc], initSEL, appID);
+        if ([state respondsToSelector:getSEL])
+            value = ((id (*)(id, SEL))objc_msgSend)(state, getSEL);
+    } else {
+        Class serviceClass = NSClassFromString(@"FBSSystemService");
+        SEL sharedSEL = NSSelectorFromString(@"sharedService");
+        SEL serviceGetSEL = NSSelectorFromString(@"badgeValueForBundleID:");
+        if ([serviceClass respondsToSelector:sharedSEL]) {
+            id service = ((id (*)(id, SEL))objc_msgSend)(
+                serviceClass, sharedSEL);
+            if ([service respondsToSelector:serviceGetSEL])
+                value = ((id (*)(id, SEL, id))objc_msgSend)(
+                    service, serviceGetSEL, appID);
+        }
+    }
+    return [value isKindOfClass:[NSNumber class]] ? value : nil;
+}
+
 /* 0xB00C/0xB688: discard stored entries for containers that no longer
  * exist. Keep apps whose container registry is unavailable untouched, so a
  * transient manager failure does not destroy persisted badge data. */
@@ -69,16 +98,39 @@ static void CRBadgeStoreReconcileContainerKeys(void)
             changed = YES;
             continue;
         }
+        /* 0xB00C also drops stored counts when redirection is disabled.
+         * Only apply after a usable registry lookup, avoiding destructive
+         * cleanup during transient initialization or unavailable services. */
         NSArray *validIDs =
             [manager containerIdentifiersOfApplicationWithIdentifier:appID];
         if (![validIDs isKindOfClass:[NSArray class]] || !validIDs.count)
             continue;
+        if (!CRBadgeRedirectionEnabled(appID)) {
+            [gCRBadgeStore removeObjectForKey:appID];
+            changed = YES;
+            continue;
+        }
         NSMutableDictionary *updated = [counts mutableCopy];
         for (id containerID in counts) {
             if (![validIDs containsObject:containerID])
                 [updated removeObjectForKey:containerID];
         }
-        if (updated.count != [counts count]) {
+        /* 0xB00C reconciles persisted positive counts with the icon's
+         * existing badge by storing that count under DEFAULT. */
+        NSNumber *iconCount = CRBadgeExistingIconCount(appID);
+        if (iconCount && [validIDs containsObject:@"DEFAULT"]) {
+            NSInteger storedPositive = 0;
+            for (id countValue in [counts allValues]) {
+                if ([countValue respondsToSelector:@selector(integerValue)]) {
+                    NSInteger count = [countValue integerValue];
+                    if (count > 0)
+                        storedPositive += count;
+                }
+            }
+            if (storedPositive != [iconCount integerValue])
+                updated[@"DEFAULT"] = iconCount;
+        }
+        if (![updated isEqualToDictionary:counts]) {
             gCRBadgeStore[appID] = [updated copy];
             changed = YES;
         }
