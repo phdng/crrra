@@ -523,15 +523,17 @@ usingBiometricsIfNeededWithSuccessHandler:(dispatch_block_t)handler
 {
     /* On the main thread, use a short-lived cached result and schedule
      * one probe on a worker. An unknown/expired result fails closed. */
-    static NSDate *lastProbe;
+    /* systemUptime is monotonic across wall-clock adjustments. */
+    static NSTimeInterval lastProbeUptime;
     static BOOL cachedAlive;
     static BOOL probeInFlight;
     if ([NSThread isMainThread]) {
         BOOL result = NO;
         @synchronized([CraneManager class]) {
-            NSTimeInterval age = lastProbe ?
-                -[lastProbe timeIntervalSinceNow] : -1.0;
-            BOOL fresh = age >= 0.0 && age < 5.0;
+            NSTimeInterval now = [NSProcessInfo processInfo].systemUptime;
+            NSTimeInterval age = now - lastProbeUptime;
+            BOOL fresh = lastProbeUptime > 0.0 &&
+                age >= 0.0 && age < 5.0;
             if (fresh)
                 result = cachedAlive;
             if (!fresh && !probeInFlight) {
@@ -541,7 +543,7 @@ usingBiometricsIfNeededWithSuccessHandler:(dispatch_block_t)handler
                         cranehelperdConnectionWorks];
                     @synchronized([CraneManager class]) {
                         cachedAlive = aliveNow;
-                        lastProbe = [NSDate date];
+                        lastProbeUptime = [NSProcessInfo processInfo].systemUptime;
                         probeInFlight = NO;
                     }
                 });
@@ -567,8 +569,11 @@ usingBiometricsIfNeededWithSuccessHandler:(dispatch_block_t)handler
         xpc_connection_send_message_with_reply(connection, request,
             dispatch_get_global_queue(QOS_CLASS_UTILITY, 0),
             ^(xpc_object_t response) {
-                if (xpc_get_type(response) == XPC_TYPE_DICTIONARY)
-                    alive = xpc_dictionary_get_bool(response, "alive");
+                if (xpc_get_type(response) == XPC_TYPE_DICTIONARY) {
+                    const char *protocol = xpc_dictionary_get_string(response, "protocol");
+                    alive = protocol && strcmp(protocol, "crane-reconstruction-ping-v1") == 0 &&
+                        xpc_dictionary_get_bool(response, "alive");
+                }
                 dispatch_semaphore_signal(done);
             });
         long waitResult = dispatch_semaphore_wait(done,

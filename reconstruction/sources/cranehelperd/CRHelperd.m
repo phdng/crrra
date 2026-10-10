@@ -385,6 +385,7 @@ int main(int argc, char *argv[], char *envp[])
                         xpc_object_t reply = xpc_dictionary_create_reply(message);
                         if (reply) {
                             xpc_dictionary_set_bool(reply, "alive", true);
+                            xpc_dictionary_set_string(reply, "protocol", "crane-reconstruction-ping-v1");
                             xpc_connection_send_message(peer, reply);
                             /* ARC manages Objective-C-backed XPC objects. */
                         }
@@ -416,6 +417,7 @@ int main(int argc, char *argv[], char *envp[])
                         xpc_object_t reply = xpc_dictionary_create_reply(message);
                         if (reply) {
                             xpc_dictionary_set_bool(reply, "alive", true);
+                            xpc_dictionary_set_string(reply, "protocol", "crane-reconstruction-ping-v1");
                             xpc_connection_send_message(peer, reply);
                             /* ARC manages Objective-C-backed XPC objects. */
                         }
