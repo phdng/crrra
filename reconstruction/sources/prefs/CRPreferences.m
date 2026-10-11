@@ -69,10 +69,17 @@
 
 @implementation CRPRootListController
 
+- (void)viewDidLoad
+{
+    [self specifiers];
+    [super viewDidLoad];
+}
+
 - (void)viewWillAppear:(BOOL)animated
 {
-    [super viewWillAppear:animated];
+    /* PSListController needs its backing before superclass layout runs. */
     [self specifiers];
+    [super viewWillAppear:animated];
 }
 
 - (id)specifiers
@@ -111,10 +118,17 @@
 
 @implementation CRPActiveContainerListItemsController
 
+- (void)viewDidLoad
+{
+    [self specifiers];
+    [super viewDidLoad];
+}
+
 - (void)viewWillAppear:(BOOL)animated
 {
-    [super viewWillAppear:animated];
+    /* PSListController needs its backing before superclass layout runs. */
     [self specifiers];
+    [super viewWillAppear:animated];
 }
 
 - (void)setSpecifier:(PSSpecifier *)specifier
@@ -184,10 +198,17 @@
 
 @implementation CRPApplicationListSubcontrollerController
 
+- (void)viewDidLoad
+{
+    [self specifiers];
+    [super viewDidLoad];
+}
+
 - (void)viewWillAppear:(BOOL)animated
 {
-    [super viewWillAppear:animated];
+    /* PSListController needs its backing before superclass layout runs. */
     [self specifiers];
+    [super viewWillAppear:animated];
 }
 
 - (id)specifiers
@@ -259,10 +280,17 @@
 
 @implementation CRPApplicationConfigurationListController
 
+- (void)viewDidLoad
+{
+    [self specifiers];
+    [super viewDidLoad];
+}
+
 - (void)viewWillAppear:(BOOL)animated
 {
-    [super viewWillAppear:animated];
+    /* PSListController needs its backing before superclass layout runs. */
     [self specifiers];
+    [super viewWillAppear:animated];
 }
 - (void)setSpecifier:(PSSpecifier *)specifier
 {
