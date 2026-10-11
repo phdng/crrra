@@ -18,10 +18,15 @@ export IPHONEOS_DEPLOYMENT_TARGET = 11.0
 export GO_EASY_ON_ME = 1
 export THEOS_PACKAGE_BASE_VERSION = 6.0
 
-# Dependency packages present on a standard jailbreak. `firmware` is required
-# because AltList.framework (linked by CranePrefs) lives in it.
+# Rootful retains its existing dependency metadata. Roothide uses a
+# different package namespace, and AltList/Choicy/Activator are optional
+# integrations (not hard-linked into the Roothide CranePrefs build).
+ifeq ($(THEOS_PACKAGE_SCHEME),roothide)
+THEOS_PACKAGE_DEPENDS = mobilesubstrate, firmware
+else
 THEOS_PACKAGE_DEPENDS = mobilesubstrate, ellekit, libhooker, firmware, \
                          altlist, activator, choicy
+endif
 
 include $(THEOS)/makefiles/common.mk
 

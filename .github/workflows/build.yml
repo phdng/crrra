@@ -65,6 +65,12 @@ jobs:
             echo '~~~'
           } >> "$GITHUB_STEP_SUMMARY"
 
+      - name: Select Roothide package dependencies
+        if: matrix.variant == 'roothide'
+        working-directory: reconstruction
+        run: |
+          python3 -c 'from pathlib import Path; p=Path("control"); s=p.read_text(); old="Depends: mobilesubstrate, ellekit, libhooker, firmware, altlist, activator, choicy"; assert s.count(old) == 1; p.write_text(s.replace(old, "Depends: mobilesubstrate, firmware"))'
+
       - name: Build package
         working-directory: reconstruction
         run: |
@@ -116,6 +122,11 @@ jobs:
           grep -Fx "Architecture: ${{ matrix.deb_arch }}" package.control || {
             echo "::error::Unexpected architecture for ${{ matrix.variant }}"; exit 1;
           }
+          if [ "${{ matrix.variant }}" = roothide ]; then
+            grep -Fx 'Depends: mobilesubstrate, firmware' package.control || {
+              echo '::error::Roothide package has unexpected hard dependencies'; exit 1;
+            }
+          fi
           echo "VARIANT=${{ matrix.variant }}" >> "$GITHUB_STEP_SUMMARY"
 
           {
