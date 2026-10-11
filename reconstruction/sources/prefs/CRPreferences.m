@@ -34,6 +34,7 @@
 
 @interface PSListController : PSViewController
 - (id)specifiers;
+- (NSArray *)loadSpecifiersFromPlistName:(NSString *)name target:(id)target;
 - (id)specifierAtIndex:(NSUInteger)index;
 - (id)indexForIndexPath:(NSIndexPath *)indexPath;
 - (void)reloadSpecifier:(id)specifier;
@@ -59,18 +60,18 @@
 /* ------------------------------------------------------------------------- */
 
 @interface CRPRootListController : PSListController
+@property (nonatomic, strong) NSArray *craneRootSpecifiers;
 @end
 
 @implementation CRPRootListController
 
 - (id)specifiers
 {
-    /* Root.plist already declares the entire tree; PreferenceLoader loads it.
-     * The only thing the controller must do is keep the group footer in the
-     * upstream form. NOTE: this build ships the "Crack by Repo BVN" label found
-     * in the analysed package; upstream ships FOLLOW_ME_ON_TWITTER. Both are
-     * recorded in analysis/preference_schema.md. */
-    return [super specifiers];
+    /* Explicit loading is required: NSPrincipalClass alone does not load
+     * Root.plist and Settings otherwise displays an empty pane. */
+    if (!self.craneRootSpecifiers)
+        self.craneRootSpecifiers = [self loadSpecifiersFromPlistName:@"Root" target:self];
+    return self.craneRootSpecifiers;
 }
 
 @end

@@ -70,7 +70,13 @@ extern int sandbox_container_path_for_pid(int pid, char *buf, size_t size);
 /* ------------------------------------------------------------------------- */
 
 static BOOL CRAppShortcutEnabled(void)          /* 0x1ECD8 */
-{ return CRPrefBool(CRPref_AppShortcutEnabled); }
+{
+    /* Root.plist declares default=true. On a fresh installation, the key
+     * may not be persisted yet; do not skip shortcut hook installation. */
+    id value = [[CraneManager sharedManager]
+        preferenceValueForKey:CRPref_AppShortcutEnabled];
+    return value ? [value boolValue] : YES;
+}
 static BOOL CRExpandContainersShortcut(void)     /* 0x1EDE4 */
 { return CRPrefBool(CRPref_ExpandContainersShortcut); }
 static BOOL CRLaunchAppOnContainerSelection(void)/* 0x1ED64 */
