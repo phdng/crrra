@@ -597,11 +597,83 @@ static void CRDidFinishLaunching(CFNotificationCenterRef center, void *observer,
 /* crane_initRunningBoardd (0x1BF10)                                           */
 /* ------------------------------------------------------------------------- */
 
+/* CraneSB 0x1BD44 requires libSandy_applyProfile("CraneRB") to return 0
+ * before it can change the runningboardd launch environment. The successful
+ * profile is process-wide; failed attempts may be retried on a later launch. */
+static BOOL CRRunningBoardProfileReady(void)
+{
+    static BOOL applied;
+    @synchronized([CraneManager class]) {
+        if (applied) return YES;
+        NSString *path = CRJailbreakRootPath(CR_LIB_SANDY);
+        void *handle = path ? dlopen(path.fileSystemRepresentation, RTLD_NOW) : NULL;
+        if (!handle) return NO;
+        int (*applyProfile)(const char *) = (int (*)(const char *))
+            dlsym(handle, "libSandy_applyProfile");
+        int result = applyProfile ? applyProfile("CraneRB") : -1;
+        dlclose(handle);
+        if (result == 0) applied = YES;
+        else NSLog(@"CraneSB: CraneRB sandbox profile unavailable (code=%d)", result);
+        return applied;
+    }
+}
+
+/* CraneSB 0x1BD44 mutates the additional launch environment before the
+ * original RBProcessManager request handler sees it. */
+static void CRModifyRunningBoardLaunchRequest(id request)
+{
+    if (!CRRunningBoardProfileReady()) return;
+    id context = [request respondsToSelector:@selector(context)]
+        ? ((id (*)(id, SEL))objc_msgSend)(request, @selector(context)) : nil;
+    if (!context) return;
+    NSString *appID = nil;
+    if ([context respondsToSelector:@selector(bundleIdentifier)])
+        appID = ((id (*)(id, SEL))objc_msgSend)(context, @selector(bundleIdentifier));
+    else
+        appID = CRLaunchApplicationIdentifier(context);
+    if (!appID.length || ![context respondsToSelector:NSSelectorFromString(@"_additionalEnvironment")] ||
+        ![context respondsToSelector:NSSelectorFromString(@"_setAdditionalEnvironment:")]) return;
+    SEL readEnvironment = NSSelectorFromString(@"_additionalEnvironment");
+    NSDictionary *original = ((id (*)(id, SEL))objc_msgSend)(context, readEnvironment);
+    NSMutableDictionary *updated = CRApplyEnvironmentChanges([original mutableCopy], appID);
+    if (updated && ![updated isEqual:original])
+        ((void (*)(id, SEL, id))objc_msgSend)(context,
+            NSSelectorFromString(@"_setAdditionalEnvironment:"), updated);
+}
+
+static id (*gOriginalRBExecuteLaunchRequest)(id, SEL, id, id);
+static id (*gOriginalRBPrivateExecuteLaunchRequest)(id, SEL, id);
+
+static id CRRBExecuteLaunchRequest(id self, SEL command, id request, id argument)
+{
+    CRModifyRunningBoardLaunchRequest(request);
+    return gOriginalRBExecuteLaunchRequest
+        ? gOriginalRBExecuteLaunchRequest(self, command, request, argument) : nil;
+}
+
+static id CRRBPrivateExecuteLaunchRequest(id self, SEL command, id request)
+{
+    CRModifyRunningBoardLaunchRequest(request);
+    return gOriginalRBPrivateExecuteLaunchRequest
+        ? gOriginalRBPrivateExecuteLaunchRequest(self, command, request) : nil;
+}
+
 static void CRInitRunningBoardd(void)
 {
-    /* RBProcessManager executeLaunchRequest:withError: / _executeLaunchRequest:
-     * are the two hooks the original installs here; their bodies live in
-     * sub_1BF74 / sub_1BFEC and are not reproduced. */
+    /* Original CraneSB 0x1BF74/0x1BFEC: modify request before calling the
+     * original selector. Register only selectors present on this iOS build. */
+    Class processManager = NSClassFromString(@"RBProcessManager");
+    if (processManager) {
+        SEL execute = NSSelectorFromString(@"executeLaunchRequest:withError:");
+        SEL privateExecute = NSSelectorFromString(@"_executeLaunchRequest:");
+        if ([processManager instancesRespondToSelector:execute])
+            MSHookMessageEx(processManager, execute, (IMP)CRRBExecuteLaunchRequest,
+                            (IMP *)&gOriginalRBExecuteLaunchRequest);
+        if ([processManager instancesRespondToSelector:privateExecute])
+            MSHookMessageEx(processManager, privateExecute,
+                            (IMP)CRRBPrivateExecuteLaunchRequest,
+                            (IMP *)&gOriginalRBPrivateExecuteLaunchRequest);
+    }
     CRInitChoicyIntegration();
 }
 
