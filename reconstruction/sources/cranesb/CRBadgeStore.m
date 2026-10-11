@@ -655,6 +655,48 @@ static void CRBadgeSaveRequest(id self, SEL cmd, id request, BOOL repost,
     original(self, cmd, request, repost, appID, completion);
 }
 
+/* 0x108F4: deliveredDate: variant of the notification save hook.
+ * The recovered original tags request.content._userInfo before forwarding
+ * all five arguments unchanged to the saved implementation. */
+static IMP gCRBadgeSaveDatedRequestOriginal;
+
+static void CRBadgeSaveDatedRequest(id self, SEL cmd, id request, BOOL repost,
+                                    id deliveredDate, NSString *appID,
+                                    id completion)
+{
+    void (*original)(id, SEL, id, BOOL, id, id, id) =
+        (void (*)(id, SEL, id, BOOL, id, id, id))gCRBadgeSaveDatedRequestOriginal;
+    if (!original)
+        return;
+    if (CRBadgeRedirectionEnabled(appID) &&
+        [request respondsToSelector:@selector(content)]) {
+        SEL currentSEL = NSSelectorFromString(@"currentConnection");
+        NSXPCConnection *connection =
+            [NSXPCConnection respondsToSelector:currentSEL]
+                ? ((id (*)(id, SEL))objc_msgSend)(
+                    [NSXPCConnection class], currentSEL) : nil;
+        NSString *container = CRBadgeContainerForConnection(connection);
+        if (container.length && ![container isEqualToString:@"DEFAULT"]) {
+            id content = ((id (*)(id, SEL))objc_msgSend)(
+                request, @selector(content));
+            if ([content respondsToSelector:@selector(userInfo)]) {
+                id info = ((id (*)(id, SEL))objc_msgSend)(
+                    content, @selector(userInfo));
+                if ([info isKindOfClass:[NSDictionary class]]) {
+                    NSMutableDictionary *tagged = [info mutableCopy];
+                    tagged[@"crane_sourceContainerID"] = container;
+                    @try {
+                        [content setValue:[tagged copy] forKey:@"_userInfo"];
+                    } @catch (NSException *exception) {
+                        (void)exception;
+                    }
+                }
+            }
+        }
+    }
+    original(self, cmd, request, repost, deliveredDate, appID, completion);
+}
+
 /* 0x10350/0x1FF68/0x1FF7C: recover the APNS topic separator
  * verbatim; only rewrite messages with a valid nonempty suffix. */
 static IMP gCRBadgeDeliverMessageOriginal;
@@ -1233,6 +1275,12 @@ void CRInitBadgeListenerMethods(void)
     if ([listener instancesRespondToSelector:saveRequestSEL])
         MSHookMessageEx(listener, saveRequestSEL, (IMP)CRBadgeSaveRequest,
                         &gCRBadgeSaveRequestOriginal);
+    SEL datedSaveSEL = NSSelectorFromString(
+        @"_saveNotificationRequest:shouldRepost:deliveredDate:forBundleIdentifier:withCompletionHandler:");
+    if ([listener instancesRespondToSelector:datedSaveSEL])
+        MSHookMessageEx(listener, datedSaveSEL,
+                        (IMP)CRBadgeSaveDatedRequest,
+                        &gCRBadgeSaveDatedRequestOriginal);
     SEL addSEL = NSSelectorFromString(
         @"_addNotificationRequests:forBundleIdentifier:withCompletionHandler:");
     if ([listener instancesRespondToSelector:addSEL])

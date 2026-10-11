@@ -42,4 +42,13 @@ assert 'if (connectionWorks == YES)' in source
 assert 'CRPresentMainDylibNotLoadedError(processName);' in source
 assert 'CRPresentDaemonError(@[@"runningboardd"], nil, NO);' in source
 assert 'reply lacks the original second status' not in source
-print('CraneSB runningboardd launch ABI contract: PASS (runtime unverified)')
+badge = (Path(__file__).resolve().parents[1] / 'sources/cranesb/CRBadgeStore.m').read_text(encoding='utf-8')
+# CraneSB original 0x108F4: deliveredDate: variant tags content before
+# forwarding request, BOOL repost, date, bundle ID, and completion unchanged.
+assert 'static void CRBadgeSaveDatedRequest(id self, SEL cmd, id request, BOOL repost,' in badge
+assert 'gCRBadgeSaveDatedRequestOriginal' in badge
+assert 'original(self, cmd, request, repost, deliveredDate, appID, completion);' in badge
+assert '@"_saveNotificationRequest:shouldRepost:deliveredDate:forBundleIdentifier:withCompletionHandler:"' in badge
+assert '(IMP)CRBadgeSaveDatedRequest' in badge
+assert 'tagged[@"crane_sourceContainerID"] = container;' in badge
+print('CraneSB runningboardd + dated notification ABI contracts: PASS (runtime unverified)')
