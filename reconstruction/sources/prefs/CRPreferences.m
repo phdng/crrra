@@ -460,8 +460,9 @@
     } @catch (NSException *exception) {
         NSLog(@"CranePrefs: app configuration backing failed: %@", exception);
     }
-    NSLog(@"CranePrefs: app configuration %@ specifier count=%lu",
-          self.applicationIdentifier, (unsigned long)specifiers.count);
+    NSLog(@"CranePrefs: app configuration %@ specifier count=%lu firstLabel=%@",
+          self.applicationIdentifier, (unsigned long)specifiers.count,
+          specifiers.count ? ((PSSpecifier *)specifiers.firstObject).name : @"(none)");
     return self.craneConfigurationSpecifiers;
 }
 

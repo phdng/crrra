@@ -22,6 +22,19 @@ static NSBundle *CRUIBundle(void)
     static dispatch_once_t once;
     dispatch_once(&once, ^{
         bundle = [NSBundle bundleWithPath:CRJailbreakRootPath(CR_UI_BUNDLE_PATH)];
+        /* Roothide may expose the UI bundle only beneath its physical jbroot. */
+        if (!bundle || ![bundle pathForResource:@"Localizable" ofType:@"strings" inDirectory:@"en.lproj"]) {
+            Class prefsClass = NSClassFromString(@"CRPRootListController");
+            NSString *prefsPath = prefsClass ? [NSBundle bundleForClass:prefsClass].bundlePath : nil;
+            NSRange marker = [prefsPath rangeOfString:@"/Library/PreferenceBundles/"];
+            if (prefsPath.length && marker.location != NSNotFound) {
+                NSString *root = [prefsPath substringToIndex:marker.location];
+                NSBundle *candidate = [NSBundle bundleWithPath:
+                    [root stringByAppendingString:CR_UI_BUNDLE_PATH]];
+                if (candidate)
+                    bundle = candidate;
+            }
+        }
     });
     return bundle;
 }
@@ -36,7 +49,7 @@ NSString *CRLocalize(NSString *key)
     /* Upstream falls back to the raw en.lproj table when localizedStringForKey
      * returns the key unchanged, which happens for keys present only as an
      * uppercase identifier. */
-    if ([value isEqualToString:key]) {
+    if (!value.length || [value isEqualToString:key]) {
         static NSDictionary *english;
         static dispatch_once_t once;
         dispatch_once(&once, ^{
