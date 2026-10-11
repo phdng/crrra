@@ -352,6 +352,31 @@
     return self.applicationSettings[CRAppSetting_Containers];
 }
 
+/* CranePrefs 0x8D00 values/titles data sources for Active Container. */
+- (NSArray *)containerIdentifersForApplication
+{
+    NSMutableArray *identifiers = [NSMutableArray arrayWithObject:CR_DEFAULT_CONTAINER_IDENTIFIER];
+    for (NSString *identifier in [CraneManager.sharedManager containerIdentifiersOfApplicationWithIdentifier:self.applicationIdentifier]) {
+        if (![identifiers containsObject:identifier])
+            [identifiers addObject:identifier];
+    }
+    return identifiers;
+}
+
+- (NSArray *)containerNamesForApplication
+{
+    NSMutableArray *names = [NSMutableArray arrayWithObject:@"Default"];
+    CraneManager *manager = CraneManager.sharedManager;
+    for (NSString *identifier in [manager containerIdentifiersOfApplicationWithIdentifier:self.applicationIdentifier]) {
+        if ([identifier isEqualToString:CR_DEFAULT_CONTAINER_IDENTIFIER])
+            continue;
+        NSString *name = [manager displayNameForContainerWithIdentifier:identifier
+            ofApplicationWithIdentifier:self.applicationIdentifier shouldUseShortVersion:NO];
+        [names addObject:name.length ? name : identifier];
+    }
+    return names;
+}
+
 - (id)specifiers
 {
     if (self.craneConfigurationSpecifiers) {
@@ -371,7 +396,11 @@
                                                             edit:0];
     [active setProperty:CRCContainer_ActiveContainer forKey:@"key"];
     [active setProperty:self.applicationIdentifier forKey:@"crane_applicationIdentifier"];
-    [active setProperty:CRCContainer_ActiveContainer forKey:@"detailControllerClass"];
+    [active setDetailControllerClass:CRPActiveContainerListItemsController.class];
+    /* Original CranePrefs 0x8D00 provides data sources to the detail pane. */
+    [active setProperty:@"containerIdentifersForApplication" forKey:@"valuesDataSource"];
+    [active setProperty:@"containerNamesForApplication" forKey:@"titlesDataSource"];
+    [active setProperty:self.applicationIdentifier forKey:@"applicationIdentifier"];
     [active setProperty:@YES forKey:@"enabled"];
     [specifiers addObject:active];
 
@@ -574,17 +603,41 @@
     return [self readPreferenceValueForKey:CRCContainer_ActiveContainer];
 }
 
-- (void)addButtonPressed:(PSSpecifier *)specifier
+- (void)addButtonPressed
 {
     if (!self.applicationIdentifier.length)
         return;
-    NSString *identifier = [CraneManager.sharedManager
-        createNewContainerWithName:CRLocalize(@"NEW_CONTAINER")
-        forApplicationWithIdentifier:self.applicationIdentifier];
-    NSLog(@"CranePrefs: created container app=%@ id=%@", self.applicationIdentifier, identifier);
-    [self loadApplicationSettings];
-    self.craneConfigurationSpecifiers = nil;
-    [self reloadSpecifiers];
+    /* CranePrefs 0x9848/0x9A80: ask for a name before creating. */
+    UIAlertController *alert = [UIAlertController alertControllerWithTitle:CRLocalize(@"ADD_CONTAINER")
+        message:nil preferredStyle:UIAlertControllerStyleAlert];
+    [alert addTextFieldWithConfigurationHandler:^(UITextField *field) {
+        field.placeholder = CRLocalize(@"NEW_CONTAINER_NAME");
+    }];
+    __weak typeof(self) weakSelf = self;
+    [alert addAction:[UIAlertAction actionWithTitle:CRLocalize(@"CANCEL")
+        style:UIAlertActionStyleCancel handler:nil]];
+    [alert addAction:[UIAlertAction actionWithTitle:CRLocalize(@"ADD")
+        style:UIAlertActionStyleDefault handler:^(__unused UIAlertAction *action) {
+        typeof(self) strongSelf = weakSelf;
+        if (!strongSelf.applicationIdentifier.length)
+            return;
+        NSString *name = [alert.textFields.firstObject.text stringByTrimmingCharactersInSet:
+            NSCharacterSet.whitespaceAndNewlineCharacterSet];
+        if (!name.length)
+            name = CRLocalize(@"NEW_CONTAINER");
+        CraneManager *manager = CraneManager.sharedManager;
+        [manager removeObserver:strongSelf];
+        NSString *identifier = [manager createNewContainerWithName:name
+            forApplicationWithIdentifier:strongSelf.applicationIdentifier];
+        [strongSelf loadApplicationSettings];
+        [manager addObserver:strongSelf];
+        NSLog(@"CranePrefs: created container app=%@ id=%@", strongSelf.applicationIdentifier, identifier);
+        strongSelf.craneConfigurationSpecifiers = nil;
+        @try { [strongSelf setValue:nil forKey:@"_specifiers"]; }
+        @catch (__unused NSException *exception) {}
+        [strongSelf reloadSpecifiers];
+    }]];
+    [self presentViewController:alert animated:YES completion:nil];
 }
 
 @end
