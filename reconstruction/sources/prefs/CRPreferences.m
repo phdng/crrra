@@ -69,6 +69,12 @@
 
 @implementation CRPRootListController
 
+- (void)viewWillAppear:(BOOL)animated
+{
+    [super viewWillAppear:animated];
+    [self specifiers];
+}
+
 - (id)specifiers
 {
     /* Explicit loading is required: NSPrincipalClass alone does not load
@@ -89,6 +95,8 @@
         NSLog(@"CranePrefs: root specifier count=%lu",
               (unsigned long)self.craneRootSpecifiers.count);
     }
+    @try { [self setValue:self.craneRootSpecifiers forKey:@"_specifiers"]; }
+    @catch (NSException *exception) { NSLog(@"CranePrefs: root backing refresh failed: %@", exception); }
     return self.craneRootSpecifiers;
 }
 
@@ -102,6 +110,12 @@
 @end
 
 @implementation CRPActiveContainerListItemsController
+
+- (void)viewWillAppear:(BOOL)animated
+{
+    [super viewWillAppear:animated];
+    [self specifiers];
+}
 
 - (void)setSpecifier:(PSSpecifier *)specifier
 {
@@ -143,6 +157,8 @@
         NSLog(@"CranePrefs: Active Container app=%@ rows=%lu",
               self.applicationIdentifier, (unsigned long)rows.count);
     }
+    @try { [self setValue:self.craneActiveSpecifiers forKey:@"_specifiers"]; }
+    @catch (NSException *exception) { NSLog(@"CranePrefs: active backing refresh failed: %@", exception); }
     return self.craneActiveSpecifiers;
 }
 
@@ -167,6 +183,12 @@
 @end
 
 @implementation CRPApplicationListSubcontrollerController
+
+- (void)viewWillAppear:(BOOL)animated
+{
+    [super viewWillAppear:animated];
+    [self specifiers];
+}
 
 - (id)specifiers
 {
@@ -213,6 +235,8 @@
         NSLog(@"CranePrefs: APPLICATIONS list count=%lu",
               (unsigned long)rows.count);
     }
+    @try { [self setValue:self.craneAppSpecifiers forKey:@"_specifiers"]; }
+    @catch (NSException *exception) { NSLog(@"CranePrefs: list backing refresh failed: %@", exception); }
     return self.craneAppSpecifiers;
 }
 @end
@@ -234,6 +258,12 @@
 @end
 
 @implementation CRPApplicationConfigurationListController
+
+- (void)viewWillAppear:(BOOL)animated
+{
+    [super viewWillAppear:animated];
+    [self specifiers];
+}
 - (void)setSpecifier:(PSSpecifier *)specifier
 {
     [super setSpecifier:specifier];
@@ -296,8 +326,11 @@
 
 - (id)specifiers
 {
-    if (self.craneConfigurationSpecifiers)
+    if (self.craneConfigurationSpecifiers) {
+        @try { [self setValue:self.craneConfigurationSpecifiers forKey:@"_specifiers"]; }
+        @catch (NSException *exception) { NSLog(@"CranePrefs: detail backing refresh failed: %@", exception); }
         return self.craneConfigurationSpecifiers;
+    }
     NSMutableArray *specifiers = [NSMutableArray new];
 
     /* Active Container */
@@ -513,12 +546,17 @@
     return [self readPreferenceValueForKey:CRCContainer_ActiveContainer];
 }
 
-- (void)addButtonPressed
+- (void)addButtonPressed:(PSSpecifier *)specifier
 {
-    [CraneManager.sharedManager createNewContainerWithName:CRLocalize(@"NEW_CONTAINER")
-                                forApplicationWithIdentifier:self.applicationIdentifier];
+    if (!self.applicationIdentifier.length)
+        return;
+    NSString *identifier = [CraneManager.sharedManager
+        createNewContainerWithName:CRLocalize(@"NEW_CONTAINER")
+        forApplicationWithIdentifier:self.applicationIdentifier];
+    NSLog(@"CranePrefs: created container app=%@ id=%@", self.applicationIdentifier, identifier);
     [self loadApplicationSettings];
-    [self reloadSpecifierAtIndex:0];
+    self.craneConfigurationSpecifiers = nil;
+    [self reloadSpecifiers];
 }
 
 @end

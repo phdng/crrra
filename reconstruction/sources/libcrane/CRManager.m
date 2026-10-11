@@ -247,14 +247,15 @@ extern xpc_connection_t CRManagerXPCConnectionCreateMachService(
     /* CONFIRMED_STATIC contract: this never returns nil in practice;
      * crane_containerToRedirectTo (CraneSB 0x1B360) is what translates
      * "DEFAULT" into nil. */
-    NSArray *containers = [self containerIdentifiersOfApplicationWithIdentifier:appID];
-    for (NSDictionary *container in
-         [self applicationSettingsForApplicationWithIdentifier:appID][CRAppSetting_Containers]) {
-        NSString *active = container[CRCContainer_ActiveContainer];
-        if (active)
+    NSDictionary *settings = [self applicationSettingsForApplicationWithIdentifier:appID];
+    NSString *active = settings[CRCContainer_ActiveContainer];
+    if (active.length)
+        return active;
+    for (NSDictionary *container in settings[CRAppSetting_Containers]) {
+        active = container[CRCContainer_ActiveContainer];
+        if (active.length)
             return active;
     }
-    (void)containers;
     return CR_DEFAULT_CONTAINER_IDENTIFIER;
 }
 
@@ -263,12 +264,21 @@ extern xpc_connection_t CRManagerXPCConnectionCreateMachService(
 {
     if (!appID || !containerID)
         return;
-    NSDictionary *settings = [self containerSettingsForContainerWithIdentifier:containerID
-                                                  ofApplicationWithIdentifier:appID];
-    NSMutableDictionary *updated = [settings mutableCopy];
-    updated[CRCContainer_ActiveContainer] = containerID;
-    [self setContainerSettings:updated forContainerWithIdentifier:containerID
-       ofApplicationWithIdentifier:appID];
+    if (![containerID isEqualToString:CR_DEFAULT_CONTAINER_IDENTIFIER] &&
+        ![[self containerIdentifiersOfApplicationWithIdentifier:appID] containsObject:containerID])
+        return;
+    NSMutableDictionary *settings = [[self applicationSettingsForApplicationWithIdentifier:appID] mutableCopy];
+    settings[CRCContainer_ActiveContainer] = containerID;
+    NSMutableArray *containers = [NSMutableArray new];
+    for (NSDictionary *container in settings[CRAppSetting_Containers]) {
+        NSMutableDictionary *item = [container mutableCopy];
+        [item removeObjectForKey:CRCContainer_ActiveContainer];
+        [containers addObject:item];
+    }
+    if (settings[CRAppSetting_Containers])
+        settings[CRAppSetting_Containers] = containers;
+    [self setApplicationSettings:settings forApplicationWithIdentifier:appID];
+    NSLog(@"CraneManager: active container app=%@ id=%@", appID, containerID);
 }
 
 - (void)setActiveContainerIdentifier:(NSString *)containerID
