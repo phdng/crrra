@@ -44,6 +44,7 @@
 - (id)readPreferenceValue:(id)specifier;
 - (void)setPreferenceValue:(id)value specifier:(id)specifier;
 - (void)reloadSpecifierAtIndex:(NSUInteger)index;
+- (void)replaceContiguousSpecifiers:(NSArray *)oldSpecifiers withSpecifiers:(NSArray *)newSpecifiers animated:(BOOL)animated;
 @end
 
 @interface PSSpecifier : NSObject
@@ -57,6 +58,10 @@
 - (NSString *)name;
 - (void)setName:(NSString *)name;
 - (void)setButtonAction:(SEL)action;
+- (void)setTitleDictionary:(id)value;
+- (void)setShortTitleDictionary:(id)value;
+- (void)setValues:(id)value;
+- (void)loadValuesAndTitlesFromDataSource;
 @end
 
 /* ------------------------------------------------------------------------- */
@@ -477,7 +482,66 @@
 
 - (void)didChangeContainersOfApplicationWithIdentifier:(NSString *)appID
 {
-    [self didChangeSettingsForApplicationWithIdentifier:appID];
+    if (![appID isEqualToString:self.applicationIdentifier]) return;
+    [self loadApplicationSettings];
+    dispatch_async(dispatch_get_main_queue(), ^{
+        [self reloadContainerSpecifiers];
+        [self reloadActiveContainer];
+    });
+}
+
+/* CranePrefs 0xA038: replace only the container rows between the group
+ * header and Add button rather than resetting every switch on the page. */
+- (void)reloadContainerSpecifiers
+{
+    NSArray *old = self.craneConfigurationSpecifiers;
+    if (!old.count) return;
+    NSMutableArray *previous = [NSMutableArray new];
+    for (PSSpecifier *row in old) {
+        if ([row propertyForKey:@"containerIdentifier"])
+            [previous addObject:row];
+    }
+    NSMutableArray *updated = [NSMutableArray new];
+    CraneManager *manager = CraneManager.sharedManager;
+    for (NSString *identifier in [manager containerIdentifiersOfApplicationWithIdentifier:self.applicationIdentifier]) {
+        PSSpecifier *row = [PSSpecifier preferenceSpecifierNamed:
+            [manager displayNameForContainerWithIdentifier:identifier
+                ofApplicationWithIdentifier:self.applicationIdentifier shouldUseShortVersion:NO]
+            target:self set:NULL get:NULL detail:CRPContainerConfigurationListController.class cell:2 edit:0];
+        [row setDetailControllerClass:CRPContainerConfigurationListController.class];
+        [row setProperty:self.applicationIdentifier forKey:@"applicationIdentifier"];
+        [row setProperty:identifier forKey:@"containerIdentifier"];
+        [row setProperty:identifier forKey:@"crane_containerIdentifier"];
+        [updated addObject:row];
+    }
+    if (previous.count && [self respondsToSelector:@selector(replaceContiguousSpecifiers:withSpecifiers:animated:)]) {
+        [self replaceContiguousSpecifiers:previous withSpecifiers:updated animated:YES];
+        NSMutableArray *merged = [old mutableCopy];
+        NSUInteger start = [merged indexOfObject:previous.firstObject];
+        if (start != NSNotFound) {
+            [merged removeObjectsInArray:previous];
+            NSIndexSet *positions = [NSIndexSet indexSetWithIndexesInRange:NSMakeRange(start, updated.count)];
+            [merged insertObjects:updated atIndexes:positions];
+            self.craneConfigurationSpecifiers = merged;
+        }
+    } else {
+        self.craneConfigurationSpecifiers = nil;
+        @try { [self setValue:nil forKey:@"_specifiers"]; }
+        @catch (__unused NSException *exception) {}
+        [self reloadSpecifiers];
+    }
+}
+
+/* CranePrefs 0x9D3C: refresh the Active Container specifier's data source. */
+- (void)reloadActiveContainer
+{
+    PSSpecifier *active = self.craneConfigurationSpecifiers.firstObject;
+    if (!active) return;
+    [active setTitleDictionary:nil];
+    [active setShortTitleDictionary:nil];
+    [active setValues:nil];
+    [active loadValuesAndTitlesFromDataSource];
+    [self reloadSpecifier:active];
 }
 
 - (void)viewDidLoad

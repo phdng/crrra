@@ -174,6 +174,9 @@ extern xpc_connection_t CRManagerXPCConnectionCreateMachService(
 {
     if (!appID)
         return;
+    NSArray *previousContainers = [[self applicationSettingsForApplicationWithIdentifier:appID][CRAppSetting_Containers] valueForKey:CRCContainer_Identifier];
+    NSArray *newContainers = [settings[CRAppSetting_Containers] valueForKey:CRCContainer_Identifier];
+    BOOL containerListChanged = ![(previousContainers ?: @[]) isEqual:(newContainers ?: @[])];
     @synchronized(self) {
         if (settings.count)
             self.applications[appID] = [settings mutableCopy];
@@ -195,10 +198,10 @@ extern xpc_connection_t CRManagerXPCConnectionCreateMachService(
     SEL changed = @selector(didChangeSettingsForApplicationWithIdentifier:);
     SEL containersChanged = @selector(didChangeContainersOfApplicationWithIdentifier:);
     for (id observer in observers) {
-        if ([observer respondsToSelector:changed])
-            ((void (*)(id, SEL, id))objc_msgSend)(observer, changed, appID);
-        if ([observer respondsToSelector:containersChanged])
+        if (containerListChanged && [observer respondsToSelector:containersChanged])
             ((void (*)(id, SEL, id))objc_msgSend)(observer, containersChanged, appID);
+        else if ([observer respondsToSelector:changed])
+            ((void (*)(id, SEL, id))objc_msgSend)(observer, changed, appID);
     }
 }
 
