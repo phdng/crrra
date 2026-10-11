@@ -317,9 +317,11 @@ adds `crane_presentMainDylibNotLoadedErrorForAppName:`,
 bridge and the corresponding SpringBoard presenters (0x19A2C, 0x19E70,
 0x1A68C, 0x1AA34, 0x1AEC0) are transcribed in `CRErrorAlerts.m`, including the
 restart-daemons/SpringBoard action and `crane_reappearsAfterUnlock` on the pkd
-error. The separate launch-injection callback path at 0x18238/0x194EC/0x19608
-remains limited by U-01 because the recovered helper reply ABI is wider than the
-reconstructed helper protocol.
+error. The launch-injection callback path at 0x18238/0x194EC/0x19608 is now wired in
+the reconstruction: the recovered helper reply block is `(containerID, status)`,
+where nil + status 1 presents the main-dylib-not-loaded error and nil + status 0
+presents the runningboardd daemon error. The transport carrying that reply is
+reconstruction-specific raw XPC; the original helper protocol itself remains U-01.
 
 ### Activator integration — `CraneActivatorManager` (0x1C4D4–0x1E284)
 

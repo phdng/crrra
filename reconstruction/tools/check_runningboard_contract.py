@@ -15,4 +15,31 @@ assert 'static id CRRBPrivateExecuteLaunchRequest(id self, SEL command, id reque
 assert 'gOriginalRBPrivateExecuteLaunchRequest(self, command, request, error)' in source
 assert 'CRModifyRunningBoardLaunchRequest(request);' in source
 assert 'applyProfile("CraneRB")' in source
+# CraneSB 0x1BD44 compares returned environment by object identity, not
+# dictionary contents. Avoid pre-copying an unchanged launch environment.
+assert source.count('CRApplyEnvironmentChanges((NSMutableDictionary *)original, appID)') == 2
+assert 'if (updated != original)' in source
+assert 'if (updated == original)' in source
+# CraneSB 0x1B45C uses the insurance success bit for redirection;
+# lastError is only used to classify a failed check.
+assert 'if (insuranceOK)' in source
+assert 'if (insuranceOK && !lastError)' not in source
+# 0x1B45C derives the daemon alert's connection flag from getLastError,
+# while the original 0x1BAA4 callback has just three parameters.
+assert 'Crane helper XPC insurance service is unavailable' in source
+assert 'if (!proxy || ![proxy respondsToSelector:@selector(verifyCraneInsuranceAndReply:)])' in source
+assert 'replyClosed = YES;' in source
+assert '@synchronized(replyLock)' in source
+assert 'if (waitResult != 0) insuranceOK = NO;' in source
+assert 'lastError == nil);' in source
+assert 'CRPresentDaemonError(brokenDaemons,\n                         insuranceError ?: lastError,\n                         lastError == nil);' in source
+# 0x194EC/0x19608 fetches the launched PID and receives a two-argument reply:
+# container ID plus a connection/status bit. nil+true is a missing main dylib;
+# nil+false is a runningboardd/helper communication error.
+assert 'reply:^(NSString *actualContainer, BOOL connectionWorks)' in source
+assert '(void)[actualContainer isEqualToString:expectedContainer];' in source
+assert 'if (connectionWorks == YES)' in source
+assert 'CRPresentMainDylibNotLoadedError(processName);' in source
+assert 'CRPresentDaemonError(@[@"runningboardd"], nil, NO);' in source
+assert 'reply lacks the original second status' not in source
 print('CraneSB runningboardd launch ABI contract: PASS (runtime unverified)')

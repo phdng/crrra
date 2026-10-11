@@ -332,12 +332,14 @@ binary imports `_MSHookMessageEx`.
 optional app launch.
 
 **Remaining difference:** the launch-injection verification path at
-0x18238/0x194EC/0x19608 is not wired
-because the original `fetchActiveContainerIDForProcessWithPid:reply:` block ABI
-includes status information not represented by the reconstructed U-01 helper
-protocol. The original `injectionFixupError` producer is also not reconstructed,
-so its optional `FIXUP_ERROR_DESCRIPTION` paragraph is not emitted. No device
-alert/presentation test has been performed.
+0x18238/0x194EC/0x19608 is now wired using the recovered two-argument
+`fetchActiveContainerIDForProcessWithPid:reply:` block ABI. The reconstruction
+carries that ABI over its own audit-token-authenticated raw-XPC transport and a
+live app runtime report; this is not protocol-compatible with the unrecovered
+original U-01 daemon interface and has not been device-validated. The original
+`injectionFixupError` producer is also not reconstructed, so its optional
+`FIXUP_ERROR_DESCRIPTION` paragraph is not emitted. No device alert/presentation
+test has been performed.
 
 ### D-20 — No visual comparison was performed
 

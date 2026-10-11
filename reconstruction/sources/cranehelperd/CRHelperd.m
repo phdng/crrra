@@ -16,8 +16,10 @@
  *   * the selector `crane_getIdentifier:ofType:forVendorName:andBundleIdentifier:`
  *     and `crane_setIdentifier:...`, from __TEXT,__objc_methname.
  *
- * What is NOT recovered: the XPC interface definition, the reply-block shapes,
- * and the implementations. The protocol below is therefore THIS project's own
+ * What is NOT recovered: the complete XPC interface definition and most daemon
+ * implementations. A few caller-side reply shapes (including the 0x19608
+ * PID/container status block) are recovered from CraneSB/CraneSupport exports.
+ * The transport below is therefore still THIS project's own
  * (see U-01). It is deliberately shaped so the method names match the ones the
  * exported binaries actually call, but the original daemon cannot be expected
  * to satisfy it.
@@ -46,6 +48,8 @@ extern xpc_connection_t CRXPCConnectionCreateMachService(const char *name,
                                                          dispatch_queue_t targetq,
                                                          uint64_t flags)
     __asm("_xpc_connection_create_mach_service");
+extern pid_t CRXPCConnectionGetPid(xpc_connection_t connection)
+    __asm("_xpc_connection_get_pid");
 
 #pragma mark - Identifiers
 
@@ -134,7 +138,8 @@ extern xpc_connection_t CRXPCConnectionCreateMachService(const char *name,
 @protocol CRHGlobalServiceProtocol <NSObject>
 - (void)verifyCraneInsuranceAndReply:(void (^)(BOOL works, NSString *brokenDaemons, NSError *error, BOOL connectionWorks))reply;
 - (void)verifySupportLoadedIntoProcessNamed:(NSString *)name reply:(void (^)(BOOL loaded))reply;
-- (void)fetchActiveContainerIDForProcessWithPid:(pid_t)pid reply:(void (^)(NSString *containerID))reply;
+- (void)fetchActiveContainerIDForProcessWithPid:(pid_t)pid
+                                           reply:(void (^)(NSString *containerID, BOOL connectionWorks))reply;
 - (void)reloadApplicationWithIdentifier:(NSString *)appID;
 - (void)reloadDaemons:(NSArray<NSString *> *)daemons;
 - (void)getIdentifierOfType:(uint64_t)type
@@ -160,26 +165,24 @@ extern xpc_connection_t CRXPCConnectionCreateMachService(const char *name,
 
 - (void)verifyCraneInsuranceAndReply:(void (^)(BOOL, NSString *, NSError *, BOOL))reply
 {
-    /* "Insurance" is Crane's self-check: CraneSupport.dylib must be present in
-     * every daemon that participates in redirection, CraneSB.dylib in
-     * SpringBoard, and the main dylib in the app. CONFIRMED_STATIC from
-     * INJECTION_ERROR_MESSAGE / CRANE_DYLIB_NOT_LOADED_ERROR. */
-    BOOL mainDylibExists = [[NSFileManager defaultManager]
-                            fileExistsAtPath:CR_MAIN_DYLIB_FILTER_PLIST];
+    /* This Objective-C delegate has no peer credential context. Never let a
+     * future NSXPC wiring accidentally turn static installation checks into an
+     * authorization result; the raw-XPC path below owns caller-aware insurance. */
+    NSString *filter = CRJailbreakRootPath(CR_MAIN_DYLIB_FILTER_PLIST);
+    BOOL mainDylibExists = filter.length &&
+        [NSFileManager.defaultManager fileExistsAtPath:filter];
     BOOL libSandyWorks = CRIsDylibLoaded(CR_LIB_SANDY);
-    BOOL works = mainDylibExists && libSandyWorks;
-
     NSMutableArray<NSString *> *broken = [NSMutableArray array];
     if (!mainDylibExists)
-        [broken addObject:@" Crane.dylib"];
+        [broken addObject:@"Crane.dylib"];
     if (!libSandyWorks)
         [broken addObject:@"libsandy"];
-
+    [broken addObject:@"CraneSB runtime attestation"];
     NSString *description = [broken componentsJoinedByString:@", "];
-    NSError *error = works ? nil :
-        [NSError errorWithDomain:@"com.opa334.crane" code:1 userInfo:
-            @{NSLocalizedDescriptionKey: description ?: @"Crane is not working"}];
-    reply(works, description, error, YES);
+    NSError *error = [NSError errorWithDomain:@"com.opa334.crane" code:2 userInfo:
+        @{NSLocalizedDescriptionKey: description}];
+    if (reply)
+        reply(NO, description, error, NO);
 }
 
 - (void)verifySupportLoadedIntoProcessNamed:(NSString *)name reply:(void (^)(BOOL))reply
@@ -189,13 +192,15 @@ extern xpc_connection_t CRXPCConnectionCreateMachService(const char *name,
     reply(NO);
 }
 
-- (void)fetchActiveContainerIDForProcessWithPid:(pid_t)pid reply:(void (^)(NSString *))reply
+- (void)fetchActiveContainerIDForProcessWithPid:(pid_t)pid
+                                           reply:(void (^)(NSString *, BOOL))reply
 {
-    /* CraneSB 0x194EC expects the container actually reported by the target
-     * process. This reconstruction has no live PID inspector. Returning
-     * DEFAULT would falsely claim a successful inspection for every PID. */
-    NSLog(@"CraneHelperd: PID %d container inspection unavailable", pid);
-    if (reply) reply(nil);
+    /* The credential-less Objective-C delegate cannot safely inspect the raw
+     * runtime registry. Keep it fail-closed; the caller-aware raw-XPC route
+     * implements the recovered 0x19608 two-argument reply ABI. */
+    NSLog(@"CraneHelperd: credential-less PID %d lookup rejected", pid);
+    if (reply)
+        reply(nil, NO);
 }
 
 - (void)reloadApplicationWithIdentifier:(NSString *)appID
@@ -269,7 +274,8 @@ extern xpc_connection_t CRXPCConnectionCreateMachService(const char *name,
     [self.delegate verifySupportLoadedIntoProcessNamed:name reply:reply];
 }
 
-- (void)fetchActiveContainerIDForProcessWithPid:(pid_t)pid reply:(void (^)(NSString *))reply
+- (void)fetchActiveContainerIDForProcessWithPid:(pid_t)pid
+                                           reply:(void (^)(NSString *, BOOL))reply
 {
     [self.delegate fetchActiveContainerIDForProcessWithPid:pid reply:reply];
 }
@@ -358,39 +364,330 @@ extern xpc_connection_t CRXPCConnectionCreateMachService(const char *name,
 
 @end
 
-/* The two Mach listeners share one non-privileged request allowlist. */
-static void CRHandleHealthPing(xpc_connection_t peer, xpc_object_t message)
+/* Runtime attestations are reconstruction-only. The daemon never trusts a
+ * caller-supplied PID or executable name: both come from the XPC peer. */
+static NSMutableDictionary<NSNumber *, NSMutableDictionary *> *CRRuntimeRegistry(void)
+{
+    static NSMutableDictionary *registry;
+    static dispatch_once_t once;
+    dispatch_once(&once, ^{ registry = [NSMutableDictionary new]; });
+    return registry;
+}
+
+static NSString *CRProcessNameForPid(pid_t pid)
+{
+    typedef int (*CRProcNameFn)(int, void *, uint32_t);
+    static CRProcNameFn procName;
+    static dispatch_once_t once;
+    dispatch_once(&once, ^{
+        void *handle = dlopen("/usr/lib/libproc.dylib", RTLD_LAZY);
+        procName = (CRProcNameFn)dlsym(handle ?: RTLD_DEFAULT, "proc_name");
+    });
+    if (pid <= 0 || !procName)
+        return nil;
+    char buffer[1024] = {0};
+    if (procName(pid, buffer, sizeof(buffer)) <= 0)
+        return nil;
+    return [NSString stringWithUTF8String:buffer];
+}
+
+typedef struct {
+    uint32_t val[8];
+} CRHelperAuditToken;
+
+typedef void (*CRHelperXPCGetAuditTokenFn)(xpc_connection_t connection,
+                                           CRHelperAuditToken *token);
+typedef CFTypeRef (*CRHelperSecTaskCreateWithAuditTokenFn)(CFAllocatorRef allocator,
+                                                           CRHelperAuditToken token);
+typedef CFStringRef (*CRHelperSecTaskCopySigningIdentifierFn)(CFTypeRef task,
+                                                              CFErrorRef *error);
+
+static NSString *CRSigningIdentifierForPeer(xpc_connection_t peer)
+{
+    static CRHelperXPCGetAuditTokenFn getAuditToken;
+    static CRHelperSecTaskCreateWithAuditTokenFn createTask;
+    static CRHelperSecTaskCopySigningIdentifierFn copySigningIdentifier;
+    static dispatch_once_t once;
+    dispatch_once(&once, ^{
+        getAuditToken = (CRHelperXPCGetAuditTokenFn)
+            dlsym(RTLD_DEFAULT, "xpc_connection_get_audit_token");
+        createTask = (CRHelperSecTaskCreateWithAuditTokenFn)
+            dlsym(RTLD_DEFAULT, "SecTaskCreateWithAuditToken");
+        copySigningIdentifier = (CRHelperSecTaskCopySigningIdentifierFn)
+            dlsym(RTLD_DEFAULT, "SecTaskCopySigningIdentifier");
+    });
+    if (!peer || !getAuditToken || !createTask || !copySigningIdentifier)
+        return nil;
+
+    CRHelperAuditToken token = {0};
+    getAuditToken(peer, &token);
+    CFTypeRef task = createTask(kCFAllocatorDefault, token);
+    if (!task)
+        return nil;
+    CFStringRef identifier = copySigningIdentifier(task, NULL);
+    CFRelease(task);
+    if (!identifier)
+        return nil;
+    NSString *result = [(__bridge NSString *)identifier copy];
+    CFRelease(identifier);
+    return result;
+}
+
+static BOOL CRIsCraneSBProcess(NSString *process)
+{
+    return [process isEqualToString:@"SpringBoard"] ||
+           [process isEqualToString:@"runningboardd"];
+}
+
+static BOOL CRIsAuthenticatedCraneSBPeer(NSString *process, NSString *signingID)
+{
+    if ([process isEqualToString:@"SpringBoard"])
+        return [signingID isEqualToString:@"com.apple.springboard"];
+    if ([process isEqualToString:@"runningboardd"]) {
+        /* No runningboardd signing-ID literal survives in the recovered Crane
+         * artifacts. Accept the two Apple identifiers used across supported
+         * iOS generations, but still require the kernel-derived process name. */
+        return [signingID isEqualToString:@"com.apple.runningboardd"] ||
+               [signingID isEqualToString:@"com.apple.runningboard"];
+    }
+    return NO;
+}
+
+static BOOL CRIsCraneSupportProcess(NSString *process)
+{
+    static NSSet<NSString *> *processes;
+    static dispatch_once_t once;
+    dispatch_once(&once, ^{
+        processes = [NSSet setWithObjects:@"cfprefsd", @"containermanagerd",
+            @"securityd", @"pkd", @"lsd", @"accountsd", @"apsd", nil];
+    });
+    return [processes containsObject:process];
+}
+
+static BOOL CRIsAuthenticatedCraneSupportPeer(NSString *process, NSString *signingID)
+{
+    static NSDictionary<NSString *, NSString *> *signingIDs;
+    static dispatch_once_t once;
+    dispatch_once(&once, ^{
+        /* Six identifiers are recovered verbatim from CRMCM 0x68C0. The
+         * containermanagerd identifier is inferred from its system service
+         * identity; a mismatch fails closed on-device. */
+        signingIDs = @{
+            @"cfprefsd": @"com.apple.cfprefsd",
+            @"containermanagerd": @"com.apple.containermanagerd",
+            @"securityd": @"com.apple.securityd",
+            @"pkd": @"com.apple.pluginkit.pkd",
+            @"lsd": @"com.apple.lsd",
+            @"accountsd": @"com.apple.accountsd",
+            @"apsd": @"com.apple.apsd",
+        };
+    });
+    NSString *expected = signingIDs[process];
+    return expected.length && [signingID isEqualToString:expected];
+}
+
+static BOOL CRRuntimeComponentAllowed(NSString *component, NSString *process,
+                                      NSString *signingID)
+{
+    if ([component isEqualToString:@"CraneSB"])
+        return CRIsAuthenticatedCraneSBPeer(process, signingID);
+    if ([component isEqualToString:@"CraneSupport"])
+        return CRIsAuthenticatedCraneSupportPeer(process, signingID);
+    if ([component isEqualToString:@"Crane"])
+        return process.length && ![process isEqualToString:@"cranehelperd"];
+    return NO;
+}
+
+static void CRRegisterRuntime(pid_t pid, NSString *process,
+                              NSString *component, NSString *containerID)
+{
+    if (pid <= 0 || !process.length || !component.length)
+        return;
+    NSMutableDictionary *registry = CRRuntimeRegistry();
+    @synchronized(registry) {
+        NSMutableDictionary *entry = registry[@(pid)];
+        if (!entry || ![entry[@"process"] isEqualToString:process]) {
+            entry = [@{@"process": process,
+                       @"components": [NSMutableSet set]} mutableCopy];
+            registry[@(pid)] = entry;
+        }
+        [(NSMutableSet *)entry[@"components"] addObject:component];
+        if ([component isEqualToString:@"Crane"]) {
+            if (containerID.length)
+                entry[@"container"] = containerID;
+            else
+                [entry removeObjectForKey:@"container"];
+        }
+    }
+}
+
+static void CRUnregisterRuntime(pid_t pid)
+{
+    NSMutableDictionary *registry = CRRuntimeRegistry();
+    @synchronized(registry) {
+        [registry removeObjectForKey:@(pid)];
+    }
+}
+
+static BOOL CRRuntimeHasComponent(pid_t pid, NSString *process, NSString *component)
+{
+    NSMutableDictionary *registry = CRRuntimeRegistry();
+    @synchronized(registry) {
+        NSDictionary *entry = registry[@(pid)];
+        if (![entry[@"process"] isEqualToString:process])
+            return NO;
+        return [(NSSet *)entry[@"components"] containsObject:component];
+    }
+}
+
+static BOOL CRRuntimeHasComponentInProcess(NSString *component, NSString *process)
+{
+    if (!component.length)
+        return NO;
+    NSMutableDictionary *registry = CRRuntimeRegistry();
+    @synchronized(registry) {
+        for (NSDictionary *entry in registry.allValues) {
+            if (process.length && ![entry[@"process"] isEqualToString:process])
+                continue;
+            if ([(NSSet *)entry[@"components"] containsObject:component])
+                return YES;
+        }
+    }
+    return NO;
+}
+
+static NSString *CRRuntimeContainerForPid(pid_t pid, NSString *process)
+{
+    NSMutableDictionary *registry = CRRuntimeRegistry();
+    @synchronized(registry) {
+        NSDictionary *entry = registry[@(pid)];
+        if (![entry[@"process"] isEqualToString:process] ||
+            ![(NSSet *)entry[@"components"] containsObject:@"Crane"])
+            return nil;
+        return entry[@"container"];
+    }
+}
+
+/* The two Mach listeners share a deliberately small raw-XPC surface:
+ * health, runtime attestation, and caller-authorized PID inspection only. */
+static NSString *CRHandleHealthRequest(xpc_connection_t peer,
+                                       xpc_object_t message,
+                                       pid_t peerPid,
+                                       NSString *peerProcess,
+                                       NSString *peerSigningID)
 {
     if (xpc_get_type(message) != XPC_TYPE_DICTIONARY)
-        return;
+        return nil;
+
     const char *operation = xpc_dictionary_get_string(message, "operation");
-    if (!operation || strcmp(operation, "ping") != 0)
-        return;
-    /* Mismatched versions get a negative reply instead of a two-second
-     * client timeout. Version matching is not client authorization. */
+    if (!operation)
+        return nil;
     const char *protocol = xpc_dictionary_get_string(message, "protocol");
     BOOL compatible = protocol &&
         strcmp(protocol, CR_HELPERD_PING_PROTOCOL_V1) == 0;
+
+    if (strcmp(operation, "runtime_report") == 0) {
+        const char *componentCString = xpc_dictionary_get_string(message, "component");
+        NSString *component = componentCString
+            ? [NSString stringWithUTF8String:componentCString] : nil;
+        const char *containerCString = xpc_dictionary_get_string(message, "container_id");
+        NSString *containerID = containerCString
+            ? [NSString stringWithUTF8String:containerCString] : nil;
+        if (compatible &&
+            CRRuntimeComponentAllowed(component, peerProcess, peerSigningID)) {
+            CRRegisterRuntime(peerPid, peerProcess, component, containerID);
+            return component;
+        }
+        return nil;
+    }
+
+    if (strcmp(operation, "ping") != 0 &&
+        strcmp(operation, "insurance") != 0 &&
+        strcmp(operation, "lookup_pid") != 0 &&
+        strcmp(operation, "component_loaded") != 0)
+        return nil;
+
     xpc_object_t reply = xpc_dictionary_create_reply(message);
     if (!reply)
-        return;
+        return nil;
+
+    if (strcmp(operation, "insurance") == 0) {
+        NSString *filter = CRJailbreakRootPath(CR_MAIN_DYLIB_FILTER_PLIST);
+        BOOL installed = filter.length &&
+            [NSFileManager.defaultManager fileExistsAtPath:filter];
+        BOOL sandy = CRIsDylibLoaded(CR_LIB_SANDY);
+        /* This request is emitted only by CraneSB's launch path. Binding it
+         * to the kernel-reported SpringBoard/runningboardd peer avoids a race
+         * with the separate persistent heartbeat connection. */
+        BOOL injectionVerified = compatible &&
+            CRIsAuthenticatedCraneSBPeer(peerProcess, peerSigningID);
+        BOOL preflight = compatible && installed && sandy;
+        xpc_dictionary_set_bool(reply, "preflight_ok", preflight);
+        xpc_dictionary_set_bool(reply, "injection_verified", injectionVerified);
+        xpc_dictionary_set_bool(reply, "works", preflight && injectionVerified);
+        xpc_dictionary_set_bool(reply, "main_dylib_installed", installed);
+        xpc_dictionary_set_bool(reply, "libsandy_loaded", sandy);
+        if (peerProcess.length)
+            xpc_dictionary_set_string(reply, "caller_process", peerProcess.UTF8String);
+        if (peerSigningID.length)
+            xpc_dictionary_set_string(reply, "caller_signing_id", peerSigningID.UTF8String);
+    } else if (strcmp(operation, "component_loaded") == 0) {
+        BOOL authorized = compatible &&
+            (CRIsAuthenticatedCraneSBPeer(peerProcess, peerSigningID) ||
+             CRIsAuthenticatedCraneSupportPeer(peerProcess, peerSigningID));
+        const char *componentCString = xpc_dictionary_get_string(message, "component");
+        const char *processCString = xpc_dictionary_get_string(message, "process");
+        NSString *component = componentCString
+            ? [NSString stringWithUTF8String:componentCString] : nil;
+        NSString *process = processCString
+            ? [NSString stringWithUTF8String:processCString] : nil;
+        BOOL queryAllowed = [component isEqualToString:@"CraneSB"] ||
+            [component isEqualToString:@"CraneSupport"];
+        BOOL loaded = authorized && queryAllowed &&
+            CRRuntimeHasComponentInProcess(component, process);
+        xpc_dictionary_set_bool(reply, "authorized", authorized);
+        xpc_dictionary_set_bool(reply, "loaded", loaded);
+    } else if (strcmp(operation, "lookup_pid") == 0) {
+        /* PID/container inspection is limited to Crane's system-side
+         * processes. The target PID is still verified against a live runtime
+         * report before any container identifier is returned. */
+        BOOL authorized = compatible &&
+            (CRIsAuthenticatedCraneSBPeer(peerProcess, peerSigningID) ||
+             CRIsAuthenticatedCraneSupportPeer(peerProcess, peerSigningID));
+        pid_t targetPid = (pid_t)xpc_dictionary_get_int64(message, "pid");
+        NSString *targetProcess = authorized ? CRProcessNameForPid(targetPid) : nil;
+        NSString *containerID = targetProcess
+            ? CRRuntimeContainerForPid(targetPid, targetProcess) : nil;
+        xpc_dictionary_set_bool(reply, "authorized", authorized);
+        xpc_dictionary_set_bool(reply, "injection_verified", containerID.length > 0);
+        if (containerID.length)
+            xpc_dictionary_set_string(reply, "container_id", containerID.UTF8String);
+    }
+
     xpc_dictionary_set_bool(reply, "alive", compatible);
     xpc_dictionary_set_string(reply, "protocol", CR_HELPERD_PING_PROTOCOL_V1);
     xpc_connection_send_message(peer, reply);
-    /* ARC manages the XPC reply. This is not caller authentication. */
+    return nil;
 }
 
-/* The iOS SDK marks xpc_connection_get_pid unavailable. Do not use
- * desktop-only credential APIs here; this ping-only listener makes no
- * authorization claim and must not expose privileged operations. */
 static void CRAcceptHealthPeer(xpc_connection_t peer)
 {
+    pid_t peerPid = CRXPCConnectionGetPid(peer);
+    NSString *peerProcess = CRProcessNameForPid(peerPid);
+    NSString *peerSigningID = CRSigningIdentifierForPeer(peer);
+    __block BOOL registeredOnPeer = NO;
+
     xpc_connection_set_event_handler(peer, ^(xpc_object_t message) {
         if (xpc_get_type(message) == XPC_TYPE_ERROR) {
+            if (registeredOnPeer)
+                CRUnregisterRuntime(peerPid);
             xpc_connection_cancel(peer);
             return;
         }
-        CRHandleHealthPing(peer, message);
+        NSString *registered = CRHandleHealthRequest(
+            peer, message, peerPid, peerProcess, peerSigningID);
+        if (registered.length)
+            registeredOnPeer = YES;
     });
     xpc_connection_resume(peer);
 }

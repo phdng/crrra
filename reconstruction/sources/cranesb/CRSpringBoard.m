@@ -174,32 +174,56 @@ static NSMutableDictionary *CRApplyEnvironmentChanges(NSMutableDictionary *envir
         return environment;
     }
 
+    /* Re-attest on every redirected launch so helperd restart cannot leave a
+     * stale positive cache or permanently lose the live CraneSB proof. */
+    CRReportRuntimeInjection(@"CraneSB", nil);
+
     /* Verify that everything Crane needs is actually in place before handing
      * the app a container it cannot honour. */
     __block BOOL insuranceOK = NO;
     __block NSString *brokenDaemons = nil;
     __block NSError *insuranceError = nil;
-    __block BOOL connectionWorks = NO;
     dispatch_semaphore_t sem = dispatch_semaphore_create(0);
+    NSObject *replyLock = [NSObject new];
+    __block BOOL replyClosed = NO;
 
     id<CRHelperServiceProtocol> proxy =
         (id<CRHelperServiceProtocol>)[manager cranehelperdGlobalSyncRemoteObjectProxy];
-    if ([proxy respondsToSelector:@selector(verifyCraneInsuranceAndReply:)]) {
+    if (!proxy || ![proxy respondsToSelector:@selector(verifyCraneInsuranceAndReply:)]) {
+        /* Defensive fail-closed guard: the reconstruction intentionally
+         * exposes only a read-only adapter here, never assume a full NSXPC
+         * helper surface exists or wait for an impossible reply. */
+        insuranceError = [NSError errorWithDomain:@"com.opa334.crane"
+            code:1001 userInfo:@{NSLocalizedDescriptionKey:
+                @"Crane helper XPC insurance service is unavailable"}];
+        NSLog(@"CraneSB: unable to verify container launch for %@: %@",
+              appID, insuranceError.localizedDescription);
+    } else {
         [proxy verifyCraneInsuranceAndReply:^(BOOL works, NSString *daemons,
                                               NSError *error, BOOL connWorks) {
-            insuranceOK = works;
-            brokenDaemons = daemons;
-            insuranceError = error;
-            connectionWorks = connWorks;
-            dispatch_semaphore_signal(sem);
+            @synchronized(replyLock) {
+                if (replyClosed) return;
+                insuranceOK = works;
+                brokenDaemons = daemons;
+                insuranceError = error;
+                replyClosed = YES;
+                dispatch_semaphore_signal(sem);
+            }
+            (void)connWorks; /* Reconstruction-only XPC reply field. */
         }];
-        dispatch_semaphore_wait(sem,
+        long waitResult = dispatch_semaphore_wait(sem,
                                 dispatch_time(DISPATCH_TIME_NOW, 5 * NSEC_PER_SEC));
+        @synchronized(replyLock) {
+            if (waitResult != 0) insuranceOK = NO;
+            replyClosed = YES;
+        }
     }
 
     NSError *lastError = [manager getLastError];
 
-    if (insuranceOK && !lastError) {
+    /* CraneSB 0x1B45C gates injection on the insurance reply's works bit.
+     * getLastError only helps classify a failed check for the error alert. */
+    if (insuranceOK) {
         if ([appSettings[CRAppSetting_SpoofSandboxLookupsEnabled] boolValue])
             env[CR_ENV_SPOOF_SANDBOX_LOOKUPS] = @"1";
         env[CR_ENV_CONTAINER_IDENTIFIER] = activeContainer;
@@ -208,9 +232,11 @@ static NSMutableDictionary *CRApplyEnvironmentChanges(NSMutableDictionary *envir
 
     /* 0x1B45C -> crane_presentDaemonError. Preserve fail-open launch
      * semantics after presenting the recovered user-visible failure. */
+    /* In original CraneSB 0x1B45C, the final alert flag is !getLastError,
+     * not a fourth argument of verifyCraneInsuranceAndReply:. */
     CRPresentDaemonError(brokenDaemons,
                          insuranceError ?: lastError,
-                         connectionWorks);
+                         lastError == nil);
     return environment;
 }
 
@@ -244,19 +270,30 @@ static void CRRegisterInjectionCheckForProcess(id self, SEL _cmd, id process,
         if (pid <= 0) return;
         id<CRHelperServiceProtocol> proxy = (id<CRHelperServiceProtocol>)
             [CraneManager.sharedManager cranehelperdGlobalSyncRemoteObjectProxy];
-        [proxy fetchActiveContainerIDForProcessWithPid:pid reply:^(NSString *actualContainer) {
-            /* The original compares a nonnil response but does not raise an
-             * alert for a mismatching ID; preserve that behavior. */
-            if (actualContainer) {
-                (void)[actualContainer isEqualToString:expectedContainer];
-                return;
-            }
-            /* The reconstructed XPC reply lacks the original second status
-             * parameter (0x19608). Do not misdiagnose a daemon failure as
-             * missing app injection until that status is recovered. */
-            NSLog(@"CraneSB: injection verification returned no container ID pid=%d expected=%@",
-                  pid, expectedContainer);
-        }];
+        [proxy fetchActiveContainerIDForProcessWithPid:pid
+            reply:^(NSString *actualContainer, BOOL connectionWorks) {
+                /* CraneSB 0x19608 compares a nonnil response but has no
+                 * mismatch alert; preserve that exact branch shape. */
+                if (actualContainer) {
+                    (void)[actualContainer isEqualToString:expectedContainer];
+                    return;
+                }
+
+                NSString *processName = nil;
+                SEL queueNameSelector = NSSelectorFromString(@"_queue_name");
+                if ([launched respondsToSelector:queueNameSelector]) {
+                    @try { processName = [launched valueForKey:@"_name"]; }
+                    @catch (__unused NSException *exception) { processName = nil; }
+                } else if ([launched respondsToSelector:@selector(name)]) {
+                    processName = ((id (*)(id, SEL))objc_msgSend)(launched, @selector(name));
+                }
+
+                if (connectionWorks == YES) {
+                    CRPresentMainDylibNotLoadedError(processName);
+                } else {
+                    CRPresentDaemonError(@[@"runningboardd"], nil, NO);
+                }
+            }];
     };
     SEL callbackSelector = NSSelectorFromString(@"_executeBlockAfterLaunchCompletes:");
     if (![process respondsToSelector:callbackSelector])
@@ -292,8 +329,8 @@ static id CRApplyModificationsIfNeededToExecutionContext(id self, SEL _cmd,
         ![executionContext respondsToSelector:setEnvironment])
         return nil;
     NSDictionary *original = ((id (*)(id, SEL))objc_msgSend)(executionContext, getEnvironment);
-    NSMutableDictionary *updated = CRApplyEnvironmentChanges([original mutableCopy], appID);
-    if (!updated || [updated isEqual:original])
+    NSMutableDictionary *updated = CRApplyEnvironmentChanges((NSMutableDictionary *)original, appID);
+    if (updated == original)
         return nil;
     NSString *containerID = updated[CR_ENV_CONTAINER_IDENTIFIER];
     ((void (*)(id, SEL, id))objc_msgSend)(executionContext, setEnvironment, updated);
@@ -635,8 +672,8 @@ static void CRModifyRunningBoardLaunchRequest(id request)
         ![context respondsToSelector:NSSelectorFromString(@"_setAdditionalEnvironment:")]) return;
     SEL readEnvironment = NSSelectorFromString(@"_additionalEnvironment");
     NSDictionary *original = ((id (*)(id, SEL))objc_msgSend)(context, readEnvironment);
-    NSMutableDictionary *updated = CRApplyEnvironmentChanges([original mutableCopy], appID);
-    if (updated && ![updated isEqual:original])
+    NSMutableDictionary *updated = CRApplyEnvironmentChanges((NSMutableDictionary *)original, appID);
+    if (updated != original)
         ((void (*)(id, SEL, id))objc_msgSend)(context,
             NSSelectorFromString(@"_setAdditionalEnvironment:"), updated);
 }
@@ -689,10 +726,12 @@ static void CRInitFunc(void)
         NSLog(@"CraneSB: constructor reached; executable=%@; bundle=%@",
               executable, [NSBundle mainBundle].bundleIdentifier);
         if ([executable isEqualToString:@"SpringBoard"]) {
+            CRReportRuntimeInjection(@"CraneSB", nil);
             gIsSpringBoard = YES;
             CRInitErrorAlerts();
             CRInitSpringBoard();
         } else if ([executable isEqualToString:@"runningboardd"]) {
+            CRReportRuntimeInjection(@"CraneSB", nil);
             CRInitRunningBoardd();
         }
     }

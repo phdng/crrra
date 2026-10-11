@@ -41,9 +41,226 @@ extern xpc_connection_t CRManagerXPCConnectionCreateMachService(
     const char *name, dispatch_queue_t targetq, uint64_t flags)
     __asm("_xpc_connection_create_mach_service");
 
+typedef void (^CRManagerPIDLookupReply)(NSString *containerID, BOOL connectionWorks);
+
+static void CRManagerLookupActiveContainerForPid(pid_t pid,
+                                                  CRManagerPIDLookupReply reply)
+{
+    if (!reply)
+        return;
+    if (pid <= 0) {
+        reply(nil, NO);
+        return;
+    }
+
+    xpc_connection_t connection = CRManagerXPCConnectionCreateMachService(
+        CR_HELPERD_MACH_SERVICE.UTF8String, NULL, 0);
+    if (!connection) {
+        reply(nil, NO);
+        return;
+    }
+
+    NSObject *replyLock = [NSObject new];
+    __block BOOL finished = NO;
+    void (^finish)(NSString *, BOOL) = ^(NSString *containerID, BOOL connectionWorks) {
+        @synchronized(replyLock) {
+            if (finished)
+                return;
+            finished = YES;
+        }
+        reply(containerID, connectionWorks);
+        xpc_connection_cancel(connection);
+    };
+
+    xpc_connection_set_event_handler(connection, ^(xpc_object_t event) {
+        if (xpc_get_type(event) == XPC_TYPE_ERROR)
+            finish(nil, NO);
+    });
+    xpc_connection_resume(connection);
+
+    xpc_object_t request = xpc_dictionary_create(NULL, NULL, 0);
+    if (!request) {
+        finish(nil, NO);
+        return;
+    }
+    xpc_dictionary_set_string(request, "operation", "lookup_pid");
+    xpc_dictionary_set_string(request, "protocol", CR_HELPERD_PING_PROTOCOL_V1);
+    xpc_dictionary_set_int64(request, "pid", pid);
+    xpc_connection_send_message_with_reply(connection, request,
+        dispatch_get_global_queue(QOS_CLASS_UTILITY, 0), ^(xpc_object_t response) {
+            BOOL valid = xpc_get_type(response) == XPC_TYPE_DICTIONARY;
+            const char *version = valid
+                ? xpc_dictionary_get_string(response, "protocol") : NULL;
+            valid = valid && version &&
+                strcmp(version, CR_HELPERD_PING_PROTOCOL_V1) == 0 &&
+                xpc_dictionary_get_bool(response, "alive");
+            BOOL authorized = valid &&
+                xpc_dictionary_get_bool(response, "authorized");
+            BOOL injected = authorized &&
+                xpc_dictionary_get_bool(response, "injection_verified");
+            const char *container = injected
+                ? xpc_dictionary_get_string(response, "container_id") : NULL;
+            NSString *containerID = container
+                ? [NSString stringWithUTF8String:container] : nil;
+
+            /* CraneSB 0x19608: second reply argument is 1 when helperd
+             * answered but the app dylib/container proof is missing; 0 means
+             * the daemon path itself failed. */
+            finish(containerID, authorized);
+        });
+}
+
+static void CRManagerVerifyRuntimeComponent(NSString *component,
+                                            NSString *process,
+                                            void (^reply)(BOOL loaded))
+{
+    if (!reply || !component.length)
+        return;
+
+    xpc_connection_t connection = CRManagerXPCConnectionCreateMachService(
+        CR_HELPERD_MACH_SERVICE.UTF8String, NULL, 0);
+    if (!connection) {
+        reply(NO);
+        return;
+    }
+
+    NSObject *replyLock = [NSObject new];
+    __block BOOL finished = NO;
+    void (^finish)(BOOL) = ^(BOOL loaded) {
+        @synchronized(replyLock) {
+            if (finished)
+                return;
+            finished = YES;
+        }
+        reply(loaded);
+        xpc_connection_cancel(connection);
+    };
+    xpc_connection_set_event_handler(connection, ^(xpc_object_t event) {
+        if (xpc_get_type(event) == XPC_TYPE_ERROR)
+            finish(NO);
+    });
+    xpc_connection_resume(connection);
+
+    xpc_object_t request = xpc_dictionary_create(NULL, NULL, 0);
+    if (!request) {
+        finish(NO);
+        return;
+    }
+    xpc_dictionary_set_string(request, "operation", "component_loaded");
+    xpc_dictionary_set_string(request, "protocol", CR_HELPERD_PING_PROTOCOL_V1);
+    xpc_dictionary_set_string(request, "component", component.UTF8String);
+    if (process.length)
+        xpc_dictionary_set_string(request, "process", process.UTF8String);
+    xpc_connection_send_message_with_reply(connection, request,
+        dispatch_get_global_queue(QOS_CLASS_UTILITY, 0), ^(xpc_object_t response) {
+            BOOL valid = xpc_get_type(response) == XPC_TYPE_DICTIONARY;
+            const char *version = valid
+                ? xpc_dictionary_get_string(response, "protocol") : NULL;
+            valid = valid && version &&
+                strcmp(version, CR_HELPERD_PING_PROTOCOL_V1) == 0 &&
+                xpc_dictionary_get_bool(response, "alive") &&
+                xpc_dictionary_get_bool(response, "authorized");
+            finish(valid && xpc_dictionary_get_bool(response, "loaded"));
+        });
+}
+
 /* ------------------------------------------------------------------------- */
 /* CraneManager                                                               */
 /* ------------------------------------------------------------------------- */
+
+/* Read-only insurance adapter. No privileged XPC selectors are exposed. */
+@interface CRInsuranceHealthProxy : NSObject
+- (void)verifyCraneInsuranceAndReply:(void (^)(BOOL, NSString *, NSError *, BOOL))reply;
+- (void)verifySupportLoadedIntoProcessNamed:(NSString *)name
+                                      reply:(void (^)(BOOL))reply;
+- (void)verifyCraneSBLoadedAndReply:(void (^)(BOOL))reply;
+- (void)fetchActiveContainerIDForProcessWithPid:(pid_t)pid
+                                           reply:(void (^)(NSString *, BOOL))reply;
+@end
+@implementation CRInsuranceHealthProxy
+- (void)verifyCraneInsuranceAndReply:(void (^)(BOOL, NSString *, NSError *, BOOL))reply
+{
+    if (!reply)
+        return;
+
+    xpc_connection_t connection = CRManagerXPCConnectionCreateMachService(
+        CR_HELPERD_MACH_SERVICE.UTF8String, NULL, 0);
+    if (!connection) {
+        reply(NO, @"cranehelperd", nil, NO);
+        return;
+    }
+
+    NSObject *replyLock = [NSObject new];
+    __block BOOL finished = NO;
+    void (^finish)(BOOL, NSString *, NSError *, BOOL) =
+        ^(BOOL works, NSString *brokenDaemons, NSError *error, BOOL connectionWorks) {
+            @synchronized(replyLock) {
+                if (finished)
+                    return;
+                finished = YES;
+            }
+            reply(works, brokenDaemons, error, connectionWorks);
+            xpc_connection_cancel(connection);
+        };
+
+    xpc_connection_set_event_handler(connection, ^(xpc_object_t event) {
+        if (xpc_get_type(event) == XPC_TYPE_ERROR)
+            finish(NO, @"cranehelperd", nil, NO);
+    });
+    xpc_connection_resume(connection);
+
+    xpc_object_t request = xpc_dictionary_create(NULL, NULL, 0);
+    if (!request) {
+        finish(NO, @"cranehelperd", nil, NO);
+        return;
+    }
+    xpc_dictionary_set_string(request, "operation", "insurance");
+    xpc_dictionary_set_string(request, "protocol", CR_HELPERD_PING_PROTOCOL_V1);
+    xpc_connection_send_message_with_reply(connection, request,
+        dispatch_get_global_queue(QOS_CLASS_UTILITY, 0), ^(xpc_object_t response) {
+            BOOL valid = xpc_get_type(response) == XPC_TYPE_DICTIONARY;
+            const char *version = valid
+                ? xpc_dictionary_get_string(response, "protocol") : NULL;
+            valid = valid && version &&
+                strcmp(version, CR_HELPERD_PING_PROTOCOL_V1) == 0 &&
+                xpc_dictionary_get_bool(response, "alive");
+
+            BOOL injectionVerified = valid &&
+                xpc_dictionary_get_bool(response, "injection_verified");
+            BOOL works = valid && xpc_dictionary_get_bool(response, "works") &&
+                injectionVerified;
+            NSMutableArray *broken = [NSMutableArray new];
+            if (valid && !xpc_dictionary_get_bool(response, "main_dylib_installed"))
+                [broken addObject:@"Crane.dylib"];
+            if (valid && !xpc_dictionary_get_bool(response, "libsandy_loaded"))
+                [broken addObject:@"libsandy"];
+            if (valid && !injectionVerified)
+                [broken addObject:@"CraneSB"];
+            if (!valid)
+                [broken addObject:@"cranehelperd"];
+            finish(works, [broken componentsJoinedByString:@", "], nil, valid);
+        });
+}
+
+- (void)verifySupportLoadedIntoProcessNamed:(NSString *)name
+                                      reply:(void (^)(BOOL))reply
+{
+    CRManagerVerifyRuntimeComponent(@"CraneSupport", name, reply);
+}
+
+- (void)verifyCraneSBLoadedAndReply:(void (^)(BOOL))reply
+{
+    /* CraneSupport 0x9B68 asks specifically whether SpringBoard-side CraneSB
+     * is live before rewriting incoming APS traffic. */
+    CRManagerVerifyRuntimeComponent(@"CraneSB", @"SpringBoard", reply);
+}
+
+- (void)fetchActiveContainerIDForProcessWithPid:(pid_t)pid
+                                           reply:(void (^)(NSString *, BOOL))reply
+{
+    CRManagerLookupActiveContainerForPid(pid, reply);
+}
+@end
 
 @interface CraneManager ()
 /* [INFERRED] The original keeps the registry in cfprefsd-backed preferences.
@@ -574,14 +791,9 @@ usingBiometricsIfNeededWithSuccessHandler:(dispatch_block_t)handler
 }
 
 - (void)fetchActiveContainerIDForProcessWithPid:(pid_t)pid
-                                reply:(void (^)(NSString *))reply
+                                reply:(void (^)(NSString *, BOOL))reply
 {
-    /* CraneSB 0x194EC verifies the container actually loaded in a PID.
-     * The current reconstruction has neither a PID inspector nor a working
-     * NSXPC remote proxy. A fabricated DEFAULT result is not verification. */
-    NSLog(@"CraneManager: active container lookup unavailable for pid=%d", pid);
-    if (reply)
-        reply(nil);
+    CRManagerLookupActiveContainerForPid(pid, reply);
 }
 
 /* Reconstruction-specific low-level health probe. This does not establish
@@ -674,7 +886,15 @@ usingBiometricsIfNeededWithSuccessHandler:(dispatch_block_t)handler
     return NO;
 }
 
-- (id)cranehelperdGlobalSyncRemoteObjectProxy { return nil; }
+- (id)cranehelperdGlobalSyncRemoteObjectProxy
+{
+    /* Minimal read-only reconstruction adapter. Each raw-XPC request is
+     * authenticated by helperd; privileged original NSXPC methods stay absent. */
+    static CRInsuranceHealthProxy *proxy;
+    static dispatch_once_t once;
+    dispatch_once(&once, ^{ proxy = [CRInsuranceHealthProxy new]; });
+    return proxy;
+}
 - (id)cranehelperdGlobalAsyncRemoteObjectProxy { return nil; }
 /* A filter plist is not a dylib and must not be passed to dlopen().
  * This is an installation-presence check, not proof of injection into a

@@ -129,6 +129,7 @@ static void CRInitFunc(void)
         ignoredProcesses = @[@"watchdogd", @"com.apple.springboard"];
 
         NSString *process = CRGetProcessName();
+        CRReportRuntimeInjection(@"CraneSupport", nil);
 
         if ([process isEqualToString:@"cfprefsd"]) {
             CRInitCfprefsd();

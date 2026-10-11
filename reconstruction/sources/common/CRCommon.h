@@ -147,4 +147,10 @@ extern NSString *CRGetProcessName(void);
 /* CraneSupport 0x60C8 / CraneSB 0x1F850 - first existing injection inserter. */
 extern NSString *CRGetInjectionPlatform(void);
 
+/* Reconstruction-only runtime attestation. The helper derives the caller PID
+ * and executable name from the XPC peer; callers never provide an identity.
+ * Keeping the connection open also lets helperd discard PID registrations when
+ * the injected process exits. */
+extern void CRReportRuntimeInjection(NSString *component, NSString *containerID);
+
 #endif /* CR_COMMON_H */

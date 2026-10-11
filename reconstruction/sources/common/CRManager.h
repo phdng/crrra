@@ -38,7 +38,9 @@
 @protocol CRHelperServiceProtocol <NSObject>
 - (void)verifyCraneInsuranceAndReply:(void (^)(BOOL works, NSString *brokenDaemons, NSError *error, BOOL connectionWorks))reply;
 - (void)verifySupportLoadedIntoProcessNamed:(NSString *)name reply:(void (^)(BOOL loaded))reply;
-- (void)fetchActiveContainerIDForProcessWithPid:(pid_t)pid reply:(void (^)(NSString *containerID))reply;
+- (void)verifyCraneSBLoadedAndReply:(void (^)(BOOL loaded))reply;
+- (void)fetchActiveContainerIDForProcessWithPid:(pid_t)pid
+                                           reply:(void (^)(NSString *containerID, BOOL connectionWorks))reply;
 - (void)reloadApplicationWithIdentifier:(NSString *)appID;
 - (void)reloadDaemons:(NSArray<NSString *> *)daemons;
 - (void)getIdentifierOfType:(uint64_t)type
@@ -138,7 +140,7 @@ usingBiometricsIfNeededWithSuccessHandler:(dispatch_block_t)handler;      /* [AP
 - (void)reloadApplicationWithIdentifier:(NSString *)appID;              /* [API] */
 - (void)reloadApplicationWithIdentifier:(NSString *)appID ifContainerIsActive:(BOOL)check; /* [API] */
 - (void)fetchActiveContainerIDForProcessWithPid:(pid_t)pid
-                                reply:(void (^)(NSString *containerID))reply; /* [API] */
+                                reply:(void (^)(NSString *containerID, BOOL connectionWorks))reply; /* [API] */
 - (BOOL)cranehelperdConnectionWorks;                                     /* [API] */
 - (id)cranehelperdGlobalSyncRemoteObjectProxy;                           /* [API] */
 - (id)cranehelperdGlobalAsyncRemoteObjectProxy;                          /* [API] */

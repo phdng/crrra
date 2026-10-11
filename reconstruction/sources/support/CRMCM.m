@@ -178,8 +178,8 @@ static void CRClearActiveContainerCache(CFNotificationCenterRef center,
      * cranehelperdGlobalSyncRemoteObjectProxy inside runSafeXPCBlock:, then
      * falls back to a containermanagerd proxy message on one XPC error.
      * libcrane's original connection internals are unavailable (U-01), while
-     * the reconstructed manager already exposes the same fetch selector.
-     * Use that selector as the transport boundary without inventing PID lookup.
+     * the reconstructed manager now backs the same fetch selector with its
+     * caller-authenticated raw-XPC PID/runtime registry.
      */
     __block NSString *fetched = nil;
     __block BOOL replied = NO;
@@ -187,7 +187,8 @@ static void CRClearActiveContainerCache(CFNotificationCenterRef center,
 
     [[CraneManager sharedManager]
         fetchActiveContainerIDForProcessWithPid:pid
-        reply:^(NSString *identifier) {
+        reply:^(NSString *identifier, BOOL connectionWorks) {
+            (void)connectionWorks; /* CraneSupport 0x12F14 only consumes ID. */
             fetched = identifier;
             replied = YES;
             dispatch_semaphore_signal(semaphore);

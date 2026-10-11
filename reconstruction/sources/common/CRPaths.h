@@ -69,7 +69,7 @@
 
 #define CR_HELPERD_MACH_SERVICE         @"com.opa334.cranehelperd.xpc"
 #define CR_HELPERD_PREFS_MACH_SERVICE   @"com.opa334.cranehelperd.preferences.xpc"
-/* Reconstruction-only low-level ping handshake (C string for libxpc). */
+/* Reconstruction-only low-level raw-XPC protocol version (C string). */
 #define CR_HELPERD_PING_PROTOCOL_V1     "crane-reconstruction-ping-v1"
 
 /* --- notifications ------------------------------------------------------ */

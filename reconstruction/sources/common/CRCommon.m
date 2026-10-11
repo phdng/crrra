@@ -12,7 +12,14 @@
 
 #import "CRCommon.h"
 #import <LocalAuthentication/LocalAuthentication.h>
+#import <xpc/xpc.h>
 #import <unistd.h>
+
+/* iOS SDKs mark the Mach-service constructor unavailable to app targets even
+ * though the symbol is present and used by the recovered Crane binaries. */
+extern xpc_connection_t CRCommonXPCConnectionCreateMachService(
+    const char *name, dispatch_queue_t targetq, uint64_t flags)
+    __asm("_xpc_connection_create_mach_service");
 
 /* Crane 0x6924 ------------------------------------------------------------ */
 
@@ -155,4 +162,48 @@ NSString *CRGetInjectionPlatform(void)
         }
     });
     return platform;
+}
+
+/* Reconstruction-only runtime attestation -------------------------------- */
+
+void CRReportRuntimeInjection(NSString *component, NSString *containerID)
+{
+    if (!component.length)
+        return;
+
+    /* One long-lived peer per loaded CRCommon image. The daemon binds the
+     * registration to this peer's kernel-provided PID and drops it when the
+     * connection dies, avoiding stale PID/container claims after process exit. */
+    static xpc_connection_t connection;
+    static NSObject *connectionLock;
+    static dispatch_once_t lockOnce;
+    dispatch_once(&lockOnce, ^{ connectionLock = [NSObject new]; });
+
+    @synchronized(connectionLock) {
+        if (!connection) {
+            xpc_connection_t created = CRCommonXPCConnectionCreateMachService(
+                CR_HELPERD_MACH_SERVICE.UTF8String, NULL, 0);
+            if (!created)
+                return;
+            connection = created;
+            xpc_connection_set_event_handler(created, ^(xpc_object_t event) {
+                if (xpc_get_type(event) != XPC_TYPE_ERROR)
+                    return;
+                @synchronized(connectionLock) {
+                    connection = NULL;
+                }
+            });
+            xpc_connection_resume(created);
+        }
+
+        xpc_object_t report = xpc_dictionary_create(NULL, NULL, 0);
+        if (!report)
+            return;
+        xpc_dictionary_set_string(report, "operation", "runtime_report");
+        xpc_dictionary_set_string(report, "protocol", CR_HELPERD_PING_PROTOCOL_V1);
+        xpc_dictionary_set_string(report, "component", component.UTF8String);
+        if (containerID.length)
+            xpc_dictionary_set_string(report, "container_id", containerID.UTF8String);
+        xpc_connection_send_message(connection, report);
+    }
 }

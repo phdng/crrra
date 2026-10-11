@@ -287,4 +287,9 @@ static void CRInitFunc(void)
 
     if (count >= 1)
         CRHookFunctions(_crHookTable, (int)count);
+
+    /* Runtime proof for SpringBoard's post-launch injection check. The helper
+     * binds this container claim to our kernel-reported XPC PID. */
+    if (_crActiveContainerIdentifier.length)
+        CRReportRuntimeInjection(@"Crane", _crActiveContainerIdentifier);
 }
