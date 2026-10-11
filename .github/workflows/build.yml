@@ -14,7 +14,19 @@ concurrency:
 
 jobs:
   build:
-    name: Theos package
+    name: Theos package (${{ matrix.variant }})
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - variant: rootful
+            scheme: rootful
+            theos_repo: theos/theos
+            deb_arch: iphoneos-arm
+          - variant: roothide
+            scheme: roothide
+            theos_repo: roothide/theos
+            deb_arch: iphoneos-arm64e
     runs-on: macos-14
     timeout-minutes: 45
 
@@ -28,7 +40,7 @@ jobs:
       - name: Set up Theos
         uses: waruhachi/theos-action@v2.6.3
         with:
-          theos-src: theos/theos
+          theos-src: ${{ matrix.theos_repo }}
           theos-branch: master
           sdks-src: theos/sdks
           sdks-branch: master
@@ -57,7 +69,11 @@ jobs:
         working-directory: reconstruction
         run: |
           set -o pipefail
-          make clean package FINALPACKAGE=1 2>&1 | tee build.log
+          if [ "${{ matrix.variant }}" = roothide ]; then
+            make clean package FINALPACKAGE=1 THEOS_PACKAGE_SCHEME=roothide 2>&1 | tee build.log
+          else
+            make clean package FINALPACKAGE=1 2>&1 | tee build.log
+          fi
 
       - name: Inspect package
         working-directory: reconstruction
@@ -94,6 +110,13 @@ jobs:
 
           python3 tools/verify_package_layout.py pkg
           python3 tools/verify_architectures.py pkg
+          CONTROL_MEMBER="$(ar -t "$DEB" | awk '/^control\.tar\./ { print; exit }')"
+          test -n "$CONTROL_MEMBER" || { echo "::error::Missing control archive"; exit 1; }
+          ar -p "$DEB" "$CONTROL_MEMBER" | tar -xOf - ./control > package.control
+          grep -Fx "Architecture: ${{ matrix.deb_arch }}" package.control || {
+            echo "::error::Unexpected architecture for ${{ matrix.variant }}"; exit 1;
+          }
+          echo "VARIANT=${{ matrix.variant }}" >> "$GITHUB_STEP_SUMMARY"
 
           {
             echo "### Package"
@@ -107,7 +130,7 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: build-log
+          name: build-log-${{ matrix.variant }}
           if-no-files-found: warn
           path: |
             reconstruction/build.log
@@ -117,7 +140,7 @@ jobs:
         if: success()
         uses: actions/upload-artifact@v4
         with:
-          name: crane-reconstruction-package
+          name: crane-reconstruction-${{ matrix.variant }}
           if-no-files-found: error
           path: |
             reconstruction/packages/*.deb
