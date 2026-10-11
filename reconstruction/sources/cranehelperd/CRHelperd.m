@@ -499,7 +499,8 @@ static BOOL CRRuntimeComponentAllowed(NSString *component, NSString *process,
 }
 
 static void CRRegisterRuntime(pid_t pid, NSString *process,
-                              NSString *component, NSString *containerID)
+                              NSString *component, NSString *containerID,
+                              NSString *peerToken)
 {
     if (pid <= 0 || !process.length || !component.length)
         return;
@@ -508,24 +509,31 @@ static void CRRegisterRuntime(pid_t pid, NSString *process,
         NSMutableDictionary *entry = registry[@(pid)];
         if (!entry || ![entry[@"process"] isEqualToString:process]) {
             entry = [@{@"process": process,
-                       @"components": [NSMutableSet set]} mutableCopy];
+                       @"components": [NSMutableDictionary new]} mutableCopy];
             registry[@(pid)] = entry;
         }
-        [(NSMutableSet *)entry[@"components"] addObject:component];
-        if ([component isEqualToString:@"Crane"]) {
-            if (containerID.length)
-                entry[@"container"] = containerID;
-            else
-                [entry removeObjectForKey:@"container"];
-        }
+        NSMutableDictionary *components = entry[@"components"];
+        NSMutableDictionary *claim = [@{@"peerToken": peerToken} mutableCopy];
+        if ([component isEqualToString:@"Crane"] && containerID.length)
+            claim[@"container"] = containerID;
+        components[component] = claim;
     }
 }
 
-static void CRUnregisterRuntime(pid_t pid)
+static void CRUnregisterRuntime(pid_t pid, NSString *peerToken)
 {
     NSMutableDictionary *registry = CRRuntimeRegistry();
     @synchronized(registry) {
-        [registry removeObjectForKey:@(pid)];
+        NSDictionary *entry = registry[@(pid)];
+        /* Remove only claims belonging to the disconnected peer. A process
+         * can host multiple injected components and independent XPC peers. */
+        NSMutableDictionary *components = entry[@"components"];
+        for (NSString *component in [components.allKeys copy]) {
+            if ([components[component][@"peerToken"] isEqualToString:peerToken])
+                [components removeObjectForKey:component];
+        }
+        if (components.count == 0)
+            [registry removeObjectForKey:@(pid)];
     }
 }
 
@@ -536,7 +544,7 @@ static BOOL CRRuntimeHasComponent(pid_t pid, NSString *process, NSString *compon
         NSDictionary *entry = registry[@(pid)];
         if (![entry[@"process"] isEqualToString:process])
             return NO;
-        return [(NSSet *)entry[@"components"] containsObject:component];
+        return entry[@"components"][component] != nil;
     }
 }
 
@@ -549,7 +557,7 @@ static BOOL CRRuntimeHasComponentInProcess(NSString *component, NSString *proces
         for (NSDictionary *entry in registry.allValues) {
             if (process.length && ![entry[@"process"] isEqualToString:process])
                 continue;
-            if ([(NSSet *)entry[@"components"] containsObject:component])
+            if (entry[@"components"][component])
                 return YES;
         }
     }
@@ -562,9 +570,9 @@ static NSString *CRRuntimeContainerForPid(pid_t pid, NSString *process)
     @synchronized(registry) {
         NSDictionary *entry = registry[@(pid)];
         if (![entry[@"process"] isEqualToString:process] ||
-            ![(NSSet *)entry[@"components"] containsObject:@"Crane"])
+            !entry[@"components"][@"Crane"])
             return nil;
-        return entry[@"container"];
+        return entry[@"components"][@"Crane"][@"container"];
     }
 }
 
@@ -574,7 +582,8 @@ static NSString *CRHandleHealthRequest(xpc_connection_t peer,
                                        xpc_object_t message,
                                        pid_t peerPid,
                                        NSString *peerProcess,
-                                       NSString *peerSigningID)
+                                       NSString *peerSigningID,
+                                       NSString *peerToken)
 {
     if (xpc_get_type(message) != XPC_TYPE_DICTIONARY)
         return nil;
@@ -595,7 +604,8 @@ static NSString *CRHandleHealthRequest(xpc_connection_t peer,
             ? [NSString stringWithUTF8String:containerCString] : nil;
         if (compatible &&
             CRRuntimeComponentAllowed(component, peerProcess, peerSigningID)) {
-            CRRegisterRuntime(peerPid, peerProcess, component, containerID);
+            CRRegisterRuntime(peerPid, peerProcess, component, containerID,
+                              peerToken);
             return component;
         }
         return nil;
@@ -675,17 +685,18 @@ static void CRAcceptHealthPeer(xpc_connection_t peer)
     pid_t peerPid = CRXPCConnectionGetPid(peer);
     NSString *peerProcess = CRProcessNameForPid(peerPid);
     NSString *peerSigningID = CRSigningIdentifierForPeer(peer);
+    NSString *peerToken = NSUUID.UUID.UUIDString;
     __block BOOL registeredOnPeer = NO;
 
     xpc_connection_set_event_handler(peer, ^(xpc_object_t message) {
         if (xpc_get_type(message) == XPC_TYPE_ERROR) {
             if (registeredOnPeer)
-                CRUnregisterRuntime(peerPid);
+                CRUnregisterRuntime(peerPid, peerToken);
             xpc_connection_cancel(peer);
             return;
         }
         NSString *registered = CRHandleHealthRequest(
-            peer, message, peerPid, peerProcess, peerSigningID);
+            peer, message, peerPid, peerProcess, peerSigningID, peerToken);
         if (registered.length)
             registeredOnPeer = YES;
     });

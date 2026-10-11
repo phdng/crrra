@@ -46,17 +46,10 @@ NSString *CRStripCraneContainerFromPath(NSString *path)
 {
     if (!path)
         return nil;
-    NSRange range = [path rangeOfString:@"/" CR_CONTAINERS_DIR_COMPONENT];
-    if (range.location == NSNotFound)
-        return path;
-    /* .../Library/___Crane_Containers/<id>[/rest] -> .../rest */
-    NSString *head = [path substringToIndex:range.location];
-    NSString *tail = [path substringFromIndex:NSMaxRange(range)];
-    NSRange slash = [tail rangeOfString:@"/"];
-    NSString *remainder = slash.location == NSNotFound
-        ? @""
-        : [tail substringFromIndex:slash.location];
-    return [head stringByAppendingString:remainder];
+    /* CraneSupport 0xC260: split at the full marker and return firstObject;
+     * the original does not preserve a trailing container-relative path. */
+    return [[path componentsSeparatedByString:
+        @"/" CR_CONTAINERS_DIR_COMPONENT] firstObject];
 }
 
 /* ------------------------------------------------------------------------- */

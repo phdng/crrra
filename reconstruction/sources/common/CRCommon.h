@@ -144,7 +144,8 @@ extern NSString *CRSafeGetBundleIdentifier(void);
 /* CraneSupport 0x647C - last path component of the running executable. */
 extern NSString *CRGetProcessName(void);
 
-/* CraneSupport 0x60C8 / CraneSB 0x1F850 - first existing injection inserter. */
+/* CraneSupport 0x60C8 / CraneSB 0x1F850 - detect an already-loaded
+ * inserter image and return Substitute, libhooker or Substrate. */
 extern NSString *CRGetInjectionPlatform(void);
 
 /* Reconstruction-only runtime attestation. The helper derives the caller PID

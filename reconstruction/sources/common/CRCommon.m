@@ -14,6 +14,7 @@
 #import <LocalAuthentication/LocalAuthentication.h>
 #import <xpc/xpc.h>
 #import <unistd.h>
+#import <mach-o/dyld.h>
 
 /* iOS SDKs mark the Mach-service constructor unavailable to app targets even
  * though the symbol is present and used by the recovered Crane binaries. */
@@ -56,7 +57,7 @@ NSString *CRLocalize(NSString *key)
     /* Upstream falls back to the raw en.lproj table when localizedStringForKey
      * returns the key unchanged, which happens for keys present only as an
      * uppercase identifier. */
-    if (!value.length || [value isEqualToString:key]) {
+    if ([value isEqualToString:key]) {
         static NSDictionary *english;
         static dispatch_once_t once;
         dispatch_once(&once, ^{
@@ -149,18 +150,31 @@ NSString *CRGetProcessName(void)
 
 NSString *CRGetInjectionPlatform(void)
 {
+    /* CraneSupport 0x60C8 and CraneSB 0x1F850 compare each loaded image
+     * against inserter paths in this order. The original walks every image;
+     * a later match replaces the earlier cached platform. */
     static NSString *platform;
-    static dispatch_once_t once;
-    dispatch_once(&once, ^{
-        for (NSString *candidate in @[CR_INSERTER_TWEAK_INJECT,
-                                      CR_INSERTER_SUBSTITUTE,
-                                      CR_INSERTER_SUBSTRATE]) {
-            if (CRIsDylibLoaded(candidate)) {
-                platform = candidate;
+    if (platform)
+        return platform;
+
+    NSArray<NSArray<NSString *> *> *candidates = @[
+        @[CR_INSERTER_SUBSTITUTE, @"Substitute"],
+        @[CR_INSERTER_TWEAK_INJECT, @"libhooker"],
+        @[CR_INSERTER_SUBSTRATE, @"Substrate"]
+    ];
+    uint32_t count = _dyld_image_count();
+    for (uint32_t i = 0; i < count; ++i) {
+        const char *image = _dyld_get_image_name(i);
+        if (!image)
+            continue;
+        NSString *imagePath = [NSString stringWithUTF8String:image];
+        for (NSArray<NSString *> *candidate in candidates) {
+            if ([imagePath isEqualToString:CRJailbreakRootPath(candidate[0])]) {
+                platform = candidate[1];
                 break;
             }
         }
-    });
+    }
     return platform;
 }
 
@@ -176,22 +190,48 @@ void CRReportRuntimeInjection(NSString *component, NSString *containerID)
      * connection dies, avoiding stale PID/container claims after process exit. */
     static xpc_connection_t connection;
     static NSObject *connectionLock;
+    static NSString *lastComponent;
+    static NSString *lastContainerID;
+    static NSUInteger generation;
     static dispatch_once_t lockOnce;
     dispatch_once(&lockOnce, ^{ connectionLock = [NSObject new]; });
 
     @synchronized(connectionLock) {
+        lastComponent = [component copy];
+        lastContainerID = [containerID copy];
         if (!connection) {
             xpc_connection_t created = CRCommonXPCConnectionCreateMachService(
                 CR_HELPERD_MACH_SERVICE.UTF8String, NULL, 0);
             if (!created)
                 return;
             connection = created;
+            NSUInteger myGeneration = ++generation;
             xpc_connection_set_event_handler(created, ^(xpc_object_t event) {
                 if (xpc_get_type(event) != XPC_TYPE_ERROR)
                     return;
+                __block BOOL reconnect = NO;
                 @synchronized(connectionLock) {
-                    connection = NULL;
+                    if (generation == myGeneration) {
+                        connection = NULL;
+                        reconnect = YES;
+                    }
                 }
+                if (!reconnect)
+                    return;
+                /* Re-register after helperd restarts. Generation checking
+                 * prevents old connection errors from replacing a new peer. */
+                dispatch_after(dispatch_time(DISPATCH_TIME_NOW, 2 * NSEC_PER_SEC),
+                    dispatch_get_global_queue(QOS_CLASS_UTILITY, 0), ^{
+                        NSString *retryComponent;
+                        NSString *retryContainer;
+                        @synchronized(connectionLock) {
+                            if (generation != myGeneration || connection)
+                                return;
+                            retryComponent = lastComponent;
+                            retryContainer = lastContainerID;
+                        }
+                        CRReportRuntimeInjection(retryComponent, retryContainer);
+                    });
             });
             xpc_connection_resume(created);
         }
