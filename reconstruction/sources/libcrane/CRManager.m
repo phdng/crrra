@@ -71,7 +71,11 @@ extern xpc_connection_t CRManagerXPCConnectionCreateMachService(
 - (instancetype)init
 {
     if ((self = [super init])) {
-        _applications = [NSMutableDictionary new];
+        /* Persist app switches across Preferences restarts in a dedicated
+         * preference domain, rather than the process-only registry. */
+        NSUserDefaults *store = [[NSUserDefaults alloc] initWithSuiteName:@"com.opa334.cranereconstruction.apps"];
+        NSDictionary *saved = [store objectForKey:@"applications"];
+        _applications = [saved isKindOfClass:NSDictionary.class] ? [saved mutableCopy] : [NSMutableDictionary new];
         _containerPaths = [NSMutableDictionary new];
         _observers = [NSHashTable weakObjectsHashTable];
         _queue = dispatch_queue_create("com.opa334.crane.manager", DISPATCH_QUEUE_SERIAL);
@@ -173,6 +177,9 @@ extern xpc_connection_t CRManagerXPCConnectionCreateMachService(
             self.applications[appID] = [settings mutableCopy];
         else
             [self.applications removeObjectForKey:appID];
+        NSUserDefaults *store = [[NSUserDefaults alloc] initWithSuiteName:@"com.opa334.cranereconstruction.apps"];
+        [store setObject:self.applications forKey:@"applications"];
+        [store synchronize];
     }
 }
 
@@ -212,7 +219,7 @@ extern xpc_connection_t CRManagerXPCConnectionCreateMachService(
         else
             containers[index] = container;
         app[CRAppSetting_Containers] = containers;
-        self.applications[appID] = app;
+        [self setApplicationSettings:app forApplicationWithIdentifier:appID];
     }
 }
 

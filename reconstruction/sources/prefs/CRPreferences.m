@@ -40,6 +40,7 @@
 - (id)specifierAtIndex:(NSUInteger)index;
 - (id)indexForIndexPath:(NSIndexPath *)indexPath;
 - (void)reloadSpecifier:(id)specifier;
+- (void)reloadSpecifiers;
 - (id)readPreferenceValue:(id)specifier;
 - (void)setPreferenceValue:(id)value specifier:(id)specifier;
 - (void)reloadSpecifierAtIndex:(NSUInteger)index;
@@ -91,86 +92,70 @@
     return self.craneRootSpecifiers;
 }
 
-@end
-
-/* ------------------------------------------------------------------------- */
-/* CRPActiveContainerListItemsController                                       */
-/* ------------------------------------------------------------------------- */
-
-/* Named by Root.plist as the detail controller of the "Active Container"
- * specifier, and confirmed by the recovered __objc_classlist at 0x59500. */
-@interface CRPActiveContainerListItemsController : UITableViewController
+/* The Preferences navigation stack expects a PSListController detail, not
+ * an unrelated UITableViewController. */
+@interface CRPActiveContainerListItemsController : PSListController
 @property (nonatomic, copy) NSString *applicationIdentifier;
-@property (nonatomic, copy) NSArray<NSString *> *containerIdentifiers;
-@property (nonatomic, copy) NSArray<NSString *> *containerNames;
+@property (nonatomic, strong) NSArray *craneActiveSpecifiers;
 @end
 
 @implementation CRPActiveContainerListItemsController
 
-- (void)viewDidLoad
+- (void)setSpecifier:(PSSpecifier *)specifier
 {
-    [super viewDidLoad];
-    [self reloadFromManager];
+    [super setSpecifier:specifier];
+    self.applicationIdentifier = [specifier propertyForKey:@"crane_applicationIdentifier"];
 }
 
-- (void)reloadFromManager
+- (id)specifiers
 {
-    CraneManager *manager = CraneManager.sharedManager;
-    NSArray *identifiers = [manager containerIdentifiersOfApplicationWithIdentifier:
-                            self.applicationIdentifier];
-    NSMutableArray *names = [NSMutableArray new];
-    for (NSString *identifier in identifiers) {
-        [names addObject:[manager displayNameForContainerWithIdentifier:identifier
-                                          ofApplicationWithIdentifier:self.applicationIdentifier
-                                               shouldUseShortVersion:NO]];
+    if (!self.craneActiveSpecifiers) {
+        CraneManager *manager = CraneManager.sharedManager;
+        NSMutableArray *rows = [NSMutableArray new];
+        NSMutableArray *identifiers = [[manager containerIdentifiersOfApplicationWithIdentifier:
+                                        self.applicationIdentifier] mutableCopy] ?: [NSMutableArray new];
+        if (![identifiers containsObject:CR_DEFAULT_CONTAINER_IDENTIFIER])
+            [identifiers insertObject:CR_DEFAULT_CONTAINER_IDENTIFIER atIndex:0];
+        NSString *active = [manager activeContainerIdentifierForApplicationWithIdentifier:
+                             self.applicationIdentifier];
+        for (NSString *identifier in identifiers) {
+            NSString *name = [identifier isEqualToString:CR_DEFAULT_CONTAINER_IDENTIFIER]
+                ? @"Default" : [manager displayNameForContainerWithIdentifier:identifier
+                               ofApplicationWithIdentifier:self.applicationIdentifier
+                                    shouldUseShortVersion:NO];
+            PSSpecifier *row = [PSSpecifier preferenceSpecifierNamed:
+                (name.length ? name : identifier) target:self set:NULL get:NULL
+                detail:NULL cell:13 edit:0];
+            [row setProperty:identifier forKey:@"crane_containerIdentifier"];
+            [row setName:[NSString stringWithFormat:@"%@%@",
+                [active isEqualToString:identifier] ? @"✓ " : @"", name ?: identifier]];
+            [row setButtonAction:@selector(selectActiveContainer:)];
+            [rows addObject:row];
+        }
+        self.craneActiveSpecifiers = rows;
+        @try {
+            [self setValue:rows forKey:@"_specifiers"];
+        } @catch (NSException *exception) {
+            NSLog(@"CranePrefs: Active Container backing failed: %@", exception);
+        }
+        NSLog(@"CranePrefs: Active Container app=%@ rows=%lu",
+              self.applicationIdentifier, (unsigned long)rows.count);
     }
-    self.containerIdentifiers = identifiers;
-    self.containerNames = names;
-    [self.tableView reloadData];
+    return self.craneActiveSpecifiers;
 }
 
-- (NSInteger)tableView:(UITableView *)tableView numberOfRowsInSection:(NSInteger)section
+- (void)selectActiveContainer:(PSSpecifier *)specifier
 {
-    return (NSInteger)self.containerIdentifiers.count;
+    NSString *identifier = [specifier propertyForKey:@"crane_containerIdentifier"];
+    if (!identifier.length || !self.applicationIdentifier.length)
+        return;
+    [[CraneManager sharedManager] setActiveContainerIdentifier:identifier
+                      forApplicationWithIdentifier:self.applicationIdentifier];
+    self.craneActiveSpecifiers = nil;
+    [self reloadSpecifiers];
 }
+@end
 
-- (UITableViewCell *)tableView:(UITableView *)tableView
-         cellForRowAtIndexPath:(NSIndexPath *)indexPath
-{
-    UITableViewCell *cell = [tableView dequeueReusableCellWithIdentifier:@"cell"];
-    if (!cell)
-        cell = [[UITableViewCell alloc] initWithStyle:UITableViewCellStyleDefault
-                                      reuseIdentifier:@"cell"];
-
-    NSString *identifier = self.containerIdentifiers[(NSUInteger)indexPath.row];
-    CraneManager *manager = CraneManager.sharedManager;
-    NSString *name = [manager displayNameForContainerWithIdentifier:identifier
-                                        ofApplicationWithIdentifier:self.applicationIdentifier
-                                             shouldUseShortVersion:NO];
-
-    /* The checkmark is SelectedContainerCheckmark from Crane.bundle/Icons. */
-    BOOL isActive = [[manager activeContainerIdentifierForApplicationWithIdentifier:
-                      self.applicationIdentifier] isEqualToString:identifier];
-    cell.accessoryType = isActive ? UITableViewCellAccessoryCheckmark
-                                 : UITableViewCellAccessoryNone;
-    cell.textLabel.text = name;
-    return cell;
-}
-
-- (void)tableView:(UITableView *)tableView didSelectRowAtIndexPath:(NSIndexPath *)indexPath
-{
-    NSString *identifier = self.containerIdentifiers[(NSUInteger)indexPath.row];
-    CraneManager *manager = CraneManager.sharedManager;
-    [manager setActiveContainerIdentifier:identifier
-              forApplicationWithIdentifier:self.applicationIdentifier
-                     reloadApplication:YES
-       usingBiometricsIfNeededWithSuccessHandler:^{
-        dispatch_async(dispatch_get_main_queue(), ^{
-            [self reloadFromManager];
-        });
-    }];
-    [tableView deselectRowAtIndexPath:indexPath animated:YES];
-}
 
 @end
 
@@ -325,6 +310,7 @@
                                                             cell:2
                                                             edit:0];
     [active setProperty:CRCContainer_ActiveContainer forKey:@"key"];
+    [active setProperty:self.applicationIdentifier forKey:@"crane_applicationIdentifier"];
     [active setProperty:CRCContainer_ActiveContainer forKey:@"detailControllerClass"];
     [active setProperty:@YES forKey:@"enabled"];
     [specifiers addObject:active];
