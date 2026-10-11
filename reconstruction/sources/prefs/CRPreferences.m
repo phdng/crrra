@@ -120,10 +120,16 @@
         [apps setDetailControllerClass:appListClass];
         [apps setProperty:@"CRPApplicationListSubcontrollerController" forKey:@"subcontrollerClass"];
         if (appsIndex != NSNotFound)
-            [rootRows replaceObjectAtIndex:appsIndex withObject:apps];
-        else
-            [rootRows insertObject:apps atIndex:0];
-        NSLog(@"CranePrefs: APPLICATIONS link installed index=%lu", (unsigned long)(appsIndex == NSNotFound ? 0 : appsIndex));
+            [rootRows removeObjectAtIndex:appsIndex];
+        /* Unlike the original CRPListController, our PSListController base
+         * does not own the original root-group normalization. A link placed
+         * before the first PSGroupCell is not reliably rendered during the
+         * initial table construction. Put the link in its own explicit group. */
+        PSSpecifier *applicationsGroup = [PSSpecifier emptyGroupSpecifier];
+        [rootRows insertObject:applicationsGroup atIndex:0];
+        [rootRows insertObject:apps atIndex:1];
+        NSLog(@"CranePrefs: APPLICATIONS group and link installed at root start; rows=%lu",
+              (unsigned long)rootRows.count);
         self.craneRootSpecifiers = rootRows;
         /* Avoid a direct _specifiers ivar reference: the private framework's
          * ivar-offset symbol is not exported by the SDK linker stub. KVC
