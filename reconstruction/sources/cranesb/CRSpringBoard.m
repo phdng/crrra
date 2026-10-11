@@ -31,6 +31,7 @@
 
 #import <UIKit/UIKit.h>
 #import <objc/runtime.h>
+#import <objc/message.h>
 
 #import "CRManager.h"
 #import "CRPaths.h"
@@ -226,27 +227,131 @@ static NSMutableDictionary *CRApplyEnvironmentChanges(NSMutableDictionary *envir
 static void CRRegisterInjectionCheckForProcess(id self, SEL _cmd, id process,
                                               NSString *containerID)
 {
-    /* [INFERRED] U-01. The original verifies through cranehelperd
-     * (verifySupportLoaded…, verifyCraneInsurance…). Not wired up here. */
     (void)self; (void)_cmd;
-    (void)process;
-    (void)containerID;
+    if (!process || !containerID.length) return;
+
+    /* CraneSB 0x18238 schedules verification only after the process has
+     * launched. 0x194EC then checks isRunning/pid and queries cranehelperd;
+     * 0x19608 only presents an error when no container ID is returned. */
+    __weak id weakProcess = process;
+    NSString *expectedContainer = [containerID copy];
+    void (^checkAfterLaunch)(void) = ^{
+        id launched = weakProcess;
+        if (!launched || ![launched respondsToSelector:@selector(isRunning)] ||
+            !((BOOL (*)(id, SEL))objc_msgSend)(launched, @selector(isRunning)) ||
+            ![launched respondsToSelector:@selector(pid)]) return;
+        pid_t pid = (pid_t)((int (*)(id, SEL))objc_msgSend)(launched, @selector(pid));
+        if (pid <= 0) return;
+        id<CRHelperServiceProtocol> proxy = (id<CRHelperServiceProtocol>)
+            [CraneManager.sharedManager cranehelperdGlobalSyncRemoteObjectProxy];
+        [proxy fetchActiveContainerIDForProcessWithPid:pid reply:^(NSString *actualContainer) {
+            /* The original compares a nonnil response but does not raise an
+             * alert for a mismatching ID; preserve that behavior. */
+            if (actualContainer) {
+                (void)[actualContainer isEqualToString:expectedContainer];
+                return;
+            }
+            /* The reconstructed XPC reply lacks the original second status
+             * parameter (0x19608). Do not misdiagnose a daemon failure as
+             * missing app injection until that status is recovered. */
+            NSLog(@"CraneSB: injection verification returned no container ID pid=%d expected=%@",
+                  pid, expectedContainer);
+        }];
+    };
+    SEL callbackSelector = NSSelectorFromString(@"_executeBlockAfterLaunchCompletes:");
+    if (![process respondsToSelector:callbackSelector])
+        callbackSelector = NSSelectorFromString(@"executeBlockAfterLaunchCompletes:");
+    if ([process respondsToSelector:callbackSelector])
+        ((void (*)(id, SEL, id))objc_msgSend)(process, callbackSelector, checkAfterLaunch);
 }
 
 /* crane_applyModificationsIfNeededToExecutionContext:withApplicationIdentifier:
  * is where CRApplyEnvironmentChanges is invoked, from sub_180F0.
  * Type encoding "@@:@@" is recovered verbatim from Crane 0x17A14. */
-static void CRApplyModificationsIfNeededToExecutionContext(id self, SEL _cmd,
-                                                          id executionContext,
-                                                          NSString *appID)
+static id CRApplyModificationsIfNeededToExecutionContext(id self, SEL _cmd,
+                                                        id executionContext,
+                                                        NSString *appID)
 {
     (void)self; (void)_cmd;
-    (void)executionContext;
-    /* The original mutates the private FBProcessExecutionContext's environment
-     * in place. That API is not recoverable, so the call site is not wired;
-     * CRApplyEnvironmentChanges above holds the full contract and is the piece
-     * that is transcribed. See final/KNOWN_DIFFERENCES.md D-04. */
-    (void)appID;
+    /* CraneSB 0x180F0: before SpringBoard has finished launching the
+     * execution context must not be changed. */
+    if (!hasFinishedLaunching || !appID.length)
+        return nil;
+
+    /* On iOS 13+ the original returns the container ID for the calling
+     * FBProcessManager launch hook to process. It does not set environment. */
+    if (kCFCoreFoundationVersionNumber >= 1665.15)
+        return CRContainerToRedirectTo(appID);
+
+    /* Pre-iOS 13 path from 0x180F0: update the execution context only if
+     * crane_applyEnvironmentChanges returned a different environment. */
+    SEL getEnvironment = @selector(environment);
+    SEL setEnvironment = @selector(setEnvironment:);
+    if (!executionContext ||
+        ![executionContext respondsToSelector:getEnvironment] ||
+        ![executionContext respondsToSelector:setEnvironment])
+        return nil;
+    NSDictionary *original = ((id (*)(id, SEL))objc_msgSend)(executionContext, getEnvironment);
+    NSMutableDictionary *updated = CRApplyEnvironmentChanges([original mutableCopy], appID);
+    if (!updated || [updated isEqual:original])
+        return nil;
+    NSString *containerID = updated[CR_ENV_CONTAINER_IDENTIFIER];
+    ((void (*)(id, SEL, id))objc_msgSend)(executionContext, setEnvironment, updated);
+    return containerID;
+}
+
+/* FBProcessManager launch interception, CraneSB 0x17DF4/0x17F14/0x1801C.
+ * Preserve the exact order: identify target, apply context change, call
+ * original, then register injection verification for a redirected process. */
+static id (*gOriginalBootstrapProcess)(id, SEL, id, BOOL, NSError **);
+static id (*gOriginalCreateProcess)(id, SEL, id);
+static id (*gOriginalCreateApplicationProcess)(id, SEL, NSString *, id);
+
+static NSString *CRLaunchApplicationIdentifier(id executionContext)
+{
+    id identity = [executionContext respondsToSelector:@selector(identity)]
+        ? ((id (*)(id, SEL))objc_msgSend)(executionContext, @selector(identity)) : nil;
+    return [identity respondsToSelector:@selector(embeddedApplicationIdentifier)]
+        ? ((id (*)(id, SEL))objc_msgSend)(identity, @selector(embeddedApplicationIdentifier)) : nil;
+}
+
+static id CRBootstrapProcess(id self, SEL command, id context, BOOL synchronously, NSError **error)
+{
+    NSString *appID = CRLaunchApplicationIdentifier(context);
+    NSString *container = CRApplyModificationsIfNeededToExecutionContext(self, command, context, appID);
+    id process = gOriginalBootstrapProcess
+        ? gOriginalBootstrapProcess(self, command, context, synchronously, error) : nil;
+    if (container.length && process) {
+        if (CRIsDylibLoaded(CR_LIB_SANDY))
+            CRRegisterInjectionCheckForProcess(self, command, process, container);
+        else
+            CRPresentLibSandyNotWorkingError();
+    }
+    return process;
+}
+
+static id CRCreateProcess(id self, SEL command, id context)
+{
+    NSString *container = CRApplyModificationsIfNeededToExecutionContext(
+        self, command, context, CRLaunchApplicationIdentifier(context));
+    id process = gOriginalCreateProcess ? gOriginalCreateProcess(self, command, context) : nil;
+    if (container.length && process) {
+        if (CRIsDylibLoaded(CR_LIB_SANDY))
+            CRRegisterInjectionCheckForProcess(self, command, process, container);
+        else
+            CRPresentLibSandyNotWorkingError();
+    }
+    return process;
+}
+
+static id CRCreateApplicationProcess(id self, SEL command, NSString *appID, id context)
+{
+    NSString *container = CRApplyModificationsIfNeededToExecutionContext(self, command, context, appID);
+    id process = gOriginalCreateApplicationProcess
+        ? gOriginalCreateApplicationProcess(self, command, appID, context) : nil;
+    if (container.length && process)
+        CRRegisterInjectionCheckForProcess(self, command, process, container);
+    return process;
 }
 
 /* crane_containerIdentifier on FBProcess, encoding "@@:" (Crane 0x17A14). */
@@ -423,10 +528,19 @@ static void CRInitSpringBoard(void)
     }
 
     if (fbProcessManager) {
-        /* Hook registration order is taken verbatim from 0x17A14. The bodies of
-         * the three launch hooks are not recovered here (see D-04); the two
-         * methods Crane adds are added, with the type encodings the original
-         * uses. */
+        /* Registration order follows the original CraneSB 0x17A14. */
+        SEL bootstrap = NSSelectorFromString(@"_bootstrapProcessWithExecutionContext:synchronously:error:");
+        SEL create = NSSelectorFromString(@"_createProcessWithExecutionContext:");
+        SEL application = NSSelectorFromString(@"createApplicationProcessForBundleID:withExecutionContext:");
+        if ([fbProcessManager instancesRespondToSelector:bootstrap])
+            MSHookMessageEx(fbProcessManager, bootstrap, (IMP)CRBootstrapProcess,
+                            (IMP *)&gOriginalBootstrapProcess);
+        if ([fbProcessManager instancesRespondToSelector:create])
+            MSHookMessageEx(fbProcessManager, create, (IMP)CRCreateProcess,
+                            (IMP *)&gOriginalCreateProcess);
+        if ([fbProcessManager instancesRespondToSelector:application])
+            MSHookMessageEx(fbProcessManager, application, (IMP)CRCreateApplicationProcess,
+                            (IMP *)&gOriginalCreateApplicationProcess);
         class_addMethod(fbProcessManager,
                         @selector(crane_applyModificationsIfNeededToExecutionContext:withApplicationIdentifier:),
                         (IMP)CRApplyModificationsIfNeededToExecutionContext,

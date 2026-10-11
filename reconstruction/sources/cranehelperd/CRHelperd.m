@@ -186,7 +186,11 @@ extern xpc_connection_t CRXPCConnectionCreateMachService(const char *name,
 
 - (void)fetchActiveContainerIDForProcessWithPid:(pid_t)pid reply:(void (^)(NSString *))reply
 {
-    reply(CR_DEFAULT_CONTAINER_IDENTIFIER);
+    /* CraneSB 0x194EC expects the container actually reported by the target
+     * process. This reconstruction has no live PID inspector. Returning
+     * DEFAULT would falsely claim a successful inspection for every PID. */
+    NSLog(@"CraneHelperd: PID %d container inspection unavailable", pid);
+    if (reply) reply(nil);
 }
 
 - (void)reloadApplicationWithIdentifier:(NSString *)appID
