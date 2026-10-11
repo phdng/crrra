@@ -32,9 +32,7 @@
 @interface PSViewController : UIViewController
 @end
 
-@interface PSListController : PSViewController {
-    NSMutableArray *_specifiers; /* Preferences.framework's actual table backing */
-}
+@interface PSListController : PSViewController
 - (id)specifiers;
 - (NSArray *)loadSpecifiersFromPlistName:(NSString *)name target:(id)target;
 - (id)specifierAtIndex:(NSUInteger)index;
@@ -62,6 +60,7 @@
 /* ------------------------------------------------------------------------- */
 
 @interface CRPRootListController : PSListController
+@property (nonatomic, strong) NSArray *craneRootSpecifiers;
 @end
 
 @implementation CRPRootListController
@@ -70,15 +69,23 @@
 {
     /* Explicit loading is required: NSPrincipalClass alone does not load
      * Root.plist and Settings otherwise displays an empty pane. */
-    if (!_specifiers) {
+    if (!self.craneRootSpecifiers) {
         NSBundle *bundle = [NSBundle bundleForClass:[self class]];
         NSLog(@"CranePrefs: root controller loaded; bundle=%@; Root.plist=%@",
               bundle.bundlePath, [bundle pathForResource:@"Root" ofType:@"plist"]);
-        _specifiers = [self loadSpecifiersFromPlistName:@"Root" target:self];
+        self.craneRootSpecifiers = [self loadSpecifiersFromPlistName:@"Root" target:self];
+        /* Avoid a direct _specifiers ivar reference: the private framework's
+         * ivar-offset symbol is not exported by the SDK linker stub. KVC
+         * resolves the ivar in the installed Preferences.framework at runtime. */
+        @try {
+            [self setValue:self.craneRootSpecifiers forKey:@"_specifiers"];
+        } @catch (NSException *exception) {
+            NSLog(@"CranePrefs: unable to install table specifiers: %@", exception);
+        }
         NSLog(@"CranePrefs: root specifier count=%lu",
-              (unsigned long)_specifiers.count);
+              (unsigned long)self.craneRootSpecifiers.count);
     }
-    return _specifiers;
+    return self.craneRootSpecifiers;
 }
 
 @end
