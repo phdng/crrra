@@ -223,6 +223,124 @@
 }
 @end
 
+/* Initial container detail controller reconstructed from CranePrefs 0x8920,
+ * 0xEF38, 0xF0EC and 0xF268. Advanced groups remain unsupported. */
+@interface CRPContainerConfigurationListController : PSListController
+@property (nonatomic, copy) NSString *applicationIdentifier;
+@property (nonatomic, copy) NSString *containerIdentifier;
+@property (nonatomic, strong) NSArray *craneContainerSpecifiers;
+@end
+
+@implementation CRPContainerConfigurationListController
+- (void)viewDidLoad
+{
+    [self specifiers];
+    [super viewDidLoad];
+}
+
+- (void)viewWillAppear:(BOOL)animated
+{
+    [self specifiers];
+    [super viewWillAppear:animated];
+}
+
+- (void)setSpecifier:(PSSpecifier *)specifier
+{
+    NSString *appID = [specifier propertyForKey:@"applicationIdentifier"];
+    NSString *containerID = [specifier propertyForKey:@"containerIdentifier"];
+    if (![appID isEqualToString:self.applicationIdentifier] ||
+        ![containerID isEqualToString:self.containerIdentifier]) {
+        self.applicationIdentifier = appID;
+        self.containerIdentifier = containerID;
+        self.craneContainerSpecifiers = nil;
+        @try { [self setValue:nil forKey:@"_specifiers"]; }
+        @catch (__unused NSException *exception) {}
+    }
+    [super setSpecifier:specifier];
+}
+
+- (id)specifiers
+{
+    if (!self.craneContainerSpecifiers) {
+        CraneManager *manager = CraneManager.sharedManager;
+        NSDictionary *settings = [manager containerSettingsForContainerWithIdentifier:
+            self.containerIdentifier ofApplicationWithIdentifier:self.applicationIdentifier];
+        NSString *name = settings[CRCContainer_Name] ?: self.containerIdentifier ?: @"Container";
+        BOOL isActive = [[manager activeContainerIdentifierForApplicationWithIdentifier:
+            self.applicationIdentifier] isEqualToString:self.containerIdentifier];
+        self.title = name;
+        NSMutableArray *rows = [NSMutableArray new];
+        PSSpecifier *group = [PSSpecifier emptyGroupSpecifier];
+        [group setName:name];
+        [rows addObject:group];
+        PSSpecifier *active = [PSSpecifier preferenceSpecifierNamed:
+            (isActive ? @"✓ Active Container" : @"Set as Active Container")
+            target:self set:NULL get:NULL detail:NULL cell:13 edit:0];
+        [active setButtonAction:@selector(makeActiveContainer)];
+        [rows addObject:active];
+        PSSpecifier *rename = [PSSpecifier preferenceSpecifierNamed:@"Rename Container"
+            target:self set:NULL get:NULL detail:NULL cell:13 edit:0];
+        [rename setButtonAction:@selector(renameContainer)];
+        [rows addObject:rename];
+        self.craneContainerSpecifiers = rows;
+    }
+    @try { [self setValue:self.craneContainerSpecifiers forKey:@"_specifiers"]; }
+    @catch (NSException *exception) {
+        NSLog(@"CranePrefs: container detail backing failed: %@", exception);
+    }
+    return self.craneContainerSpecifiers;
+}
+
+- (void)makeActiveContainer
+{
+    if (!self.applicationIdentifier.length || !self.containerIdentifier.length) return;
+    [CraneManager.sharedManager setActiveContainerIdentifier:self.containerIdentifier
+        forApplicationWithIdentifier:self.applicationIdentifier];
+    NSLog(@"CranePrefs: container detail active app=%@ id=%@",
+          self.applicationIdentifier, self.containerIdentifier);
+    self.craneContainerSpecifiers = nil;
+    @try { [self setValue:nil forKey:@"_specifiers"]; }
+    @catch (__unused NSException *exception) {}
+    [self specifiers];
+    [self reloadSpecifiers];
+}
+
+- (void)renameContainer
+{
+    if (!self.applicationIdentifier.length || !self.containerIdentifier.length) return;
+    UIAlertController *alert = [UIAlertController alertControllerWithTitle:@"Rename Container"
+        message:nil preferredStyle:UIAlertControllerStyleAlert];
+    [alert addTextFieldWithConfigurationHandler:^(UITextField *field) {
+        NSDictionary *settings = [CraneManager.sharedManager containerSettingsForContainerWithIdentifier:
+            self.containerIdentifier ofApplicationWithIdentifier:self.applicationIdentifier];
+        field.text = settings[CRCContainer_Name];
+    }];
+    __weak typeof(self) weakSelf = self;
+    [alert addAction:[UIAlertAction actionWithTitle:CRLocalize(@"CANCEL")
+        style:UIAlertActionStyleCancel handler:nil]];
+    [alert addAction:[UIAlertAction actionWithTitle:CRLocalize(@"SAVE")
+        style:UIAlertActionStyleDefault handler:^(__unused UIAlertAction *action) {
+        typeof(self) strongSelf = weakSelf;
+        if (!strongSelf) return;
+        NSString *name = [alert.textFields.firstObject.text stringByTrimmingCharactersInSet:
+            NSCharacterSet.whitespaceAndNewlineCharacterSet];
+        if (!name.length) return;
+        CraneManager *manager = CraneManager.sharedManager;
+        NSMutableDictionary *settings = [[manager containerSettingsForContainerWithIdentifier:
+            strongSelf.containerIdentifier ofApplicationWithIdentifier:strongSelf.applicationIdentifier] mutableCopy];
+        settings[CRCContainer_Name] = name;
+        [manager setContainerSettings:settings forContainerWithIdentifier:strongSelf.containerIdentifier
+            ofApplicationWithIdentifier:strongSelf.applicationIdentifier];
+        strongSelf.craneContainerSpecifiers = nil;
+        @try { [strongSelf setValue:nil forKey:@"_specifiers"]; }
+        @catch (__unused NSException *exception) {}
+        [strongSelf specifiers];
+        [strongSelf reloadSpecifiers];
+    }]];
+    [self presentViewController:alert animated:YES completion:nil];
+}
+@end
+
 /* Minimal APPLICATIONS list for the recovered PSLinkListCell entry. The
  * original uses a custom app-list class; enumerate installed proxies at
  * runtime instead of linking unavailable private SDK symbols. */
@@ -473,6 +591,9 @@
                                                 detail:NULL
                                                   cell:2
                                                   edit:0];
+        [row setDetailControllerClass:CRPContainerConfigurationListController.class];
+        [row setProperty:self.applicationIdentifier forKey:@"applicationIdentifier"];
+        [row setProperty:identifier forKey:@"containerIdentifier"];
         [row setProperty:identifier forKey:@"crane_containerIdentifier"];
         [specifiers addObject:row];
     }
