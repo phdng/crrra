@@ -288,7 +288,18 @@
      * CraneManager observer around the write (CranePrefs 0xA7EC). */
     CraneManager *manager = CraneManager.sharedManager;
     [manager removeObserver:self];
-    self.applicationSettings[key] = value;
+    if (!key.length || !self.applicationIdentifier.length) {
+        NSLog(@"CranePrefs: refusing preference write without key/app ID (key=%@ app=%@)",
+              key, self.applicationIdentifier);
+        [manager addObserver:self];
+        return;
+    }
+    NSLog(@"CranePrefs: write preference app=%@ key=%@ value=%@",
+          self.applicationIdentifier, key, value);
+    if (value)
+        self.applicationSettings[key] = value;
+    else
+        [self.applicationSettings removeObjectForKey:key];
     [manager setApplicationSettings:[self.applicationSettings copy]
         forApplicationWithIdentifier:self.applicationIdentifier];
     [manager addObserver:self];
@@ -489,7 +500,9 @@
     [self setPreferenceValue:value specifier:specifier];
     /* Enabling system accounts invalidates the Game Center specifier, which is
      * why the original caches it in an ivar. */
-    [self reloadSpecifier:self.gameCenterSupportEnabledSpecifier];
+    if (self.gameCenterSupportEnabledSpecifier &&
+        [self.craneConfigurationSpecifiers containsObject:self.gameCenterSupportEnabledSpecifier])
+        [self reloadSpecifier:self.gameCenterSupportEnabledSpecifier];
 }
 
 - (void)setGameCenterSupportValue:(id)value specifier:(id)specifier
