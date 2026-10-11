@@ -401,6 +401,7 @@ static void CRKeychainMigrationSucceeded(CFNotificationCenterRef center, void *o
 
 static void CRInitSpringBoard(void)
 {
+    NSLog(@"CraneSB: SpringBoard initialization reached");
     hasFinishedLaunching = NO;
 
     /* Restore CraneSB's per-app badge-count snapshot (0xAE20). */
@@ -459,7 +460,9 @@ static void CRInitSpringBoard(void)
                                     NULL,
                                     CFNotificationSuspensionBehaviorDeliverImmediately);
 
-    if (CRAppShortcutEnabled())
+    BOOL shortcutsEnabled = CRAppShortcutEnabled();
+    NSLog(@"CraneSB: application shortcuts enabled=%@", shortcutsEnabled ? @"YES" : @"NO");
+    if (shortcutsEnabled)
         CRInitApplicationShortcutHooks();
 
     /* initNotificationSupport / initCRBadgeContextMenuActionView remain

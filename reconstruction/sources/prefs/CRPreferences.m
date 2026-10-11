@@ -69,8 +69,14 @@
 {
     /* Explicit loading is required: NSPrincipalClass alone does not load
      * Root.plist and Settings otherwise displays an empty pane. */
-    if (!self.craneRootSpecifiers)
+    if (!self.craneRootSpecifiers) {
+        NSBundle *bundle = [NSBundle bundleForClass:[self class]];
+        NSLog(@"CranePrefs: root controller loaded; bundle=%@; Root.plist=%@",
+              bundle.bundlePath, [bundle pathForResource:@"Root" ofType:@"plist"]);
         self.craneRootSpecifiers = [self loadSpecifiersFromPlistName:@"Root" target:self];
+        NSLog(@"CranePrefs: root specifier count=%lu",
+              (unsigned long)self.craneRootSpecifiers.count);
+    }
     return self.craneRootSpecifiers;
 }
 
