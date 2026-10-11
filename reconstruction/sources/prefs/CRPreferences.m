@@ -36,6 +36,8 @@
 @interface PSListController : PSViewController
 - (id)specifiers;
 - (void)setSpecifier:(id)specifier;
+- (id)specifier;
+- (void)tableView:(UITableView *)tableView didSelectRowAtIndexPath:(NSIndexPath *)indexPath;
 - (NSArray *)loadSpecifiersFromPlistName:(NSString *)name target:(id)target;
 - (id)specifierAtIndex:(NSUInteger)index;
 - (id)indexForIndexPath:(NSIndexPath *)indexPath;
@@ -63,6 +65,7 @@
 - (void)setShortTitleDictionary:(id)value;
 - (void)setValues:(id)value;
 - (void)loadValuesAndTitlesFromDataSource;
+- (NSArray *)values;
 @end
 
 /* ------------------------------------------------------------------------- */
@@ -98,26 +101,29 @@
               bundle.bundlePath, [bundle pathForResource:@"Root" ofType:@"plist"]);
         NSArray *loaded = [self loadSpecifiersFromPlistName:@"Root" target:self];
         NSMutableArray *rootRows = [loaded mutableCopy] ?: [NSMutableArray new];
-        BOOL hasApplications = NO;
-        for (PSSpecifier *row in rootRows) {
-            if ([[row propertyForKey:@"subcontrollerClass"] isEqual:@"CRPApplicationListSubcontrollerController"] ||
-                [[row propertyForKey:@"label"] isEqual:@"APPLICATIONS"] ||
+        /* Root.plist's first entry is a PSLinkListCell, handled by AltList
+         * in the original. The current loader may produce a deferred/blank
+         * cell until Settings relayout. Replace it with an immediately
+         * usable link, preserving every later Root.plist preference. */
+        NSUInteger appsIndex = NSNotFound;
+        for (NSUInteger i = 0; i < rootRows.count; ++i) {
+            PSSpecifier *row = rootRows[i];
+            if ([[row propertyForKey:@"label"] isEqual:@"APPLICATIONS"] ||
                 [row.name isEqualToString:CRLocalize(@"APPLICATIONS")]) {
-                hasApplications = YES;
+                appsIndex = i;
                 break;
             }
         }
-        if (!hasApplications) {
-            /* The root plist's dynamic section predicate can hide the link
-             * before app enumeration has initialized. Keep navigation available. */
-            PSSpecifier *apps = [PSSpecifier preferenceSpecifierNamed:CRLocalize(@"APPLICATIONS")
-                target:self set:NULL get:NULL
-                detail:NSClassFromString(@"CRPApplicationListSubcontrollerController") cell:2 edit:0];
-            [apps setDetailControllerClass:NSClassFromString(@"CRPApplicationListSubcontrollerController")];
-            [apps setProperty:@"CRPApplicationListSubcontrollerController" forKey:@"subcontrollerClass"];
+        Class appListClass = NSClassFromString(@"CRPApplicationListSubcontrollerController");
+        PSSpecifier *apps = [PSSpecifier preferenceSpecifierNamed:CRLocalize(@"APPLICATIONS")
+            target:self set:NULL get:NULL detail:appListClass cell:2 edit:0];
+        [apps setDetailControllerClass:appListClass];
+        [apps setProperty:@"CRPApplicationListSubcontrollerController" forKey:@"subcontrollerClass"];
+        if (appsIndex != NSNotFound)
+            [rootRows replaceObjectAtIndex:appsIndex withObject:apps];
+        else
             [rootRows insertObject:apps atIndex:0];
-            NSLog(@"CranePrefs: restored missing APPLICATIONS navigation row");
-        }
+        NSLog(@"CranePrefs: APPLICATIONS link installed index=%lu", (unsigned long)(appsIndex == NSNotFound ? 0 : appsIndex));
         self.craneRootSpecifiers = rootRows;
         /* Avoid a direct _specifiers ivar reference: the private framework's
          * ivar-offset symbol is not exported by the SDK linker stub. KVC
@@ -137,120 +143,52 @@
 
 @end
 
-/* The Preferences navigation stack expects a PSListController detail, not
- * an unrelated UITableViewController. */
-@interface CRPActiveContainerListItemsController : PSListController
-@property (nonatomic, copy) NSString *applicationIdentifier;
-@property (nonatomic, strong) NSArray *craneActiveSpecifiers;
+/* The original CRPActiveContainerListItemsController inherits the built-in
+ * PSListItemsController; Preferences handles the selected value and calls
+ * the parent specifier's setActiveContainer:specifier: action (0x74D8/77CC).
+ * Recreating the selection in PSListController bypassed that contract. */
+@interface PSListItemsController : PSListController
+@end
+
+@interface CRPActiveContainerListItemsController : PSListItemsController
+- (NSString *)applicationIdentifier;
 @end
 
 @implementation CRPActiveContainerListItemsController
-
-- (void)viewDidLoad
+- (NSString *)applicationIdentifier
 {
-    [self specifiers];
-    [super viewDidLoad];
+    return [[self specifier] propertyForKey:@"applicationIdentifier"];
 }
 
-- (void)viewWillAppear:(BOOL)animated
-{
-    /* PSListController needs its backing before superclass layout runs. */
-    [self specifiers];
-    [super viewWillAppear:animated];
-}
-
-- (void)setSpecifier:(PSSpecifier *)specifier
-{
-    NSString *identifier = [specifier propertyForKey:@"crane_applicationIdentifier"];
-    if (!identifier.length)
-        identifier = [specifier propertyForKey:@"applicationIdentifier"];
-    if (identifier.length && ![identifier isEqualToString:self.applicationIdentifier]) {
-        self.applicationIdentifier = identifier;
-        self.craneActiveSpecifiers = nil;
-        @try { [self setValue:nil forKey:@"_specifiers"]; }
-        @catch (__unused NSException *exception) {}
-    }
-    [super setSpecifier:specifier];
-}
-
-- (id)specifiers
-{
-    if (!self.craneActiveSpecifiers) {
-        CraneManager *manager = CraneManager.sharedManager;
-        NSMutableArray *rows = [NSMutableArray new];
-        NSMutableArray *identifiers = [[manager containerIdentifiersOfApplicationWithIdentifier:
-                                        self.applicationIdentifier] mutableCopy] ?: [NSMutableArray new];
-        if (![identifiers containsObject:CR_DEFAULT_CONTAINER_IDENTIFIER])
-            [identifiers insertObject:CR_DEFAULT_CONTAINER_IDENTIFIER atIndex:0];
-        NSString *active = [manager activeContainerIdentifierForApplicationWithIdentifier:
-                             self.applicationIdentifier];
-        for (NSString *identifier in identifiers) {
-            NSString *name = [identifier isEqualToString:CR_DEFAULT_CONTAINER_IDENTIFIER]
-                ? @"Default" : [manager displayNameForContainerWithIdentifier:identifier
-                               ofApplicationWithIdentifier:self.applicationIdentifier
-                                    shouldUseShortVersion:NO];
-            PSSpecifier *row = [PSSpecifier preferenceSpecifierNamed:
-                (name.length ? name : identifier) target:self set:NULL get:NULL
-                detail:NULL cell:2 edit:0];
-            [row setProperty:identifier forKey:@"crane_containerIdentifier"];
-            [row setName:[NSString stringWithFormat:@"%@%@",
-                [active isEqualToString:identifier] ? @"✓ " : @"", name ?: identifier]];
-            [rows addObject:row];
-        }
-        self.craneActiveSpecifiers = rows;
-        @try {
-            [self setValue:rows forKey:@"_specifiers"];
-        } @catch (NSException *exception) {
-            NSLog(@"CranePrefs: Active Container backing failed: %@", exception);
-        }
-        NSLog(@"CranePrefs: Active Container app=%@ rows=%lu",
-              self.applicationIdentifier, (unsigned long)rows.count);
-    }
-    @try { [self setValue:self.craneActiveSpecifiers forKey:@"_specifiers"]; }
-    @catch (NSException *exception) { NSLog(@"CranePrefs: active backing refresh failed: %@", exception); }
-    return self.craneActiveSpecifiers;
-}
-
-/* CranePrefs 0x74D8 selects by table row and checks biometric protection. */
 - (void)tableView:(UITableView *)tableView didSelectRowAtIndexPath:(NSIndexPath *)indexPath
 {
-    [tableView deselectRowAtIndexPath:indexPath animated:YES];
-    NSUInteger index = (NSUInteger)[self indexForIndexPath:indexPath];
-    PSSpecifier *specifier = [self specifierAtIndex:index];
-    if (!specifier) return;
-    NSString *identifier = [specifier propertyForKey:@"crane_containerIdentifier"];
-    if (!identifier.length || !self.applicationIdentifier.length)
+    PSSpecifier *parent = [self specifier];
+    NSArray *values = [parent values];
+    NSUInteger row = (NSUInteger)indexPath.row;
+    if (row >= values.count) {
+        [tableView deselectRowAtIndexPath:indexPath animated:YES];
         return;
-    CraneManager *manager = CraneManager.sharedManager;
-    NSDictionary *settings = [manager containerSettingsForContainerWithIdentifier:identifier
-        ofApplicationWithIdentifier:self.applicationIdentifier];
-    __weak typeof(self) weakSelf = self;
-    void (^selectContainer)(void) = ^{
-        [manager setActiveContainerIdentifier:identifier
-            forApplicationWithIdentifier:weakSelf.applicationIdentifier];
-        NSLog(@"CranePrefs: active selection persisted app=%@ desired=%@ actual=%@",
-              weakSelf.applicationIdentifier, identifier,
-              [manager activeContainerIdentifierForApplicationWithIdentifier:weakSelf.applicationIdentifier]);
-        dispatch_async(dispatch_get_main_queue(), ^{
-            typeof(self) strongSelf = weakSelf;
-            if (!strongSelf) return;
-            strongSelf.craneActiveSpecifiers = nil;
-            @try { [strongSelf setValue:nil forKey:@"_specifiers"]; }
-            @catch (__unused NSException *exception) {}
-            [strongSelf specifiers];
-            [strongSelf reloadSpecifiers];
-        });
-    };
-    NSLog(@"CranePrefs: select active container app=%@ id=%@ biometric=%@",
-          self.applicationIdentifier, identifier,
-          [settings[@"requireBiometricAuthentication"] boolValue] ? @"YES" : @"NO");
-    if ([settings[@"requireBiometricAuthentication"] boolValue]) {
-        NSString *reason = [NSString stringWithFormat:CRLocalize(@"SET_ACTIVE_CONTAINER_DESCRIPTION"),
-            specifier.name ?: identifier];
-        CRRequestAuthentication(reason, selectContainer);
-    } else {
-        selectContainer();
     }
+    NSString *containerID = values[row];
+    NSString *appID = [self applicationIdentifier];
+    if (!appID.length || ![containerID isKindOfClass:NSString.class]) {
+        [tableView deselectRowAtIndexPath:indexPath animated:YES];
+        return;
+    }
+    NSDictionary *settings = [CraneManager.sharedManager
+        containerSettingsForContainerWithIdentifier:containerID
+        ofApplicationWithIdentifier:appID];
+    if ([settings[@"requireBiometricAuthentication"] boolValue]) {
+        [tableView deselectRowAtIndexPath:indexPath animated:YES];
+        PSSpecifier *rowSpecifier = [self specifierAtIndex:(NSUInteger)[self indexForIndexPath:indexPath]];
+        NSString *reason = [NSString stringWithFormat:CRLocalize(@"SET_ACTIVE_CONTAINER_DESCRIPTION"),
+            rowSpecifier.name ?: containerID];
+        CRRequestAuthentication(reason, ^{
+            [super tableView:tableView didSelectRowAtIndexPath:indexPath];
+        });
+        return;
+    }
+    [super tableView:tableView didSelectRowAtIndexPath:indexPath];
 }
 @end
 
