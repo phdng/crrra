@@ -45,6 +45,7 @@
 - (void)setPreferenceValue:(id)value specifier:(id)specifier;
 - (void)reloadSpecifierAtIndex:(NSUInteger)index;
 - (void)replaceContiguousSpecifiers:(NSArray *)oldSpecifiers withSpecifiers:(NSArray *)newSpecifiers animated:(BOOL)animated;
+- (void)insertSpecifier:(id)specifier atIndex:(NSUInteger)index animated:(BOOL)animated;
 @end
 
 @interface PSSpecifier : NSObject
@@ -524,7 +525,33 @@
             [merged insertObjects:updated atIndexes:positions];
             self.craneConfigurationSpecifiers = merged;
         }
-    } else {
+    } else if (!previous.count && updated.count &&
+               [self respondsToSelector:@selector(insertSpecifier:atIndex:animated:)]) {
+        /* With zero existing containers the original replacement range is
+         * empty. Insert new rows immediately before the Add button. */
+        NSUInteger addIndex = NSNotFound;
+        for (NSUInteger i = 0; i < old.count; ++i) {
+            PSSpecifier *candidate = old[i];
+            if ([candidate.name isEqualToString:CRLocalize(@"ADD")]) {
+                addIndex = i;
+                break;
+            }
+        }
+        if (addIndex != NSNotFound) {
+            NSMutableArray *merged = [old mutableCopy];
+            NSUInteger position = addIndex;
+            for (PSSpecifier *row in updated) {
+                [self insertSpecifier:row atIndex:position animated:YES];
+                [merged insertObject:row atIndex:position++];
+            }
+            self.craneConfigurationSpecifiers = merged;
+        } else {
+            self.craneConfigurationSpecifiers = nil;
+            @try { [self setValue:nil forKey:@"_specifiers"]; }
+            @catch (__unused NSException *exception) {}
+            [self reloadSpecifiers];
+        }
+    } else if (previous.count || updated.count) {
         self.craneConfigurationSpecifiers = nil;
         @try { [self setValue:nil forKey:@"_specifiers"]; }
         @catch (__unused NSException *exception) {}
