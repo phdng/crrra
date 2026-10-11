@@ -460,6 +460,7 @@
 @property (nonatomic, strong) NSMutableDictionary *applicationSettings;
 @property (nonatomic, strong) PSSpecifier *gameCenterSupportEnabledSpecifier;
 @property (nonatomic, strong) NSArray *craneConfigurationSpecifiers;
+@property (nonatomic, assign) BOOL craneDidCompleteFirstLayout;
 @end
 
 @implementation CRPApplicationConfigurationListController
@@ -583,15 +584,30 @@
 
 - (void)viewWillAppear:(BOOL)animated
 {
-    /* PSListController needs its backing before superclass layout runs. */
     [self specifiers];
     [super viewWillAppear:animated];
 }
+
+- (void)viewDidAppear:(BOOL)animated
+{
+    [super viewDidAppear:animated];
+    /* A freshly pushed Preferences detail controller can complete its initial
+     * table layout before the incoming app-specific specifiers are attached. */
+    if (!self.craneDidCompleteFirstLayout && self.applicationIdentifier.length) {
+        self.craneDidCompleteFirstLayout = YES;
+        [self specifiers];
+        [self reloadSpecifiers];
+        NSLog(@"CranePrefs: first layout refreshed app=%@ rows=%lu",
+              self.applicationIdentifier, (unsigned long)self.craneConfigurationSpecifiers.count);
+    }
+}
+
 - (void)setSpecifier:(PSSpecifier *)specifier
 {
     NSString *identifier = [specifier propertyForKey:@"crane_applicationIdentifier"];
     if (identifier.length && ![identifier isEqualToString:self.applicationIdentifier]) {
         self.applicationIdentifier = identifier;
+        self.craneDidCompleteFirstLayout = NO;
         self.craneConfigurationSpecifiers = nil;
         @try { [self setValue:nil forKey:@"_specifiers"]; }
         @catch (__unused NSException *exception) {}
