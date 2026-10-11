@@ -186,6 +186,20 @@ extern xpc_connection_t CRManagerXPCConnectionCreateMachService(
         NSLog(@"CraneManager: registry write app=%@ sync=%@", appID,
               synced ? @"YES" : @"NO");
     }
+    /* CranePrefs 0x7BD4 / 0x7CC8 receive manager notifications.
+     * Snapshot the weak observer set and notify outside the registry lock. */
+    NSArray *observers = nil;
+    @synchronized(self.observers) {
+        observers = self.observers.allObjects;
+    }
+    SEL changed = @selector(didChangeSettingsForApplicationWithIdentifier:);
+    SEL containersChanged = @selector(didChangeContainersOfApplicationWithIdentifier:);
+    for (id observer in observers) {
+        if ([observer respondsToSelector:changed])
+            ((void (*)(id, SEL, id))objc_msgSend)(observer, changed, appID);
+        if ([observer respondsToSelector:containersChanged])
+            ((void (*)(id, SEL, id))objc_msgSend)(observer, containersChanged, appID);
+    }
 }
 
 - (NSDictionary *)containerSettingsForContainerWithIdentifier:(NSString *)containerID
@@ -207,8 +221,8 @@ extern xpc_connection_t CRManagerXPCConnectionCreateMachService(
     if (!appID || !containerID)
         return;
     @synchronized(self) {
-        NSMutableDictionary *app = [self applicationSettingsForApplicationWithIdentifier:appID];
-        if (!app.count)
+        NSMutableDictionary *app = [[self applicationSettingsForApplicationWithIdentifier:appID] mutableCopy];
+        if (!app)
             app = [NSMutableDictionary new];
         NSMutableArray *containers = [app[CRAppSetting_Containers] mutableCopy];
         if (!containers)
@@ -225,6 +239,13 @@ extern xpc_connection_t CRManagerXPCConnectionCreateMachService(
             containers[index] = container;
         app[CRAppSetting_Containers] = containers;
         [self setApplicationSettings:app forApplicationWithIdentifier:appID];
+    }
+    NSArray *observers = nil;
+    @synchronized(self.observers) { observers = self.observers.allObjects; }
+    SEL changed = @selector(didChangeContainerSettingsForContainerWithIdentifier:onApplicationWithIdentifier:);
+    for (id observer in observers) {
+        if ([observer respondsToSelector:changed])
+            ((void (*)(id, SEL, id, id))objc_msgSend)(observer, changed, containerID, appID);
     }
 }
 

@@ -232,6 +232,31 @@
 @end
 
 @implementation CRPContainerConfigurationListController
+
+- (instancetype)init
+{
+    if ((self = [super init]))
+        [CraneManager.sharedManager addObserver:self];
+    return self;
+}
+
+- (void)dealloc
+{
+    [CraneManager.sharedManager removeObserver:self];
+}
+
+- (void)didChangeContainerSettingsForContainerWithIdentifier:(NSString *)containerID
+                            onApplicationWithIdentifier:(NSString *)appID
+{
+    if (![containerID isEqualToString:self.containerIdentifier] ||
+        ![appID isEqualToString:self.applicationIdentifier]) return;
+    dispatch_async(dispatch_get_main_queue(), ^{
+        self.craneContainerSpecifiers = nil;
+        @try { [self setValue:nil forKey:@"_specifiers"]; }
+        @catch (__unused NSException *exception) {}
+        [self reloadSpecifiers];
+    });
+}
 - (void)viewDidLoad
 {
     [self specifiers];
@@ -433,6 +458,28 @@
 
 @implementation CRPApplicationConfigurationListController
 
+- (void)dealloc
+{
+    [CraneManager.sharedManager removeObserver:self];
+}
+
+- (void)didChangeSettingsForApplicationWithIdentifier:(NSString *)appID
+{
+    if (![appID isEqualToString:self.applicationIdentifier]) return;
+    [self loadApplicationSettings];
+    dispatch_async(dispatch_get_main_queue(), ^{
+        self.craneConfigurationSpecifiers = nil;
+        @try { [self setValue:nil forKey:@"_specifiers"]; }
+        @catch (__unused NSException *exception) {}
+        [self reloadSpecifiers];
+    });
+}
+
+- (void)didChangeContainersOfApplicationWithIdentifier:(NSString *)appID
+{
+    [self didChangeSettingsForApplicationWithIdentifier:appID];
+}
+
 - (void)viewDidLoad
 {
     [self specifiers];
@@ -461,6 +508,7 @@
 - (id)init
 {
     if ((self = [super init])) {
+        [CraneManager.sharedManager addObserver:self];
         _applicationSettings = [NSMutableDictionary new];
         [self loadApplicationSettings];
     }
