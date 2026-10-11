@@ -75,18 +75,23 @@ extern xpc_connection_t CRXPCConnectionCreateMachService(const char *name,
 /* Internal, non-protocol helper (the protocol method is the reply variant). */
 - (id)storedPreferenceValueForKey:(NSString *)key
 {
-    return [[NSUserDefaults standardUserDefaults] objectForKey:key];
+    if (!key.length)
+        return nil;
+    return CFBridgingRelease(CFPreferencesCopyAppValue(
+        (__bridge CFStringRef)key, (__bridge CFStringRef)CR_PREFS_DOMAIN));
 }
 
 - (void)storePreferenceValue:(id)value forKey:(NSString *)key
 {
     if (!key)
         return;
-    NSUserDefaults *defaults = NSUserDefaults.standardUserDefaults;
-    if (value)
-        [defaults setObject:value forKey:key];
-    else
-        [defaults removeObjectForKey:key];
+    /* Root.plist and CraneManager use a shared explicit preferences domain;
+     * the daemon's standardUserDefaults belongs to a different process. */
+    CFPreferencesSetAppValue((__bridge CFStringRef)key,
+        (__bridge CFPropertyListRef)value,
+        (__bridge CFStringRef)CR_PREFS_DOMAIN);
+    if (!CFPreferencesAppSynchronize((__bridge CFStringRef)CR_PREFS_DOMAIN))
+        NSLog(@"Crane helper: failed to synchronize global preference key=%@", key);
     /* The preference domain is com.opa334.craneprefs; posting the reload
      * notification keeps the settings bundle and the injected daemons in sync,
      * which is what Root.plist's PostNotification does on every switch. */

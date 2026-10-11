@@ -576,10 +576,12 @@ usingBiometricsIfNeededWithSuccessHandler:(dispatch_block_t)handler
 - (void)fetchActiveContainerIDForProcessWithPid:(pid_t)pid
                                 reply:(void (^)(NSString *))reply
 {
-    /* [INFERRED] U-01. Upstream resolves the pid to a bundle id through the
-     * runningboard/client cache then asks cranehelperd. */
+    /* CraneSB 0x194EC verifies the container actually loaded in a PID.
+     * The current reconstruction has neither a PID inspector nor a working
+     * NSXPC remote proxy. A fabricated DEFAULT result is not verification. */
+    NSLog(@"CraneManager: active container lookup unavailable for pid=%d", pid);
     if (reply)
-        reply(CR_DEFAULT_CONTAINER_IDENTIFIER);
+        reply(nil);
 }
 
 /* Reconstruction-specific low-level health probe. This does not establish
