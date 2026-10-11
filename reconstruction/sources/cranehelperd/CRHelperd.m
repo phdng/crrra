@@ -357,14 +357,15 @@ static void CRHandleHealthPing(xpc_connection_t peer, xpc_object_t message)
     const char *operation = xpc_dictionary_get_string(message, "operation");
     if (!operation || strcmp(operation, "ping") != 0)
         return;
-    /* A version match is compatibility checking, not client authorization. */
+    /* Mismatched versions get a negative reply instead of a two-second
+     * client timeout. Version matching is not client authorization. */
     const char *protocol = xpc_dictionary_get_string(message, "protocol");
-    if (!protocol || strcmp(protocol, CR_HELPERD_PING_PROTOCOL_V1) != 0)
-        return;
+    BOOL compatible = protocol &&
+        strcmp(protocol, CR_HELPERD_PING_PROTOCOL_V1) == 0;
     xpc_object_t reply = xpc_dictionary_create_reply(message);
     if (!reply)
         return;
-    xpc_dictionary_set_bool(reply, "alive", true);
+    xpc_dictionary_set_bool(reply, "alive", compatible);
     xpc_dictionary_set_string(reply, "protocol", CR_HELPERD_PING_PROTOCOL_V1);
     xpc_connection_send_message(peer, reply);
     /* ARC manages the XPC reply. This is not caller authentication. */
