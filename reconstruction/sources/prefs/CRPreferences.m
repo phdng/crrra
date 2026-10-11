@@ -92,6 +92,8 @@
     return self.craneRootSpecifiers;
 }
 
+@end
+
 /* The Preferences navigation stack expects a PSListController detail, not
  * an unrelated UITableViewController. */
 @interface CRPActiveContainerListItemsController : PSListController
@@ -154,9 +156,6 @@
     self.craneActiveSpecifiers = nil;
     [self reloadSpecifiers];
 }
-@end
-
-
 @end
 
 /* Minimal APPLICATIONS list for the recovered PSLinkListCell entry. The
