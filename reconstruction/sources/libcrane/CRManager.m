@@ -25,6 +25,7 @@
  */
 
 #import <Foundation/Foundation.h>
+#import <CoreFoundation/CoreFoundation.h>
 #import <objc/message.h>
 
 #import "CRManager.h"
@@ -73,9 +74,10 @@ extern xpc_connection_t CRManagerXPCConnectionCreateMachService(
     if ((self = [super init])) {
         /* Persist app switches across Preferences restarts in a dedicated
          * preference domain, rather than the process-only registry. */
-        NSUserDefaults *store = [[NSUserDefaults alloc] initWithSuiteName:@"com.opa334.cranereconstruction.apps"];
-        NSDictionary *saved = [store objectForKey:@"applications"];
+        NSDictionary *saved = CFBridgingRelease(CFPreferencesCopyAppValue(
+            CFSTR("applications"), CFSTR("com.opa334.cranereconstruction.apps")));
         _applications = [saved isKindOfClass:NSDictionary.class] ? [saved mutableCopy] : [NSMutableDictionary new];
+        NSLog(@"CraneManager: registry loaded app count=%lu", (unsigned long)_applications.count);
         _containerPaths = [NSMutableDictionary new];
         _observers = [NSHashTable weakObjectsHashTable];
         _queue = dispatch_queue_create("com.opa334.crane.manager", DISPATCH_QUEUE_SERIAL);
@@ -177,9 +179,12 @@ extern xpc_connection_t CRManagerXPCConnectionCreateMachService(
             self.applications[appID] = [settings mutableCopy];
         else
             [self.applications removeObjectForKey:appID];
-        NSUserDefaults *store = [[NSUserDefaults alloc] initWithSuiteName:@"com.opa334.cranereconstruction.apps"];
-        [store setObject:self.applications forKey:@"applications"];
-        [store synchronize];
+        CFPreferencesSetAppValue(CFSTR("applications"),
+            (__bridge CFPropertyListRef)self.applications,
+            CFSTR("com.opa334.cranereconstruction.apps"));
+        BOOL synced = CFPreferencesAppSynchronize(CFSTR("com.opa334.cranereconstruction.apps"));
+        NSLog(@"CraneManager: registry write app=%@ sync=%@", appID,
+              synced ? @"YES" : @"NO");
     }
 }
 
