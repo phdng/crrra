@@ -317,8 +317,10 @@
     /* Always Ask on App-Launch */
     PSSpecifier *ask = [PSSpecifier preferenceSpecifierNamed:
                         CRLocalize(@"ALWAYS_ASK_ON_APP_LAUNCH")
-                                                     target:self set:NULL get:NULL
-                                                  detail:NULL cell:6 edit:0];
+                                                     target:self
+                                                      set:@selector(setPreferenceValue:specifier:)
+                                                      get:@selector(readPreferenceValue:)
+                                                   detail:NULL cell:6 edit:0];
     [ask setProperty:@YES forKey:@"enabled"];
     [ask setProperty:CRAppSetting_AlwaysAskBeforeLaunchEnabled forKey:@"key"];
     [ask setProperty:@YES forKey:@"default"];
@@ -338,10 +340,10 @@
                                   ofApplicationWithIdentifier:self.applicationIdentifier
                                        shouldUseShortVersion:NO]
                                                  target:self
-                                                   set:@selector(setPreferenceValue:specifier:)
-                                                   get:@selector(readPreferenceValue:)
-                                                detail:CRPApplicationConfigurationListController.class
-                                                  cell:6
+                                                   set:NULL
+                                                   get:NULL
+                                                detail:NULL
+                                                  cell:2
                                                   edit:0];
         [row setProperty:identifier forKey:@"crane_containerIdentifier"];
         [specifiers addObject:row];
@@ -458,7 +460,12 @@
 
 - (id)readPreferenceValue:(id)specifier
 {
-    return [self readPreferenceValueForKey:[specifier propertyForKey:@"key"]];
+    NSString *key = [specifier propertyForKey:@"key"];
+    id value = [self readPreferenceValueForKey:key];
+    if (!value)
+        value = [specifier propertyForKey:@"default"];
+    NSLog(@"CranePrefs: read app=%@ key=%@ value=%@", self.applicationIdentifier, key, value);
+    return value;
 }
 
 - (void)setSeparateNotificationRegistrationsValue:(id)value specifier:(id)specifier
