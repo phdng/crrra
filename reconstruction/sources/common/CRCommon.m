@@ -27,23 +27,10 @@ extern xpc_connection_t CRCommonXPCConnectionCreateMachService(
 static NSBundle *CRUIBundle(void)
 {
     static NSBundle *bundle;
-    static dispatch_once_t once;
-    dispatch_once(&once, ^{
+    /* Crane 0x6924 retries bundleWithPath: whenever its cached result is nil;
+     * dispatch_once would permanently cache a failed first lookup. */
+    if (!bundle)
         bundle = [NSBundle bundleWithPath:CRJailbreakRootPath(CR_UI_BUNDLE_PATH)];
-        /* Roothide may expose the UI bundle only beneath its physical jbroot. */
-        if (!bundle || ![bundle pathForResource:@"Localizable" ofType:@"strings" inDirectory:@"en.lproj"]) {
-            Class prefsClass = NSClassFromString(@"CRPRootListController");
-            NSString *prefsPath = prefsClass ? [NSBundle bundleForClass:prefsClass].bundlePath : nil;
-            NSRange marker = [prefsPath rangeOfString:@"/Library/PreferenceBundles/"];
-            if (prefsPath.length && marker.location != NSNotFound) {
-                NSString *root = [prefsPath substringToIndex:marker.location];
-                NSBundle *candidate = [NSBundle bundleWithPath:
-                    [root stringByAppendingString:CR_UI_BUNDLE_PATH]];
-                if (candidate)
-                    bundle = candidate;
-            }
-        }
-    });
     return bundle;
 }
 
@@ -59,13 +46,13 @@ NSString *CRLocalize(NSString *key)
      * uppercase identifier. */
     if ([value isEqualToString:key]) {
         static NSDictionary *english;
-        static dispatch_once_t once;
-        dispatch_once(&once, ^{
+        /* Like 0x6924, repeat the read only if no dictionary was cached. */
+        if (!english) {
             NSString *path = [CRUIBundle() pathForResource:@"Localizable"
                                                      ofType:@"strings"
                                                 inDirectory:@"en.lproj"];
             english = [NSDictionary dictionaryWithContentsOfFile:path];
-        });
+        }
         value = english[key] ?: key;
     }
 
@@ -98,17 +85,19 @@ void CRRequestAuthentication(NSString *reason, CRBiometricHandler handler)
     if (!handler)
         return;
 
+    /* Original Crane 0x6E08 captures the calling thread before policy
+     * evaluation, then reuses that result in the 0x6F40 reply block. */
+    BOOL onMainThread = NSThread.isMainThread;
     LAContext *context = [[LAContext alloc] init];
     NSError *error = nil;
 
     if ([context canEvaluatePolicy:LAPolicyDeviceOwnerAuthenticationWithBiometrics
                              error:&error]) {
-        BOOL onMainThread = NSThread.isMainThread;
         CRBiometricHandler block = ^{
             if (onMainThread)
                 dispatch_async(dispatch_get_main_queue(), handler);
             else
-                dispatch_async(dispatch_get_global_queue(QOS_CLASS_DEFAULT, 0), handler);
+                dispatch_async(dispatch_get_global_queue(0, 0), handler);
         };
         [context evaluatePolicy:LAPolicyDeviceOwnerAuthenticationWithBiometrics
                 localizedReason:reason
@@ -190,15 +179,16 @@ void CRReportRuntimeInjection(NSString *component, NSString *containerID)
      * connection dies, avoiding stale PID/container claims after process exit. */
     static xpc_connection_t connection;
     static NSObject *connectionLock;
-    static NSString *lastComponent;
-    static NSString *lastContainerID;
+    static NSMutableDictionary<NSString *, id> *reports;
     static NSUInteger generation;
     static dispatch_once_t lockOnce;
-    dispatch_once(&lockOnce, ^{ connectionLock = [NSObject new]; });
+    dispatch_once(&lockOnce, ^{
+        connectionLock = [NSObject new];
+        reports = [NSMutableDictionary new];
+    });
 
     @synchronized(connectionLock) {
-        lastComponent = [component copy];
-        lastContainerID = [containerID copy];
+        reports[component] = containerID.length ? [containerID copy] : NSNull.null;
         if (!connection) {
             xpc_connection_t created = CRCommonXPCConnectionCreateMachService(
                 CR_HELPERD_MACH_SERVICE.UTF8String, NULL, 0);
@@ -222,15 +212,19 @@ void CRReportRuntimeInjection(NSString *component, NSString *containerID)
                  * prevents old connection errors from replacing a new peer. */
                 dispatch_after(dispatch_time(DISPATCH_TIME_NOW, 2 * NSEC_PER_SEC),
                     dispatch_get_global_queue(QOS_CLASS_UTILITY, 0), ^{
-                        NSString *retryComponent;
-                        NSString *retryContainer;
+                        NSDictionary<NSString *, id> *pending;
                         @synchronized(connectionLock) {
                             if (generation != myGeneration || connection)
                                 return;
-                            retryComponent = lastComponent;
-                            retryContainer = lastContainerID;
+                            pending = [reports copy];
                         }
-                        CRReportRuntimeInjection(retryComponent, retryContainer);
+                        /* Each component on this image needs its own live
+                         * report after the helper has restarted. */
+                        for (NSString *name in pending) {
+                            id value = pending[name];
+                            CRReportRuntimeInjection(name,
+                                value == NSNull.null ? nil : value);
+                        }
                     });
             });
             xpc_connection_resume(created);

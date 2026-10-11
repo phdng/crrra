@@ -17,12 +17,32 @@ prefs = (root / "common" / "CRPreferences.h").read_text(encoding="utf-8")
 manager_header = (root / "common" / "CRManager.h").read_text(encoding="utf-8")
 
 assert '#define CR_PREFS_DOMAIN @"com.opa334.craneprefs"' in prefs
+# Crane 0x6924 constructs its UI bundle solely from the jbroot-resolved
+# fixed bundle path, without a PreferenceBundles-relative fallback.
+ui_start = common.index('static NSBundle *CRUIBundle(void)')
+ui_end = common.index('NSString *CRLocalize(', ui_start)
+ui_body = common[ui_start:ui_end]
+assert 'bundleWithPath:CRJailbreakRootPath(CR_UI_BUNDLE_PATH)' in ui_body
+assert 'if (!bundle)' in ui_body
+assert 'dispatch_once(&' not in ui_body
+assert 'CRPRootListController' not in ui_body
+assert '/Library/PreferenceBundles/' not in ui_body
+# Main Crane 0x6F40 dispatches off-main authentication success callbacks
+# with dispatch_get_global_queue(0, 0), not a reconstructed QOS override.
+auth_start = common.index('void CRRequestAuthentication(')
+auth_end = common.index('/* Crane 0x6544', auth_start)
+auth_body = common[auth_start:auth_end]
+assert 'dispatch_get_global_queue(0, 0), handler' in auth_body
+assert auth_body.index('BOOL onMainThread = NSThread.isMainThread;') < auth_body.index('LAContext *context =') < auth_body.index('canEvaluatePolicy:')
+assert 'QOS_CLASS_DEFAULT' not in auth_body
 # Main Crane 0x6924 consults the English fallback only when localization
 # equals the input key; an empty translated value must be preserved.
 localize_start = common.index('NSString *CRLocalize(NSString *key)')
 localize_end = common.index('/* Crane 0x6BE0', localize_start)
 localize_body = common[localize_start:localize_end]
 assert 'if ([value isEqualToString:key])' in localize_body
+assert 'if (!english)' in localize_body
+assert 'dispatch_once(&' not in localize_body
 assert '!value.length ||' not in localize_body
 # CraneSupport 0x60C8 checks loaded dyld image paths, not dlopen presence,
 # and returns platform names rather than dylib paths.
@@ -136,7 +156,10 @@ assert 'xpc_dictionary_set_string(report, "container_id", containerID.UTF8String
 # connection must not clear a newer live registration for the same PID.
 assert 'NSUInteger myGeneration = ++generation;' in common
 assert 'if (generation != myGeneration || connection)' in common
-assert 'CRReportRuntimeInjection(retryComponent, retryContainer)' in common
+assert 'reports[component] = containerID.length ? [containerID copy] : NSNull.null;' in common
+assert 'pending = [reports copy];' in common
+assert 'for (NSString *name in pending)' in common
+assert 'CRReportRuntimeInjection(name,' in common
 assert 'components[component] = claim;' in helper
 assert 'claim[@"container"] = containerID;' in helper
 assert '[components[component][@"peerToken"] isEqualToString:peerToken]' in helper
