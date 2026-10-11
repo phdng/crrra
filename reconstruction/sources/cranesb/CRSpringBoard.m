@@ -500,6 +500,8 @@ static void CRInitFunc(void)
 {
     @autoreleasepool {
         NSString *executable = CRGetProcessName();
+        NSLog(@"CraneSB: constructor reached; executable=%@; bundle=%@",
+              executable, [NSBundle mainBundle].bundleIdentifier);
         if ([executable isEqualToString:@"SpringBoard"]) {
             gIsSpringBoard = YES;
             CRInitErrorAlerts();

@@ -20,6 +20,7 @@
  */
 
 #import <UIKit/UIKit.h>
+#import <objc/message.h>
 
 #import "CRManager.h"
 #import "CRPaths.h"
@@ -34,6 +35,7 @@
 
 @interface PSListController : PSViewController
 - (id)specifiers;
+- (void)setSpecifier:(id)specifier;
 - (NSArray *)loadSpecifiersFromPlistName:(NSString *)name target:(id)target;
 - (id)specifierAtIndex:(NSUInteger)index;
 - (id)indexForIndexPath:(NSIndexPath *)indexPath;
@@ -51,6 +53,7 @@
 - (void)setProperty:(id)property forKey:(NSString *)key;
 - (id)propertyForKey:(NSString *)key;
 - (void)setDetailControllerClass:(Class)cls;
+- (NSString *)name;
 - (void)setName:(NSString *)name;
 - (void)setButtonAction:(SEL)action;
 @end
@@ -171,6 +174,65 @@
 
 @end
 
+/* Minimal APPLICATIONS list for the recovered PSLinkListCell entry. The
+ * original uses a custom app-list class; enumerate installed proxies at
+ * runtime instead of linking unavailable private SDK symbols. */
+@class CRPApplicationConfigurationListController;
+@interface CRPApplicationListSubcontrollerController : PSListController
+@property (nonatomic, strong) NSArray *craneAppSpecifiers;
+@end
+
+@implementation CRPApplicationListSubcontrollerController
+
+- (id)specifiers
+{
+    if (!self.craneAppSpecifiers) {
+        NSMutableArray *rows = [NSMutableArray new];
+        Class workspaceClass = NSClassFromString(@"LSApplicationWorkspace");
+        SEL defaultSelector = NSSelectorFromString(@"defaultWorkspace");
+        id workspace = workspaceClass &&
+            [workspaceClass respondsToSelector:defaultSelector]
+            ? ((id (*)(id, SEL))objc_msgSend)(workspaceClass, defaultSelector) : nil;
+        SEL applicationsSelector = NSSelectorFromString(@"allApplications");
+        NSArray *applications = workspace &&
+            [workspace respondsToSelector:applicationsSelector]
+            ? ((id (*)(id, SEL))objc_msgSend)(workspace, applicationsSelector) : nil;
+        for (id app in applications) {
+            NSString *identifier = nil;
+            NSString *name = nil;
+            @try {
+                identifier = [app valueForKey:@"bundleIdentifier"];
+                name = [app valueForKey:@"localizedName"];
+            } @catch (__unused NSException *exception) {
+                continue;
+            }
+            if (![identifier isKindOfClass:NSString.class] || !identifier.length)
+                continue;
+            if (![name isKindOfClass:NSString.class] || !name.length)
+                name = identifier;
+            PSSpecifier *row = [PSSpecifier preferenceSpecifierNamed:name
+                target:self set:NULL get:NULL
+                detail:NSClassFromString(@"CRPApplicationConfigurationListController")
+                cell:2 edit:0];
+            [row setProperty:identifier forKey:@"crane_applicationIdentifier"];
+            [rows addObject:row];
+        }
+        [rows sortUsingComparator:^NSComparisonResult(PSSpecifier *a, PSSpecifier *b) {
+            return [a.name localizedCaseInsensitiveCompare:b.name];
+        }];
+        self.craneAppSpecifiers = rows;
+        @try {
+            [self setValue:rows forKey:@"_specifiers"];
+        } @catch (NSException *exception) {
+            NSLog(@"CranePrefs: application list backing failed: %@", exception);
+        }
+        NSLog(@"CranePrefs: APPLICATIONS list count=%lu",
+              (unsigned long)rows.count);
+    }
+    return self.craneAppSpecifiers;
+}
+@end
+
 /* ------------------------------------------------------------------------- */
 /* CRPApplicationConfigurationListController                                  */
 /* ------------------------------------------------------------------------- */
@@ -187,6 +249,15 @@
 @end
 
 @implementation CRPApplicationConfigurationListController
+- (void)setSpecifier:(PSSpecifier *)specifier
+{
+    [super setSpecifier:specifier];
+    NSString *identifier = [specifier propertyForKey:@"crane_applicationIdentifier"];
+    if (identifier.length) {
+        self.applicationIdentifier = identifier;
+        [self loadApplicationSettings];
+    }
+}
 
 - (id)init
 {
