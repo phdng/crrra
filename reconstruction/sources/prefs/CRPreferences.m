@@ -32,7 +32,9 @@
 @interface PSViewController : UIViewController
 @end
 
-@interface PSListController : PSViewController
+@interface PSListController : PSViewController {
+    NSMutableArray *_specifiers; /* Preferences.framework's actual table backing */
+}
 - (id)specifiers;
 - (NSArray *)loadSpecifiersFromPlistName:(NSString *)name target:(id)target;
 - (id)specifierAtIndex:(NSUInteger)index;
@@ -60,7 +62,6 @@
 /* ------------------------------------------------------------------------- */
 
 @interface CRPRootListController : PSListController
-@property (nonatomic, strong) NSArray *craneRootSpecifiers;
 @end
 
 @implementation CRPRootListController
@@ -69,15 +70,15 @@
 {
     /* Explicit loading is required: NSPrincipalClass alone does not load
      * Root.plist and Settings otherwise displays an empty pane. */
-    if (!self.craneRootSpecifiers) {
+    if (!_specifiers) {
         NSBundle *bundle = [NSBundle bundleForClass:[self class]];
         NSLog(@"CranePrefs: root controller loaded; bundle=%@; Root.plist=%@",
               bundle.bundlePath, [bundle pathForResource:@"Root" ofType:@"plist"]);
-        self.craneRootSpecifiers = [self loadSpecifiersFromPlistName:@"Root" target:self];
+        _specifiers = [self loadSpecifiersFromPlistName:@"Root" target:self];
         NSLog(@"CranePrefs: root specifier count=%lu",
-              (unsigned long)self.craneRootSpecifiers.count);
+              (unsigned long)_specifiers.count);
     }
-    return self.craneRootSpecifiers;
+    return _specifiers;
 }
 
 @end
