@@ -170,7 +170,16 @@ extern xpc_connection_t CRManagerXPCConnectionCreateMachService(
 {
     if (!appID)
         return @{};
-    return self.applications[appID] ?: @{};
+    /* SpringBoard and Preferences are separate processes. Refresh the shared
+     * registry on reads so Active Container selection is not stuck at the
+     * snapshot loaded by -init. */
+    @synchronized(self) {
+        NSDictionary *saved = CFBridgingRelease(CFPreferencesCopyAppValue(
+            CFSTR("applications"), CFSTR("com.opa334.cranereconstruction.apps")));
+        if ([saved isKindOfClass:NSDictionary.class])
+            self.applications = [saved mutableCopy];
+        return [self.applications[appID] copy] ?: @{};
+    }
 }
 
 - (void)setApplicationSettings:(NSDictionary *)settings

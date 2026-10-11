@@ -96,7 +96,29 @@
         NSBundle *bundle = [NSBundle bundleForClass:[self class]];
         NSLog(@"CranePrefs: root controller loaded; bundle=%@; Root.plist=%@",
               bundle.bundlePath, [bundle pathForResource:@"Root" ofType:@"plist"]);
-        self.craneRootSpecifiers = [self loadSpecifiersFromPlistName:@"Root" target:self];
+        NSArray *loaded = [self loadSpecifiersFromPlistName:@"Root" target:self];
+        NSMutableArray *rootRows = [loaded mutableCopy] ?: [NSMutableArray new];
+        BOOL hasApplications = NO;
+        for (PSSpecifier *row in rootRows) {
+            if ([[row propertyForKey:@"subcontrollerClass"] isEqual:@"CRPApplicationListSubcontrollerController"] ||
+                [[row propertyForKey:@"label"] isEqual:@"APPLICATIONS"] ||
+                [row.name isEqualToString:CRLocalize(@"APPLICATIONS")]) {
+                hasApplications = YES;
+                break;
+            }
+        }
+        if (!hasApplications) {
+            /* The root plist's dynamic section predicate can hide the link
+             * before app enumeration has initialized. Keep navigation available. */
+            PSSpecifier *apps = [PSSpecifier preferenceSpecifierNamed:CRLocalize(@"APPLICATIONS")
+                target:self set:NULL get:NULL
+                detail:NSClassFromString(@"CRPApplicationListSubcontrollerController") cell:2 edit:0];
+            [apps setDetailControllerClass:NSClassFromString(@"CRPApplicationListSubcontrollerController")];
+            [apps setProperty:@"CRPApplicationListSubcontrollerController" forKey:@"subcontrollerClass"];
+            [rootRows insertObject:apps atIndex:0];
+            NSLog(@"CranePrefs: restored missing APPLICATIONS navigation row");
+        }
+        self.craneRootSpecifiers = rootRows;
         /* Avoid a direct _specifiers ivar reference: the private framework's
          * ivar-offset symbol is not exported by the SDK linker stub. KVC
          * resolves the ivar in the installed Preferences.framework at runtime. */
@@ -193,9 +215,9 @@
 - (void)tableView:(UITableView *)tableView didSelectRowAtIndexPath:(NSIndexPath *)indexPath
 {
     [tableView deselectRowAtIndexPath:indexPath animated:YES];
-    if (indexPath.row < 0 || (NSUInteger)indexPath.row >= self.craneActiveSpecifiers.count)
-        return;
-    PSSpecifier *specifier = self.craneActiveSpecifiers[(NSUInteger)indexPath.row];
+    NSUInteger index = (NSUInteger)[self indexForIndexPath:indexPath];
+    PSSpecifier *specifier = [self specifierAtIndex:index];
+    if (!specifier) return;
     NSString *identifier = [specifier propertyForKey:@"crane_containerIdentifier"];
     if (!identifier.length || !self.applicationIdentifier.length)
         return;
@@ -206,6 +228,9 @@
     void (^selectContainer)(void) = ^{
         [manager setActiveContainerIdentifier:identifier
             forApplicationWithIdentifier:weakSelf.applicationIdentifier];
+        NSLog(@"CranePrefs: active selection persisted app=%@ desired=%@ actual=%@",
+              weakSelf.applicationIdentifier, identifier,
+              [manager activeContainerIdentifierForApplicationWithIdentifier:weakSelf.applicationIdentifier]);
         dispatch_async(dispatch_get_main_queue(), ^{
             typeof(self) strongSelf = weakSelf;
             if (!strongSelf) return;
