@@ -14,7 +14,12 @@ CranePrefs_CFLAGS  = -fobjc-arc -I$(THEOS_PROJECT_DIR)/sources/common
 CranePrefs_CFLAGS += -I$(THEOS_PROJECT_DIR)/layout/Library/PreferenceBundles/CranePrefs.bundle
 CranePrefs_FRAMEWORKS = Foundation CoreFoundation UIKit Security CoreGraphics LocalAuthentication MobileCoreServices
 CranePrefs_PRIVATE_FRAMEWORKS = Preferences
+# Current CranePrefs source does not call AltList symbols. The roothide
+# toolchain does not provide AltList.framework, so avoid an unused hard link
+# there; preserve the recovered Rootful link requirement unchanged.
+ifneq ($(THEOS_PACKAGE_SCHEME),roothide)
 CranePrefs_EXTRA_FRAMEWORKS = AltList
+endif
 CranePrefs_LIBRARIES  = crane z iconv
 CranePrefs_LDFLAGS += -F$(THEOS_PROJECT_DIR)/vendor -L$(THEOS_OBJ_DIR)
 
