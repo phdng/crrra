@@ -91,18 +91,22 @@ extern xpc_connection_t CRManagerXPCConnectionCreateMachService(
 {
     if (!key)
         return nil;
-    return [[NSUserDefaults standardUserDefaults] objectForKey:key];
+    /* Root.plist writes to com.opa334.craneprefs, not to the hosting
+     * process' standard defaults domain (which varies by process). */
+    return CFBridgingRelease(CFPreferencesCopyAppValue(
+        (__bridge CFStringRef)key, (__bridge CFStringRef)CR_PREFS_DOMAIN));
 }
 
 - (void)setPreferenceValue:(id)value forKey:(NSString *)key
 {
     if (!key)
         return;
-    NSUserDefaults *defaults = NSUserDefaults.standardUserDefaults;
-    if (value)
-        [defaults setObject:value forKey:key];
-    else
-        [defaults removeObjectForKey:key];
+    CFPreferencesSetAppValue((__bridge CFStringRef)key,
+        (__bridge CFPropertyListRef)value,
+        (__bridge CFStringRef)CR_PREFS_DOMAIN);
+    BOOL synced = CFPreferencesAppSynchronize((__bridge CFStringRef)CR_PREFS_DOMAIN);
+    NSLog(@"CraneManager: global preference write key=%@ sync=%@",
+          key, synced ? @"YES" : @"NO");
 }
 
 /* ---- observation -------------------------------------------------------- */
