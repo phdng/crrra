@@ -524,6 +524,8 @@
             NSIndexSet *positions = [NSIndexSet indexSetWithIndexesInRange:NSMakeRange(start, updated.count)];
             [merged insertObjects:updated atIndexes:positions];
             self.craneConfigurationSpecifiers = merged;
+            @try { [self setValue:merged forKey:@"_specifiers"]; }
+            @catch (NSException *exception) { NSLog(@"CranePrefs: container replacement backing failed: %@", exception); }
         }
     } else if (!previous.count && updated.count &&
                [self respondsToSelector:@selector(insertSpecifier:atIndex:animated:)]) {
@@ -532,7 +534,7 @@
         NSUInteger addIndex = NSNotFound;
         for (NSUInteger i = 0; i < old.count; ++i) {
             PSSpecifier *candidate = old[i];
-            if ([candidate.name isEqualToString:CRLocalize(@"ADD")]) {
+            if ([[candidate propertyForKey:@"crane_addContainer"] boolValue]) {
                 addIndex = i;
                 break;
             }
@@ -545,6 +547,8 @@
                 [merged insertObject:row atIndex:position++];
             }
             self.craneConfigurationSpecifiers = merged;
+            @try { [self setValue:merged forKey:@"_specifiers"]; }
+            @catch (NSException *exception) { NSLog(@"CranePrefs: container insert backing failed: %@", exception); }
         } else {
             self.craneConfigurationSpecifiers = nil;
             @try { [self setValue:nil forKey:@"_specifiers"]; }
@@ -741,6 +745,7 @@
                                                        target:self set:NULL get:NULL
                                                     detail:NULL cell:13 edit:0];
     [add setProperty:@YES forKey:@"enabled"];
+    [add setProperty:@YES forKey:@"crane_addContainer"];
     [add setButtonAction:@selector(addButtonPressed)];
     [specifiers addObject:add];
 

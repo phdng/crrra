@@ -317,9 +317,15 @@ extern xpc_connection_t CRManagerXPCConnectionCreateMachService(
         if (handler)
             handler();
     };
-    /* CONFIRMED_STATIC: requestAuthentication runs the handler even when
-     * biometrics are unavailable (Crane 0x6E08). */
-    CRRequestAuthentication(CRLocalize(@"CONFIRM_PASSWORD"), apply);
+    /* Only protected containers require authentication. The exported
+     * CranePrefs 0x74D8 checks requireBiometricAuthentication before
+     * continuing selection; shortcut selection must respect that too. */
+    NSDictionary *targetSettings = [self containerSettingsForContainerWithIdentifier:containerID
+        ofApplicationWithIdentifier:appID];
+    if ([targetSettings[@"requireBiometricAuthentication"] boolValue])
+        CRRequestAuthentication(CRLocalize(@"CONFIRM_PASSWORD"), apply);
+    else
+        apply();
 }
 
 - (void)setActiveContainerIdentifier:(NSString *)containerID
