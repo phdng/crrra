@@ -133,8 +133,16 @@
 
 - (void)setSpecifier:(PSSpecifier *)specifier
 {
+    NSString *identifier = [specifier propertyForKey:@"crane_applicationIdentifier"];
+    if (!identifier.length)
+        identifier = [specifier propertyForKey:@"applicationIdentifier"];
+    if (identifier.length && ![identifier isEqualToString:self.applicationIdentifier]) {
+        self.applicationIdentifier = identifier;
+        self.craneActiveSpecifiers = nil;
+        @try { [self setValue:nil forKey:@"_specifiers"]; }
+        @catch (__unused NSException *exception) {}
+    }
     [super setSpecifier:specifier];
-    self.applicationIdentifier = [specifier propertyForKey:@"crane_applicationIdentifier"];
 }
 
 - (id)specifiers
@@ -155,11 +163,10 @@
                                     shouldUseShortVersion:NO];
             PSSpecifier *row = [PSSpecifier preferenceSpecifierNamed:
                 (name.length ? name : identifier) target:self set:NULL get:NULL
-                detail:NULL cell:13 edit:0];
+                detail:NULL cell:2 edit:0];
             [row setProperty:identifier forKey:@"crane_containerIdentifier"];
             [row setName:[NSString stringWithFormat:@"%@%@",
                 [active isEqualToString:identifier] ? @"✓ " : @"", name ?: identifier]];
-            [row setButtonAction:@selector(selectActiveContainer:)];
             [rows addObject:row];
         }
         self.craneActiveSpecifiers = rows;
@@ -176,15 +183,43 @@
     return self.craneActiveSpecifiers;
 }
 
-- (void)selectActiveContainer:(PSSpecifier *)specifier
+/* CranePrefs 0x74D8 selects by table row and checks biometric protection. */
+- (void)tableView:(UITableView *)tableView didSelectRowAtIndexPath:(NSIndexPath *)indexPath
 {
+    [tableView deselectRowAtIndexPath:indexPath animated:YES];
+    if (indexPath.row < 0 || (NSUInteger)indexPath.row >= self.craneActiveSpecifiers.count)
+        return;
+    PSSpecifier *specifier = self.craneActiveSpecifiers[(NSUInteger)indexPath.row];
     NSString *identifier = [specifier propertyForKey:@"crane_containerIdentifier"];
     if (!identifier.length || !self.applicationIdentifier.length)
         return;
-    [[CraneManager sharedManager] setActiveContainerIdentifier:identifier
-                      forApplicationWithIdentifier:self.applicationIdentifier];
-    self.craneActiveSpecifiers = nil;
-    [self reloadSpecifiers];
+    CraneManager *manager = CraneManager.sharedManager;
+    NSDictionary *settings = [manager containerSettingsForContainerWithIdentifier:identifier
+        ofApplicationWithIdentifier:self.applicationIdentifier];
+    __weak typeof(self) weakSelf = self;
+    void (^selectContainer)(void) = ^{
+        [manager setActiveContainerIdentifier:identifier
+            forApplicationWithIdentifier:weakSelf.applicationIdentifier];
+        dispatch_async(dispatch_get_main_queue(), ^{
+            typeof(self) strongSelf = weakSelf;
+            if (!strongSelf) return;
+            strongSelf.craneActiveSpecifiers = nil;
+            @try { [strongSelf setValue:nil forKey:@"_specifiers"]; }
+            @catch (__unused NSException *exception) {}
+            [strongSelf specifiers];
+            [strongSelf reloadSpecifiers];
+        });
+    };
+    NSLog(@"CranePrefs: select active container app=%@ id=%@ biometric=%@",
+          self.applicationIdentifier, identifier,
+          [settings[@"requireBiometricAuthentication"] boolValue] ? @"YES" : @"NO");
+    if ([settings[@"requireBiometricAuthentication"] boolValue]) {
+        NSString *reason = [NSString stringWithFormat:CRLocalize(@"SET_ACTIVE_CONTAINER_DESCRIPTION"),
+            specifier.name ?: identifier];
+        CRRequestAuthentication(reason, selectContainer);
+    } else {
+        selectContainer();
+    }
 }
 @end
 
@@ -294,12 +329,15 @@
 }
 - (void)setSpecifier:(PSSpecifier *)specifier
 {
-    [super setSpecifier:specifier];
     NSString *identifier = [specifier propertyForKey:@"crane_applicationIdentifier"];
-    if (identifier.length) {
+    if (identifier.length && ![identifier isEqualToString:self.applicationIdentifier]) {
         self.applicationIdentifier = identifier;
+        self.craneConfigurationSpecifiers = nil;
+        @try { [self setValue:nil forKey:@"_specifiers"]; }
+        @catch (__unused NSException *exception) {}
         [self loadApplicationSettings];
     }
+    [super setSpecifier:specifier];
 }
 
 - (id)init
@@ -595,12 +633,17 @@
 
 - (void)setActiveContainer:(id)value specifier:(id)specifier
 {
-    [self setPreferenceValue:value key:CRCContainer_ActiveContainer];
+    if ([value isKindOfClass:NSString.class]) {
+        [CraneManager.sharedManager setActiveContainerIdentifier:value
+            forApplicationWithIdentifier:self.applicationIdentifier];
+        [self loadApplicationSettings];
+    }
 }
 
 - (id)readActiveContainer:(id)specifier
 {
-    return [self readPreferenceValueForKey:CRCContainer_ActiveContainer];
+    return [CraneManager.sharedManager activeContainerIdentifierForApplicationWithIdentifier:
+        self.applicationIdentifier];
 }
 
 - (void)addButtonPressed
@@ -635,6 +678,7 @@
         strongSelf.craneConfigurationSpecifiers = nil;
         @try { [strongSelf setValue:nil forKey:@"_specifiers"]; }
         @catch (__unused NSException *exception) {}
+        [strongSelf specifiers];
         [strongSelf reloadSpecifiers];
     }]];
     [self presentViewController:alert animated:YES completion:nil];
