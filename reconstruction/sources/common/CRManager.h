@@ -124,6 +124,9 @@ usingBiometricsIfNeededWithSuccessHandler:(dispatch_block_t)handler;      /* [AP
 
 /* ---- naming ------------------------------------------------------------- */
 - (NSString *)displayNameForApplicationWithIdentifier:(NSString *)appID; /* [API] */
+/* Reconstructed from CraneSB 0xE730/0x1119C call sites; body inferred. */
+- (NSString *)containerNameToDisplayInNotificationWithUserInfoOrContext:(NSDictionary *)info
+                                         ofApplicationWithIdentifier:(NSString *)appID;
 - (NSString *)displayNameForContainerWithIdentifier:(NSString *)containerID
                          ofApplicationWithIdentifier:(NSString *)appID
                               shouldUseShortVersion:(BOOL)useShort;      /* [API] */

@@ -51,4 +51,32 @@ assert 'original(self, cmd, request, repost, deliveredDate, appID, completion);'
 assert '@"_saveNotificationRequest:shouldRepost:deliveredDate:forBundleIdentifier:withCompletionHandler:"' in badge
 assert '(IMP)CRBadgeSaveDatedRequest' in badge
 assert 'tagged[@"crane_sourceContainerID"] = container;' in badge
-print('CraneSB runningboardd + dated notification ABI contracts: PASS (runtime unverified)')
+assert 'static void CRBadgePendingRequests(id self, SEL cmd, NSString *appID, id completion)' in badge
+assert '@"getPendingNotificationRequestsForBundleIdentifier:withCompletionHandler:"' in badge
+assert 'gCRBadgePendingRequestsOriginal' in badge
+assert 'crane_copyWithoutContainerID' in badge
+assert 'reply([filtered copy]);' in badge
+for selector in ('removePendingNotificationRequestsWithIdentifiers:forBundleIdentifier:completionHandler:', 'removePendingNotificationRequestsWithIdentifiers:forBundleIdentifier:', 'removeAllPendingNotificationRequestsForBundleIdentifier:completionHandler:', 'removeAllPendingNotificationRequestsForBundleIdentifier:'):
+    assert selector in badge
+assert 'CRBadgeResolveRemovalIdentifiers(self, appID, identifiers, NO' in badge
+assert 'CRBadgeResolveRemovalIdentifiers(self, appID, nil, YES' in badge
+assert 'original(self, cmd, filtered, appID, completion);' in badge
+assert 'original(self, cmd, filtered, appID);' in badge
+assert 'static id CRBadgeProxyBundleID(id self, SEL cmd)' in badge
+assert 'un_applicationBundleIdentifier' in badge
+assert 'crane_requestOriginContainerID' in badge
+assert '(IMP)CRBadgeProxyBundleID' in badge
+manager = (Path(__file__).resolve().parents[1] / 'sources/libcrane/CRManager.m').read_text(encoding='utf-8')
+assert 'containerNameToDisplayInNotificationWithUserInfoOrContext:' in manager
+assert 'info[@"crane_sourceContainerID"]' in manager
+assert 'shouldUseShortVersion:YES' in manager
+assert 'static id CRBadgeNotificationTitle(id self, SEL cmd)' in badge
+assert '@"NCNotificationRequestContentProvider"' in badge
+assert '@"setHeader:"' in badge
+assert 'containerNameToDisplayInNotificationWithUserInfoOrContext:ofApplicationWithIdentifier:' in badge
+assert 'return [NSString stringWithFormat:@"%@ (%@)", title, [name uppercaseString]];' in badge
+assert 'static id CRBadgeBulletinForNotification(id self, SEL cmd, id notification)' in badge
+assert '@"_queue_bulletinForNotification:"' in badge
+assert '(IMP)CRBadgeBulletinForNotification' in badge
+assert 'tagged[@"crane_sourceContainerID"] = source;' in badge
+print('CraneSB runningboardd + notification ABI contracts: PASS (runtime unverified)')

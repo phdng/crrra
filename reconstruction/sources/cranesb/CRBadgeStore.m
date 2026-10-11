@@ -697,6 +697,157 @@ static void CRBadgeSaveDatedRequest(id self, SEL cmd, id request, BOOL repost,
     original(self, cmd, request, repost, deliveredDate, appID, completion);
 }
 
+/* CraneSB 0x10D10/0x12424: pending requests are returned only for the
+ * caller's container, and copied without the private source tag. */
+static IMP gCRBadgePendingRequestsOriginal;
+static void CRBadgePendingRequests(id self, SEL cmd, NSString *appID, id completion)
+{
+    void (*original)(id, SEL, id, id) =
+        (void (*)(id, SEL, id, id))gCRBadgePendingRequestsOriginal;
+    if (!original)
+        return;
+    if (!completion || !CRBadgeRedirectionEnabled(appID)) {
+        original(self, cmd, appID, completion);
+        return;
+    }
+    NSXPCConnection *connection = [NSXPCConnection currentConnection];
+    if (!connection) {
+        original(self, cmd, appID, completion);
+        return;
+    }
+    NSString *container = CRBadgeContainerForConnection(connection) ?: @"DEFAULT";
+    void (^reply)(NSArray *) = completion;
+    original(self, cmd, appID, ^(NSArray *requests) {
+        NSMutableArray *filtered = [NSMutableArray array];
+        for (id request in requests) {
+            if (![request respondsToSelector:@selector(content)])
+                continue;
+            id content = ((id (*)(id, SEL))objc_msgSend)(request, @selector(content));
+            id info = [content respondsToSelector:@selector(userInfo)]
+                ? ((id (*)(id, SEL))objc_msgSend)(content, @selector(userInfo)) : nil;
+            /* Original sub_BE18: absent userInfo yields nil; a dictionary
+             * without the source tag maps to DEFAULT. */
+            id source = [info isKindOfClass:[NSDictionary class]]
+                ? (info[@"crane_sourceContainerID"] ?: @"DEFAULT") : nil;
+            if (![container isEqualToString:source])
+                continue;
+            SEL copySEL = NSSelectorFromString(@"crane_copyWithoutContainerID");
+            if (![request respondsToSelector:copySEL])
+                continue;
+            id copied = ((id (*)(id, SEL))objc_msgSend)(request, copySEL);
+            if (copied)
+                [filtered addObject:copied];
+        }
+        reply([filtered copy]);
+    });
+}
+
+/* CraneSB 0xC08C/0xC1D4, 0xC4B0/0xC5E0 and wrappers 0x10EA4..0x11110.
+ * Resolve the caller-scoped pending list before any destructive operation. */
+static void CRBadgeResolveRemovalIdentifiers(id self, NSString *appID,
+                                              NSArray *requested, BOOL removeAll,
+                                              void (^reply)(NSArray *))
+{
+    if (!CRBadgeRedirectionEnabled(appID) || ![NSXPCConnection currentConnection]) {
+        reply(requested);
+        return;
+    }
+    SEL pendingSEL = NSSelectorFromString(
+        @"getPendingNotificationRequestsForBundleIdentifier:withCompletionHandler:");
+    if (![self respondsToSelector:pendingSEL]) {
+        reply(@[]);
+        return;
+    }
+    ((void (*)(id, SEL, id, id))objc_msgSend)(self, pendingSEL, appID,
+        ^(NSArray *pending) {
+            NSMutableArray *identifiers = [NSMutableArray array];
+            for (id request in pending) {
+                id identifier = [request respondsToSelector:@selector(identifier)]
+                    ? ((id (*)(id, SEL))objc_msgSend)(request, @selector(identifier)) : nil;
+                if (!identifier)
+                    continue;
+                if (removeAll || [requested containsObject:identifier])
+                    [identifiers addObject:identifier];
+            }
+            reply([identifiers copy]);
+        });
+}
+
+static IMP gCRBadgeRemovePendingWithReplyOriginal;
+static void CRBadgeRemovePendingWithReply(id self, SEL cmd, NSArray *identifiers,
+                                           NSString *appID, id completion)
+{
+    void (*original)(id, SEL, id, id, id) =
+        (void (*)(id, SEL, id, id, id))gCRBadgeRemovePendingWithReplyOriginal;
+    if (!original)
+        return;
+    CRBadgeResolveRemovalIdentifiers(self, appID, identifiers, NO, ^(NSArray *filtered) {
+        original(self, cmd, filtered, appID, completion);
+    });
+}
+
+static IMP gCRBadgeRemovePendingOriginal;
+static void CRBadgeRemovePending(id self, SEL cmd, NSArray *identifiers,
+                                  NSString *appID)
+{
+    void (*original)(id, SEL, id, id) =
+        (void (*)(id, SEL, id, id))gCRBadgeRemovePendingOriginal;
+    if (!original)
+        return;
+    CRBadgeResolveRemovalIdentifiers(self, appID, identifiers, NO, ^(NSArray *filtered) {
+        original(self, cmd, filtered, appID);
+    });
+}
+
+static void CRBadgeRemoveAllScoped(id self, NSString *appID, id completion)
+{
+    CRBadgeResolveRemovalIdentifiers(self, appID, nil, YES, ^(NSArray *identifiers) {
+        SEL withoutReply = NSSelectorFromString(
+            @"removePendingNotificationRequestsWithIdentifiers:forBundleIdentifier:");
+        SEL withReply = NSSelectorFromString(
+            @"removePendingNotificationRequestsWithIdentifiers:forBundleIdentifier:completionHandler:");
+        if (completion && [self respondsToSelector:withReply])
+            ((void (*)(id, SEL, id, id, id))objc_msgSend)(self, withReply, identifiers, appID, completion);
+        else {
+            if ([self respondsToSelector:withoutReply])
+                ((void (*)(id, SEL, id, id))objc_msgSend)(self, withoutReply, identifiers, appID);
+            else if ([self respondsToSelector:withReply])
+                ((void (*)(id, SEL, id, id, id))objc_msgSend)(self, withReply, identifiers, appID, nil);
+            if (completion)
+                ((void (^)(void))completion)();
+        }
+    });
+}
+
+static IMP gCRBadgeRemoveAllPendingWithReplyOriginal;
+static void CRBadgeRemoveAllPendingWithReply(id self, SEL cmd,
+                                              NSString *appID, id completion)
+{
+    void (*original)(id, SEL, id, id) =
+        (void (*)(id, SEL, id, id))gCRBadgeRemoveAllPendingWithReplyOriginal;
+    if (!original)
+        return;
+    if (!CRBadgeRedirectionEnabled(appID) || ![NSXPCConnection currentConnection]) {
+        original(self, cmd, appID, completion);
+        return;
+    }
+    CRBadgeRemoveAllScoped(self, appID, completion);
+}
+
+static IMP gCRBadgeRemoveAllPendingOriginal;
+static void CRBadgeRemoveAllPending(id self, SEL cmd, NSString *appID)
+{
+    void (*original)(id, SEL, id) =
+        (void (*)(id, SEL, id))gCRBadgeRemoveAllPendingOriginal;
+    if (!original)
+        return;
+    if (!CRBadgeRedirectionEnabled(appID) || ![NSXPCConnection currentConnection]) {
+        original(self, cmd, appID);
+        return;
+    }
+    CRBadgeRemoveAllScoped(self, appID, nil);
+}
+
 /* 0x10350/0x1FF68/0x1FF7C: recover the APNS topic separator
  * verbatim; only rewrite messages with a valid nonempty suffix. */
 static IMP gCRBadgeDeliverMessageOriginal;
@@ -778,6 +929,19 @@ static void CRBadgeReceiveToken(id self, SEL cmd, id connection, id token,
         }
     }
     original(self, cmd, connection, token, base, identifier);
+}
+
+/* CraneSB 0xD958: LSApplicationProxy bundle ID is topic-scoped only
+ * while requestToken's origin container is active on this thread. */
+static IMP gCRBadgeProxyBundleIDOriginal;
+static id CRBadgeProxyBundleID(id self, SEL cmd)
+{
+    id (*original)(id, SEL) = (id (*)(id, SEL))gCRBadgeProxyBundleIDOriginal;
+    id appID = original ? original(self, cmd) : nil;
+    id container = [NSThread currentThread].threadDictionary[@"crane_requestOriginContainerID"];
+    if (container && [appID isKindOfClass:[NSString class]])
+        return [NSString stringWithFormat:@"%@.c_r_a_n_e.%@", appID, container];
+    return appID;
 }
 
 /* 0xDC5C/0xE194: encode token invalidation per originating container.
@@ -1158,8 +1322,110 @@ static void CRBadgeModifyLegacy(id self, SEL cmd, id request, id appID,
     }
 }
 
+/* CraneSB 0xE730: decorate notification title with the source
+ * container's display name. The recovered CraneManager selector is not
+ * reconstructed yet, so preserve the original title until it exists. */
+static IMP gCRBadgeNotificationTitleOriginal;
+static id CRBadgeNotificationTitle(id self, SEL cmd)
+{
+    id (*original)(id, SEL) = (id (*)(id, SEL))gCRBadgeNotificationTitleOriginal;
+    id title = original ? original(self, cmd) : nil;
+    SEL requestSEL = NSSelectorFromString(@"notificationRequest");
+    if (![self respondsToSelector:requestSEL])
+        return title;
+    id notificationRequest = ((id (*)(id, SEL))objc_msgSend)(self, requestSEL);
+    SEL userNotificationSEL = NSSelectorFromString(@"userNotification");
+    if (![notificationRequest respondsToSelector:userNotificationSEL])
+        return title;
+    id notification = ((id (*)(id, SEL))objc_msgSend)(notificationRequest, userNotificationSEL);
+    if (!notification)
+        return title;
+    id appID = [notificationRequest respondsToSelector:@selector(sectionIdentifier)]
+        ? ((id (*)(id, SEL))objc_msgSend)(notificationRequest, @selector(sectionIdentifier)) : nil;
+    id manager = [CraneManager sharedManager];
+    SEL nameSEL = NSSelectorFromString(
+        @"containerNameToDisplayInNotificationWithUserInfoOrContext:ofApplicationWithIdentifier:");
+    if (![manager respondsToSelector:nameSEL])
+        return title;
+    id request = [notification respondsToSelector:@selector(request)]
+        ? ((id (*)(id, SEL))objc_msgSend)(notification, @selector(request)) : nil;
+    id content = [request respondsToSelector:@selector(content)]
+        ? ((id (*)(id, SEL))objc_msgSend)(request, @selector(content)) : nil;
+    id info = [content respondsToSelector:@selector(userInfo)]
+        ? ((id (*)(id, SEL))objc_msgSend)(content, @selector(userInfo)) : nil;
+    id name = ((id (*)(id, SEL, id, id))objc_msgSend)(manager, nameSEL, info, appID);
+    if (![name isKindOfClass:[NSString class]] || ![name length])
+        return title;
+    return [NSString stringWithFormat:@"%@ (%@)", title, [name uppercaseString]];
+}
+
+/* CraneSB 0x1119C: scope bulletin headers and context to the source
+ * container after the original provider creates the bulletin. */
+static IMP gCRBadgeBulletinOriginal;
+static id CRBadgeBulletinForNotification(id self, SEL cmd, id notification)
+{
+    id (*original)(id, SEL, id) =
+        (id (*)(id, SEL, id))gCRBadgeBulletinOriginal;
+    id bulletin = original ? original(self, cmd, notification) : nil;
+    id appID = [self respondsToSelector:@selector(sectionIdentifier)]
+        ? ((id (*)(id, SEL))objc_msgSend)(self, @selector(sectionIdentifier)) : nil;
+    id info = [notification respondsToSelector:@selector(userInfo)]
+        ? ((id (*)(id, SEL))objc_msgSend)(notification, @selector(userInfo)) : nil;
+    id source = [info isKindOfClass:[NSDictionary class]]
+        ? info[@"crane_sourceContainerID"] : nil;
+    if (!source && [info isKindOfClass:[NSDictionary class]] &&
+        CRBadgeRedirectionEnabled(appID))
+        source = @"DEFAULT";
+    if (!source || !bulletin)
+        return bulletin;
+    if ([bulletin respondsToSelector:@selector(setHeader:)]) {
+        NSString *name = [[CraneManager sharedManager]
+            containerNameToDisplayInNotificationWithUserInfoOrContext:info
+                                     ofApplicationWithIdentifier:appID];
+        if (name) {
+            NSString *applicationName = [[CraneManager sharedManager]
+                displayNameForApplicationWithIdentifier:appID];
+            ((void (*)(id, SEL, id))objc_msgSend)(bulletin, @selector(setHeader:),
+                [NSString stringWithFormat:@"%@ (%@)", applicationName, name]);
+        }
+    }
+    if (![source isEqual:@"DEFAULT"] &&
+        [bulletin respondsToSelector:@selector(context)] &&
+        [bulletin respondsToSelector:@selector(setContext:)]) {
+        id context = ((id (*)(id, SEL))objc_msgSend)(bulletin, @selector(context));
+        if ([context isKindOfClass:[NSDictionary class]]) {
+            NSMutableDictionary *tagged = [context mutableCopy];
+            tagged[@"crane_sourceContainerID"] = source;
+            ((void (*)(id, SEL, id))objc_msgSend)(bulletin, @selector(setContext:),
+                [tagged copy]);
+        }
+    }
+    return bulletin;
+}
+
 void CRInitBadgeListenerMethods(void)
 {
+    Class dataProvider = NSClassFromString(@"UNSDefaultDataProvider");
+    SEL bulletinSEL = NSSelectorFromString(@"_queue_bulletinForNotification:");
+    if (dataProvider && [dataProvider instancesRespondToSelector:bulletinSEL])
+        MSHookMessageEx(dataProvider, bulletinSEL,
+                        (IMP)CRBadgeBulletinForNotification,
+                        &gCRBadgeBulletinOriginal);
+    Class bulletinClass = NSClassFromString(@"BBBulletin");
+    SEL headerSEL = NSSelectorFromString(@"setHeader:");
+    if (!bulletinClass || ![bulletinClass instancesRespondToSelector:headerSEL]) {
+        Class provider = NSClassFromString(@"NCNotificationRequestContentProvider");
+        SEL titleSEL = NSSelectorFromString(@"title");
+        if (provider && [provider instancesRespondToSelector:titleSEL])
+            MSHookMessageEx(provider, titleSEL,
+                            (IMP)CRBadgeNotificationTitle,
+                            &gCRBadgeNotificationTitleOriginal);
+    }
+    Class proxyClass = NSClassFromString(@"LSApplicationProxy");
+    SEL proxySEL = NSSelectorFromString(@"un_applicationBundleIdentifier");
+    if (proxyClass && [proxyClass instancesRespondToSelector:proxySEL])
+        MSHookMessageEx(proxyClass, proxySEL, (IMP)CRBadgeProxyBundleID,
+                        &gCRBadgeProxyBundleIDOriginal);
     Class descriptionClass = NSClassFromString(
         @"UNSNotificationSourceDescription");
     if (!descriptionClass)
@@ -1286,6 +1552,34 @@ void CRInitBadgeListenerMethods(void)
     if ([listener instancesRespondToSelector:addSEL])
         MSHookMessageEx(listener, addSEL, (IMP)CRBadgeAddRequests,
                         &gCRBadgeAddRequestsOriginal);
+    SEL pendingSEL = NSSelectorFromString(@"getPendingNotificationRequestsForBundleIdentifier:withCompletionHandler:");
+    if ([listener instancesRespondToSelector:pendingSEL])
+        MSHookMessageEx(listener, pendingSEL, (IMP)CRBadgePendingRequests,
+                        &gCRBadgePendingRequestsOriginal);
+    SEL removeWithReplySEL = NSSelectorFromString(
+        @"removePendingNotificationRequestsWithIdentifiers:forBundleIdentifier:completionHandler:");
+    if ([listener instancesRespondToSelector:removeWithReplySEL])
+        MSHookMessageEx(listener, removeWithReplySEL,
+                        (IMP)CRBadgeRemovePendingWithReply,
+                        &gCRBadgeRemovePendingWithReplyOriginal);
+    SEL removeSEL = NSSelectorFromString(
+        @"removePendingNotificationRequestsWithIdentifiers:forBundleIdentifier:");
+    if ([listener instancesRespondToSelector:removeSEL])
+        MSHookMessageEx(listener, removeSEL,
+                        (IMP)CRBadgeRemovePending,
+                        &gCRBadgeRemovePendingOriginal);
+    SEL removeAllWithReplySEL = NSSelectorFromString(
+        @"removeAllPendingNotificationRequestsForBundleIdentifier:completionHandler:");
+    if ([listener instancesRespondToSelector:removeAllWithReplySEL])
+        MSHookMessageEx(listener, removeAllWithReplySEL,
+                        (IMP)CRBadgeRemoveAllPendingWithReply,
+                        &gCRBadgeRemoveAllPendingWithReplyOriginal);
+    SEL removeAllSEL = NSSelectorFromString(
+        @"removeAllPendingNotificationRequestsForBundleIdentifier:");
+    if ([listener instancesRespondToSelector:removeAllSEL])
+        MSHookMessageEx(listener, removeAllSEL,
+                        (IMP)CRBadgeRemoveAllPending,
+                        &gCRBadgeRemoveAllPendingOriginal);
     class_addMethod(listener,
         NSSelectorFromString(@"crane_switchBadgesOfContainerWithIdentifier:andContainerWithIdentifier:ofApplicationWithIdentifier:"),
         (IMP)CRSwitchContainerBadges, "v@:@@@");

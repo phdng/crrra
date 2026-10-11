@@ -719,6 +719,22 @@ usingBiometricsIfNeededWithSuccessHandler:(dispatch_block_t)handler
     return appID.lastPathComponent ?: appID;
 }
 
+/* Inferred: the selector/arguments are confirmed in CraneSB 0xE730 and
+ * 0x1119C; the original libcrane implementation is not recovered. */
+- (NSString *)containerNameToDisplayInNotificationWithUserInfoOrContext:(NSDictionary *)info
+                                         ofApplicationWithIdentifier:(NSString *)appID
+{
+    if (![info isKindOfClass:[NSDictionary class]] || !appID.length)
+        return nil;
+    id source = info[@"crane_sourceContainerID"];
+    NSString *container = [source isKindOfClass:[NSString class]] ? source : nil;
+    if (!container.length)
+        return nil;
+    return [self displayNameForContainerWithIdentifier:container
+                           ofApplicationWithIdentifier:appID
+                                shouldUseShortVersion:YES];
+}
+
 - (NSString *)displayNameForContainerWithIdentifier:(NSString *)containerID
                          ofApplicationWithIdentifier:(NSString *)appID
                               shouldUseShortVersion:(BOOL)useShort
