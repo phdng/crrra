@@ -40,6 +40,9 @@ jobs:
       - name: Verify daemon safety contracts
         run: python3 reconstruction/tools/check_daemon_contract.py
 
+      - name: Verify runningboardd launch hook ABI
+        run: python3 reconstruction/tools/check_runningboard_contract.py
+
       - name: Set up Theos
         uses: waruhachi/theos-action@v2.6.3
         with:

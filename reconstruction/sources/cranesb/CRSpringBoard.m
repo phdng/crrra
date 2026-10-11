@@ -642,7 +642,7 @@ static void CRModifyRunningBoardLaunchRequest(id request)
 }
 
 static id (*gOriginalRBExecuteLaunchRequest)(id, SEL, id, id);
-static id (*gOriginalRBPrivateExecuteLaunchRequest)(id, SEL, id);
+static id (*gOriginalRBPrivateExecuteLaunchRequest)(id, SEL, id, id);
 
 static id CRRBExecuteLaunchRequest(id self, SEL command, id request, id argument)
 {
@@ -651,11 +651,11 @@ static id CRRBExecuteLaunchRequest(id self, SEL command, id request, id argument
         ? gOriginalRBExecuteLaunchRequest(self, command, request, argument) : nil;
 }
 
-static id CRRBPrivateExecuteLaunchRequest(id self, SEL command, id request)
+static id CRRBPrivateExecuteLaunchRequest(id self, SEL command, id request, id error)
 {
     CRModifyRunningBoardLaunchRequest(request);
     return gOriginalRBPrivateExecuteLaunchRequest
-        ? gOriginalRBPrivateExecuteLaunchRequest(self, command, request) : nil;
+        ? gOriginalRBPrivateExecuteLaunchRequest(self, command, request, error) : nil;
 }
 
 static void CRInitRunningBoardd(void)
@@ -665,7 +665,7 @@ static void CRInitRunningBoardd(void)
     Class processManager = NSClassFromString(@"RBProcessManager");
     if (processManager) {
         SEL execute = NSSelectorFromString(@"executeLaunchRequest:withError:");
-        SEL privateExecute = NSSelectorFromString(@"_executeLaunchRequest:");
+        SEL privateExecute = NSSelectorFromString(@"_executeLaunchRequest:withError:");
         if ([processManager instancesRespondToSelector:execute])
             MSHookMessageEx(processManager, execute, (IMP)CRRBExecuteLaunchRequest,
                             (IMP *)&gOriginalRBExecuteLaunchRequest);
