@@ -116,6 +116,17 @@ jobs:
 
           python3 tools/verify_package_layout.py pkg
           python3 tools/verify_architectures.py pkg
+          echo '### Mach-O dependencies (installed payload)' >> "$GITHUB_STEP_SUMMARY"
+          echo '~~~text' >> "$GITHUB_STEP_SUMMARY"
+          for binary in \
+            'pkg/Library/PreferenceBundles/CranePrefs.bundle/CranePrefs' \
+            'pkg/Library/MobileSubstrate/DynamicLibraries/CraneSB.dylib' \
+            'pkg/usr/lib/libcrane.dylib'; do
+            echo "--- $binary" | tee -a linkage.txt
+            otool -L "$binary" | tee -a linkage.txt
+          done
+          cat linkage.txt >> "$GITHUB_STEP_SUMMARY"
+          echo '~~~' >> "$GITHUB_STEP_SUMMARY"
           CONTROL_MEMBER="$(ar -t "$DEB" | awk '/^control\.tar\./ { print; exit }')"
           test -n "$CONTROL_MEMBER" || { echo "::error::Missing control archive"; exit 1; }
           ar -p "$DEB" "$CONTROL_MEMBER" | tar -xOf - ./control > package.control
@@ -146,6 +157,7 @@ jobs:
           path: |
             reconstruction/build.log
             reconstruction/deb.sha256
+            reconstruction/linkage.txt
 
       - name: Upload package
         if: success()
