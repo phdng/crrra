@@ -155,10 +155,19 @@ assert 'xpc_dictionary_set_string(report, "container_id", containerID.UTF8String
 # A disconnected helper peer must trigger re-attestation, and a stale
 # connection must not clear a newer live registration for the same PID.
 assert 'NSUInteger myGeneration = ++generation;' in common
+assert 'xpc_connection_cancel(created);' in common
+assert 'static BOOL creationRetryScheduled;' in common
+assert 'if (!creationRetryScheduled)' in common
+assert 'creationRetryScheduled = NO;' in common
+assert 'generation == myGeneration && connection == created' in common
+assert 'if (!creationRetryScheduled)' in common
+assert 'if (!retire)' in common
+assert 'if (connection)' in common
 assert 'if (generation != myGeneration || connection)' in common
 assert 'reports[component] = containerID.length ? [containerID copy] : NSNull.null;' in common
-assert 'pending = [reports copy];' in common
-assert 'for (NSString *name in pending)' in common
+assert 'for (NSString *name in reports)' in common
+assert 'xpc_connection_send_message(created, replay);' in common
+assert 'name = reports.allKeys.firstObject;' in common
 assert 'CRReportRuntimeInjection(name,' in common
 assert 'components[component] = claim;' in helper
 assert 'claim[@"container"] = containerID;' in helper

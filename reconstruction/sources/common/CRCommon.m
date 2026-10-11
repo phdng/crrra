@@ -181,6 +181,7 @@ void CRReportRuntimeInjection(NSString *component, NSString *containerID)
     static NSObject *connectionLock;
     static NSMutableDictionary<NSString *, id> *reports;
     static NSUInteger generation;
+    static BOOL creationRetryScheduled;
     static dispatch_once_t lockOnce;
     dispatch_once(&lockOnce, ^{
         connectionLock = [NSObject new];
@@ -192,42 +193,89 @@ void CRReportRuntimeInjection(NSString *component, NSString *containerID)
         if (!connection) {
             xpc_connection_t created = CRCommonXPCConnectionCreateMachService(
                 CR_HELPERD_MACH_SERVICE.UTF8String, NULL, 0);
-            if (!created)
+            if (!created) {
+                /* A temporary launchd/Mach-service failure must not leave
+                 * constructor-only injection reports permanently unregistered. */
+                if (!creationRetryScheduled) {
+                    creationRetryScheduled = YES;
+                    dispatch_after(dispatch_time(DISPATCH_TIME_NOW, 2 * NSEC_PER_SEC),
+                        dispatch_get_global_queue(QOS_CLASS_UTILITY, 0), ^{
+                            NSString *name;
+                            id value;
+                            @synchronized(connectionLock) {
+                                creationRetryScheduled = NO;
+                                if (connection)
+                                    return;
+                                name = reports.allKeys.firstObject;
+                                value = name ? reports[name] : nil;
+                            }
+                            if (name)
+                                CRReportRuntimeInjection(name,
+                                    value == NSNull.null ? nil : value);
+                        });
+                }
                 return;
+            }
             connection = created;
             NSUInteger myGeneration = ++generation;
             xpc_connection_set_event_handler(created, ^(xpc_object_t event) {
                 if (xpc_get_type(event) != XPC_TYPE_ERROR)
                     return;
                 __block BOOL reconnect = NO;
+                __block BOOL retire = NO;
                 @synchronized(connectionLock) {
-                    if (generation == myGeneration) {
+                    if (generation == myGeneration && connection == created) {
                         connection = NULL;
-                        reconnect = YES;
+                        retire = YES;
+                        /* Share the retry gate with initial creation failures. */
+                        if (!creationRetryScheduled) {
+                            creationRetryScheduled = YES;
+                            reconnect = YES;
+                        }
                     }
                 }
+                if (!retire)
+                    return;
+                /* Retire the failed peer even when another retry is queued. */
+                xpc_connection_cancel(created);
                 if (!reconnect)
                     return;
                 /* Re-register after helperd restarts. Generation checking
                  * prevents old connection errors from replacing a new peer. */
                 dispatch_after(dispatch_time(DISPATCH_TIME_NOW, 2 * NSEC_PER_SEC),
                     dispatch_get_global_queue(QOS_CLASS_UTILITY, 0), ^{
-                        NSDictionary<NSString *, id> *pending;
+                        NSString *name;
+                        id value;
                         @synchronized(connectionLock) {
+                            creationRetryScheduled = NO;
                             if (generation != myGeneration || connection)
                                 return;
-                            pending = [reports copy];
+                            name = reports.allKeys.firstObject;
+                            value = name ? reports[name] : nil;
                         }
-                        /* Each component on this image needs its own live
-                         * report after the helper has restarted. */
-                        for (NSString *name in pending) {
-                            id value = pending[name];
+                        /* Opening a connection replays every cached claim;
+                         * even a concurrent new report cannot skip older ones. */
+                        if (name)
                             CRReportRuntimeInjection(name,
                                 value == NSNull.null ? nil : value);
-                        }
                     });
             });
             xpc_connection_resume(created);
+            /* The new connection must receive every component's latest
+             * claim, not merely the report that caused reconnection. */
+            for (NSString *name in reports) {
+                id value = reports[name];
+                xpc_object_t replay = xpc_dictionary_create(NULL, NULL, 0);
+                if (!replay)
+                    continue;
+                xpc_dictionary_set_string(replay, "operation", "runtime_report");
+                xpc_dictionary_set_string(replay, "protocol", CR_HELPERD_PING_PROTOCOL_V1);
+                xpc_dictionary_set_string(replay, "component", name.UTF8String);
+                if (value != NSNull.null)
+                    xpc_dictionary_set_string(replay, "container_id", [(NSString *)value UTF8String]);
+                xpc_connection_send_message(created, replay);
+            }
+            return;
         }
 
         xpc_object_t report = xpc_dictionary_create(NULL, NULL, 0);
