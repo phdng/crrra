@@ -246,6 +246,7 @@
 @property (nonatomic, copy) NSString *applicationIdentifier;
 @property (nonatomic, strong) NSMutableDictionary *applicationSettings;
 @property (nonatomic, strong) PSSpecifier *gameCenterSupportEnabledSpecifier;
+@property (nonatomic, strong) NSArray *craneConfigurationSpecifiers;
 @end
 
 @implementation CRPApplicationConfigurationListController
@@ -300,6 +301,8 @@
 
 - (id)specifiers
 {
+    if (self.craneConfigurationSpecifiers)
+        return self.craneConfigurationSpecifiers;
     NSMutableArray *specifiers = [NSMutableArray new];
 
     /* Active Container */
@@ -440,7 +443,15 @@
     [spoof setProperty:CRAppSetting_SpoofSandboxLookupsEnabled forKey:@"key"];
     [specifiers addObject:spoof];
 
-    return specifiers;
+    self.craneConfigurationSpecifiers = specifiers;
+    @try {
+        [self setValue:specifiers forKey:@"_specifiers"];
+    } @catch (NSException *exception) {
+        NSLog(@"CranePrefs: app configuration backing failed: %@", exception);
+    }
+    NSLog(@"CranePrefs: app configuration %@ specifier count=%lu",
+          self.applicationIdentifier, (unsigned long)specifiers.count);
+    return self.craneConfigurationSpecifiers;
 }
 
 - (void)setPreferenceValue:(id)value specifier:(id)specifier
