@@ -21,6 +21,7 @@
 
 #import <UIKit/UIKit.h>
 #import <objc/message.h>
+#import <limits.h>
 
 #import "CRManager.h"
 #import "CRPaths.h"
@@ -208,6 +209,12 @@
 @property (nonatomic, strong) NSArray *craneContainerSpecifiers;
 @property (nonatomic, strong) PSSpecifier *choicyOverwriteToggleSpecifier;
 @property (nonatomic, strong) PSSpecifier *choicyConfigurationPreviewSpecifier;
+@property (nonatomic, strong) PSSpecifier *sizeGroupSpecifier;
+@property (nonatomic, assign) unsigned long long cachedSize;
+@property (nonatomic, assign) BOOL sizeCached;
+@property (nonatomic, assign) NSUInteger sizeFetchGeneration;
+- (void)updateContainerSize;
+- (void)updateSizeGroupSpecifierAndReload:(BOOL)reload;
 @end
 
 @implementation CRPContainerConfigurationListController
@@ -230,6 +237,8 @@
     if (![containerID isEqualToString:self.containerIdentifier] ||
         ![appID isEqualToString:self.applicationIdentifier]) return;
     dispatch_async(dispatch_get_main_queue(), ^{
+        self.sizeCached = NO;
+        self.sizeFetchGeneration++;
         self.craneContainerSpecifiers = nil;
         @try { [self setValue:nil forKey:@"_specifiers"]; }
         @catch (__unused NSException *exception) {}
@@ -244,8 +253,13 @@
 
 - (void)viewWillAppear:(BOOL)animated
 {
+    BOOL alreadyLoaded = self.craneContainerSpecifiers != nil;
     [self specifiers];
     [super viewWillAppear:animated];
+    /* Refresh on return from another pane, but do not request twice
+     * during the initial specifier build. */
+    if (alreadyLoaded)
+        [self updateContainerSize];
 }
 
 - (void)setSpecifier:(PSSpecifier *)specifier
@@ -256,6 +270,8 @@
         ![containerID isEqualToString:self.containerIdentifier]) {
         self.applicationIdentifier = appID;
         self.containerIdentifier = containerID;
+        self.sizeCached = NO;
+        self.sizeFetchGeneration++;
         self.craneContainerSpecifiers = nil;
         @try { [self setValue:nil forKey:@"_specifiers"]; }
         @catch (__unused NSException *exception) {}
@@ -265,6 +281,7 @@
 
 - (id)specifiers
 {
+    BOOL shouldUpdateSize = !self.craneContainerSpecifiers;
     if (!self.craneContainerSpecifiers) {
         CraneManager *manager = CraneManager.sharedManager;
         NSDictionary *settings = [manager containerSettingsForContainerWithIdentifier:
@@ -324,13 +341,71 @@
             self.choicyOverwriteToggleSpecifier = nil;
             self.choicyConfigurationPreviewSpecifier = nil;
         }
+        /* Native CranePrefs 0x11520 displays size in a footer, initially
+         * '(...)' and then NSByteCountFormatter once the async callback fires. */
+        PSSpecifier *sizeGroup = [PSSpecifier emptyGroupSpecifier];
+        self.sizeGroupSpecifier = sizeGroup;
+        [rows addObject:sizeGroup];
+        [self updateSizeGroupSpecifierAndReload:NO];
         self.craneContainerSpecifiers = rows;
     }
     @try { [self setValue:self.craneContainerSpecifiers forKey:@"_specifiers"]; }
     @catch (NSException *exception) {
         NSLog(@"CranePrefs: container detail backing failed: %@", exception);
     }
+    if (shouldUpdateSize)
+        [self updateContainerSize];
     return self.craneContainerSpecifiers;
+}
+
+/* Native CranePrefs 0x113A4/0x1148C/0x11520: calculate container size
+ * asynchronously and update the existing footer on the main queue. */
+- (void)updateSizeGroupSpecifierAndReload:(BOOL)reload
+{
+    PSSpecifier *group = self.sizeGroupSpecifier;
+    if (!group)
+        return;
+    NSString *label = CRLocalize(@"SIZE_OF_CONTAINER");
+    long long count = self.cachedSize > LLONG_MAX
+        ? LLONG_MAX : (long long)self.cachedSize;
+    NSString *value = self.sizeCached
+        ? [NSByteCountFormatter stringFromByteCount:count countStyle:0]
+        : @"(...)";
+    [group setProperty:[NSString stringWithFormat:@"%@: %@", label, value]
+               forKey:@"footerText"];
+    if (reload)
+        [self reloadSpecifier:group];
+}
+
+- (void)updateContainerSize
+{
+    NSString *appID = [self.applicationIdentifier copy];
+    NSString *containerID = [self.containerIdentifier copy];
+    if (!appID.length || !containerID.length)
+        return;
+    CraneManager *manager = CraneManager.sharedManager;
+    /* No guessed/shared fallback if the app container cannot be resolved. */
+    NSArray<NSString *> *paths = [manager pathsAssociatedToContainerWithIdentifier:containerID
+                                                        ofApplicationWithIdentifier:appID];
+    if (!paths.count)
+        return;
+    NSUInteger generation = ++self.sizeFetchGeneration;
+    __weak typeof(self) weakSelf = self;
+    [manager sizeOccupiedByContainerWithIdentifier:containerID
+                     forApplicationWithIdentifier:appID
+                              completionHandler:^(unsigned long long bytes) {
+        dispatch_async(dispatch_get_main_queue(), ^{
+            typeof(self) strongSelf = weakSelf;
+            if (!strongSelf ||
+                generation != strongSelf.sizeFetchGeneration ||
+                ![appID isEqualToString:strongSelf.applicationIdentifier] ||
+                ![containerID isEqualToString:strongSelf.containerIdentifier])
+                return;
+            strongSelf.cachedSize = bytes;
+            strongSelf.sizeCached = YES;
+            [strongSelf updateSizeGroupSpecifierAndReload:YES];
+        });
+    }];
 }
 
 /* ChoicyPrefs is optional; original 0x10BD4 loads its bundle before

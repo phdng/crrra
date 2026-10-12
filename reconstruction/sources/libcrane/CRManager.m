@@ -26,6 +26,7 @@
 
 #import <Foundation/Foundation.h>
 #import <CoreFoundation/CoreFoundation.h>
+#import <limits.h>
 #import <objc/message.h>
 
 #import "CRManager.h"
@@ -1057,22 +1058,52 @@ usingBiometricsIfNeededWithSuccessHandler:(void (^)(BOOL authenticated))handler
     return root ? @[root] : @[];
 }
 
+/* CranePrefs 0x113A4/0x1148C expects an asynchronous size completion.
+ * Resolve the app-scoped root before scanning; do not fall back to the
+ * shared Crane root, nor traverse symlinked container entries. */
 - (void)sizeOccupiedByContainerWithIdentifier:(NSString *)containerID
                       forApplicationWithIdentifier:(NSString *)appID
                                completionHandler:(void (^)(unsigned long long))handler
 {
-    unsigned long long total = 0;
+    if (!handler)
+        return;
     NSString *root = [self containerDirectoryForContainerWithIdentifier:containerID
                                           ofApplicationWithIdentifier:appID];
-    NSDirectoryEnumerator *e = [NSFileManager.defaultManager enumeratorAtPath:root];
-    for (NSString *rel in e) {
-        NSDictionary *attrs = [NSFileManager.defaultManager
-                               attributesOfItemAtPath:[root stringByAppendingPathComponent:rel]
-                                                error:NULL];
-        total += [attrs fileSize];
+    BOOL valid = NO;
+    if ([containerID isEqualToString:CR_DEFAULT_CONTAINER_IDENTIFIER]) {
+        NSString *appHome = CRManagerVerifiedApplicationHome(appID);
+        valid = appHome.length && [root isEqualToString:appHome];
+    } else {
+        valid = CRManagerSafeManagedPath(appID, containerID, root);
     }
-    if (handler)
-        handler(total);
+    if (!valid) {
+        dispatch_async(dispatch_get_main_queue(), ^{ handler(0); });
+        return;
+    }
+    dispatch_async(dispatch_get_global_queue(QOS_CLASS_UTILITY, 0), ^{
+        NSFileManager *fm = [NSFileManager new];
+        BOOL isDirectory = NO;
+        unsigned long long total = 0;
+        if ([fm fileExistsAtPath:root isDirectory:&isDirectory] &&
+            isDirectory &&
+            ![fm destinationOfSymbolicLinkAtPath:root error:NULL]) {
+            NSDirectoryEnumerator *enumerator = [fm enumeratorAtPath:root];
+            for (NSString *relative in enumerator) {
+                NSString *path = [root stringByAppendingPathComponent:relative];
+                NSDictionary *attrs = [fm attributesOfItemAtPath:path error:NULL];
+                NSString *kind = attrs[NSFileType];
+                if ([kind isEqualToString:NSFileTypeSymbolicLink]) {
+                    [enumerator skipDescendants];
+                    continue;
+                }
+                if ([kind isEqualToString:NSFileTypeRegular]) {
+                    unsigned long long bytes = [attrs fileSize];
+                    total = ULLONG_MAX - total < bytes ? ULLONG_MAX : total + bytes;
+                }
+            }
+        }
+        dispatch_async(dispatch_get_main_queue(), ^{ handler(total); });
+    });
 }
 
 - (NSArray<NSString *> *)unknownContainersInsideApplicationWithIdentifier:(NSString *)appID

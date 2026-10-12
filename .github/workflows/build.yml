@@ -67,6 +67,9 @@ jobs:
       - name: Verify optional Choicy integration
         run: python3 reconstruction/tools/check_choicy_integration_contract.py
 
+      - name: Verify asynchronous container size footer
+        run: python3 reconstruction/tools/check_container_size_contract.py
+
       - name: Set up Theos
         uses: waruhachi/theos-action@v2.6.3
         with:
