@@ -62,6 +62,39 @@ static id CRActivatorWorkspace(void)
     return workspaceClass ? [(id)workspaceClass defaultWorkspace] : nil;
 }
 
+/* Native 0x1C924 used containsString:, but an externally supplied
+ * Activator listener name must not be accepted because it contains a
+ * substring of another tweak's name. Native 0x1C8B0 generates exactly
+ * four pipe-separated components, ending in '|'. Defensive adaptation. */
+static NSArray<NSString *> *CRActivatorParsedListenerName(NSString *name)
+{
+    if (![name isKindOfClass:NSString.class])
+        return nil;
+    NSArray<NSString *> *parts = [name componentsSeparatedByString:@"|"];
+    if (parts.count != 4 || [parts[3] length] != 0 ||
+        ![parts[1] length] || ![parts[2] length])
+        return nil;
+    NSString *expected = [NSString stringWithFormat:CR_ACTIVATOR_LISTENER_FMT,
+                          CR_ACTIVATOR_LISTENER_PREFIX, parts[1], parts[2]];
+    return [name isEqualToString:expected] ? parts : nil;
+}
+
+/* 0x1D82C emits a different field order for changed-container
+ * events: container ID first, application ID second. Treat anything
+ * except the exact generated name as an unrelated Activator event. */
+static NSArray<NSString *> *CRActivatorParsedEventName(NSString *name)
+{
+    if (![name isKindOfClass:NSString.class])
+        return nil;
+    NSArray<NSString *> *parts = [name componentsSeparatedByString:@"|"];
+    if (parts.count != 4 || [parts[3] length] != 0 ||
+        ![parts[1] length] || ![parts[2] length])
+        return nil;
+    NSString *expected = [NSString stringWithFormat:CR_ACTIVATOR_EVENT_FMT,
+                          CR_ACTIVATOR_EVENT_PREFIX, parts[1], parts[2]];
+    return [name isEqualToString:expected] ? parts : nil;
+}
+
 @interface CraneActivatorManager : NSObject
 @property (nonatomic, strong) NSMutableArray<NSString *> *setActiveContainerListenersCache;
 @property (nonatomic, strong) NSMutableArray<NSString *> *changedToContainerEventCache;
@@ -153,23 +186,17 @@ static id CRActivatorWorkspace(void)
 
 - (BOOL)listenerNameIsSetActiveContainerListener:(NSString *)listenerName
 {
-    return [listenerName containsString:@"SetActiveContainer"];
+    return CRActivatorParsedListenerName(listenerName) != nil;
 }
 
 - (NSString *)applicationIdentifierForSetActiveContainerListenerName:(NSString *)listenerName
 {
-    if (![self listenerNameIsSetActiveContainerListener:listenerName])
-        return nil;
-    NSArray<NSString *> *parts = [listenerName componentsSeparatedByString:@"|"];
-    return parts.count >= 3 ? parts[1] : nil;
+    return CRActivatorParsedListenerName(listenerName)[1];
 }
 
 - (NSString *)containerIdentifierForSetActiveContainerListenerName:(NSString *)listenerName
 {
-    if (![self listenerNameIsSetActiveContainerListener:listenerName])
-        return nil;
-    NSArray<NSString *> *parts = [listenerName componentsSeparatedByString:@"|"];
-    return parts.count >= 3 ? parts[2] : nil;
+    return CRActivatorParsedListenerName(listenerName)[2];
 }
 
 - (void)unregisterAllListeners
@@ -234,10 +261,24 @@ static id CRActivatorWorkspace(void)
     NSString *containerIdentifier =
         [self containerIdentifierForSetActiveContainerListenerName:listenerName];
 
+    /* Only honor registered listener names for an installed app and a
+     * currently known target. Deleted containers must never be activated.
+     * DEFAULT remains valid even when absent from the persisted ID list. */
+    if (![self listenerNameIsSetActiveContainerListener:listenerName] ||
+        ![self.setActiveContainerListenersCache containsObject:listenerName] ||
+        !CRActivatorApplicationIsInstalled(applicationIdentifier))
+        return;
     CraneManager *manager = [CraneManager sharedManager];
+    NSArray<NSString *> *containers =
+        [manager containerIdentifiersOfApplicationWithIdentifier:applicationIdentifier];
+    if (![containerIdentifier isEqualToString:CR_DEFAULT_CONTAINER_IDENTIFIER] &&
+        ![containers containsObject:containerIdentifier])
+        return;
     NSString *previousContainerIdentifier =
         [manager activeContainerIdentifierForApplicationWithIdentifier:applicationIdentifier];
-
+    if (![previousContainerIdentifier isKindOfClass:NSString.class] ||
+        !previousContainerIdentifier.length)
+        return;
     if (![containerIdentifier isEqualToString:previousContainerIdentifier]) {
         [event setUserInfo:@{ @"previousContainerID": previousContainerIdentifier }];
         [manager setActiveContainerIdentifier:containerIdentifier
@@ -251,15 +292,25 @@ static id CRActivatorWorkspace(void)
 - (void)activator:(id)activator abortEvent:(id)event forListenerName:(NSString *)listenerName
 {
     (void)activator;
+    if (![self listenerNameIsSetActiveContainerListener:listenerName] ||
+        ![self.setActiveContainerListenersCache containsObject:listenerName])
+        return;
     NSString *previousContainerIdentifier = [event userInfo][@"previousContainerID"];
-    if (!previousContainerIdentifier)
+    if (![previousContainerIdentifier isKindOfClass:NSString.class] ||
+        !previousContainerIdentifier.length)
         return;
 
     NSString *applicationIdentifier =
         [self applicationIdentifierForSetActiveContainerListenerName:listenerName];
-    [[CraneManager sharedManager]
-        setActiveContainerIdentifier:previousContainerIdentifier
-        forApplicationWithIdentifier:applicationIdentifier];
+    CraneManager *manager = [CraneManager sharedManager];
+    NSArray<NSString *> *containers =
+        [manager containerIdentifiersOfApplicationWithIdentifier:applicationIdentifier];
+    if (!CRActivatorApplicationIsInstalled(applicationIdentifier) ||
+        (![previousContainerIdentifier isEqualToString:CR_DEFAULT_CONTAINER_IDENTIFIER] &&
+         ![containers containsObject:previousContainerIdentifier]))
+        return;
+    [manager setActiveContainerIdentifier:previousContainerIdentifier
+             forApplicationWithIdentifier:applicationIdentifier];
 }
 
 - (BOOL)activator:(id)activator
@@ -447,25 +498,17 @@ requiresSmallIconForListenerName:(NSString *)listenerName
 
 - (BOOL)eventNameIsChangedToContainerEvent:(NSString *)eventName
 {
-    NSString *prefix =
-        [NSString stringWithFormat:@"%@.ChangedToContainer", CR_ACTIVATOR_EVENT_PREFIX];
-    return [eventName hasPrefix:prefix];
+    return CRActivatorParsedEventName(eventName) != nil;
 }
 
 - (NSString *)containerIDForChangedToContainerEventName:(NSString *)eventName
 {
-    if (![self eventNameIsChangedToContainerEvent:eventName])
-        return nil;
-    NSArray<NSString *> *parts = [eventName componentsSeparatedByString:@"|"];
-    return parts.count >= 3 ? parts[1] : nil;
+    return CRActivatorParsedEventName(eventName)[1];
 }
 
 - (NSString *)applicationIDForChangedToContainerEventName:(NSString *)eventName
 {
-    if (![self eventNameIsChangedToContainerEvent:eventName])
-        return nil;
-    NSArray<NSString *> *parts = [eventName componentsSeparatedByString:@"|"];
-    return parts.count >= 3 ? parts[2] : nil;
+    return CRActivatorParsedEventName(eventName)[2];
 }
 
 - (void)updateProvidedEvents

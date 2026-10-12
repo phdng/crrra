@@ -52,6 +52,9 @@ jobs:
       - name: Verify container switch callbacks
         run: python3 reconstruction/tools/check_container_switch_contract.py
 
+      - name: Verify Activator listener/event safety
+        run: python3 reconstruction/tools/check_activator_contract.py
+
       - name: Verify legacy Force Touch shortcuts
         run: python3 reconstruction/tools/check_legacy_shortcut_contract.py
 
@@ -75,6 +78,9 @@ jobs:
 
       - name: Verify per-container notification permission
         run: python3 reconstruction/tools/check_prefs_notification_contract.py
+
+      - name: Verify guarded device identifier settings
+        run: python3 reconstruction/tools/check_device_identifier_settings_contract.py
 
       - name: Set up Theos
         uses: waruhachi/theos-action@v2.6.3

@@ -426,6 +426,44 @@
         [rename setButtonAction:@selector(renameContainer)];
         [rows addObject:rename];
 
+        /* CranePrefs 0x12EE8/0x10608/0xF8F0/0x12F74 displays vendor
+         * ID only for supported applications. Our helper cannot yet
+         * generate the real system ID, so restrict this to a verified,
+         * non-default UUID and don't expose Generate/Set Custom actions. */
+        if (![self.containerIdentifier isEqualToString:CR_DEFAULT_CONTAINER_IDENTIFIER] &&
+            [manager applicationHasDeviceIdentifier:self.applicationIdentifier]) {
+            NSString *selected = [manager
+                deviceIdentifierToUseForContainerWithIdentifier:self.containerIdentifier
+                                    ofApplicationWithIdentifier:self.applicationIdentifier];
+            if (selected.length && [[NSUUID alloc] initWithUUIDString:selected]) {
+                PSSpecifier *deviceGroup = [PSSpecifier emptyGroupSpecifier];
+                [deviceGroup setName:CRLocalize(@"DEVICE_IDENTIFIER_FOR_VENDOR")];
+                [rows addObject:deviceGroup];
+                PSSpecifier *display = [PSSpecifier preferenceSpecifierNamed:selected
+                    target:self set:NULL get:NULL detail:NULL cell:4 edit:0];
+                [rows addObject:display];
+
+                /* Disabling "use container identifier" is meaningful
+                 * only if a valid stored custom UUID already exists.
+                 * Otherwise CraneSupport falls back to the container ID,
+                 * so don't offer a switch that silently does nothing. */
+                NSString *custom = settings[@"customDeviceIdentifier"];
+                if ([custom isKindOfClass:NSString.class] &&
+                    [[NSUUID alloc] initWithUUIDString:custom]) {
+                    PSSpecifier *useContainer = [PSSpecifier preferenceSpecifierNamed:
+                        CRLocalize(@"USE_CONTAINER_IDENTIFIER")
+                        target:self set:@selector(setUseContainerIdentifierAsDeviceIdentifier:specifier:)
+                        get:@selector(readUseContainerIdentifierAsDeviceIdentifier:)
+                        detail:NULL cell:6 edit:0];
+                    [useContainer setProperty:@YES forKey:@"enabled"];
+                    [useContainer setProperty:@YES forKey:@"default"];
+                    [useContainer setProperty:CRPref_UseContainerIdentifierAsDeviceID
+                                     forKey:@"key"];
+                    [rows addObject:useContainer];
+                }
+            }
+        }
+
         /* Native CranePrefs 0x11734: expose container notification
          * permission when global notifications are not disabled and the
          * application's separate registration switch is not disabled.
@@ -578,6 +616,55 @@
             [strongSelf updateSizeGroupSpecifierAndReload:YES];
         });
     }];
+}
+
+/* Device-ID editor subset from CranePrefs 0xF8F0/0x129F0.
+ * No generation of new UUIDs and no calls to the unavailable original
+ * NSXPC device-ID setter. LSD consumes this exact per-container switch
+ * on the next app request; it is NOT a promise of immediate app reload. */
+- (id)readUseContainerIdentifierAsDeviceIdentifier:(PSSpecifier *)specifier
+{
+    if (![[specifier propertyForKey:@"key"]
+          isEqualToString:CRPref_UseContainerIdentifierAsDeviceID])
+        return @YES;
+    NSDictionary *settings = [CraneManager.sharedManager
+        containerSettingsForContainerWithIdentifier:self.containerIdentifier
+                          ofApplicationWithIdentifier:self.applicationIdentifier];
+    id use = settings[CRPref_UseContainerIdentifierAsDeviceID];
+    return use ? @([use boolValue]) : @YES;
+}
+
+- (void)setUseContainerIdentifierAsDeviceIdentifier:(id)value
+                                           specifier:(PSSpecifier *)specifier
+{
+    if (![[specifier propertyForKey:@"key"]
+          isEqualToString:CRPref_UseContainerIdentifierAsDeviceID] ||
+        ![value respondsToSelector:@selector(boolValue)] ||
+        !self.applicationIdentifier.length || !self.containerIdentifier.length ||
+        [self.containerIdentifier isEqualToString:CR_DEFAULT_CONTAINER_IDENTIFIER])
+        return;
+    CraneManager *manager = CraneManager.sharedManager;
+    if (![manager applicationHasDeviceIdentifier:self.applicationIdentifier])
+        return;
+    NSMutableDictionary *settings = [[manager
+        containerSettingsForContainerWithIdentifier:self.containerIdentifier
+                          ofApplicationWithIdentifier:self.applicationIdentifier]
+        mutableCopy];
+    if (!settings)
+        return;
+    NSString *custom = settings[@"customDeviceIdentifier"];
+    if (![custom isKindOfClass:NSString.class] ||
+        ![[NSUUID alloc] initWithUUIDString:custom])
+        return;
+    id old = settings[CRPref_UseContainerIdentifierAsDeviceID];
+    BOOL previous = !old || [old boolValue];
+    BOOL requested = [value boolValue];
+    if (previous == requested)
+        return;
+    settings[CRPref_UseContainerIdentifierAsDeviceID] = @(requested);
+    [manager setContainerSettings:settings
+        forContainerWithIdentifier:self.containerIdentifier
+         ofApplicationWithIdentifier:self.applicationIdentifier];
 }
 
 /* Native 0x11734 sets default=1 on the notification permission switch.

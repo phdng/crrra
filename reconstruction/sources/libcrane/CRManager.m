@@ -1191,15 +1191,24 @@ usingBiometricsIfNeededWithSuccessHandler:(void (^)(BOOL authenticated))handler
 - (NSString *)deviceIdentifierToUseForContainerWithIdentifier:(NSString *)containerID
                                     ofApplicationWithIdentifier:(NSString *)appID
 {
+    if (!CRManagerSafePathComponent(appID) ||
+        !CRManagerSafePathComponent(containerID))
+        return nil;
     NSDictionary *settings = [self containerSettingsForContainerWithIdentifier:containerID
                                                    ofApplicationWithIdentifier:appID];
-    id custom = settings[CRPref_UseContainerIdentifierAsDeviceID];
-    if (custom && [custom boolValue])
-        return containerID; /* CONFIRMED_STATIC default from DEVICE_IDENTIFIER_DESCRIPTION */
+    id pref = settings[CRPref_UseContainerIdentifierAsDeviceID];
     NSString *customValue = settings[@"customDeviceIdentifier"];
-    if (customValue.length)
-        return customValue;
-    return nil;
+    BOOL hasCustomUUID = [customValue isKindOfClass:NSString.class] &&
+        [[NSUUID alloc] initWithUUIDString:customValue] != nil;
+    /* CranePrefs 0xF8F0 defaults this option to YES when absent.
+     * CraneSupport/CRLsd.m also falls back to the container identifier
+     * when custom is unavailable. Never return the literal DEFAULT as a
+     * vendor UUID: only non-default IDs are valid fallback candidates. */
+    if ((!pref || [pref boolValue] || !hasCustomUUID) &&
+        ![containerID isEqualToString:CR_DEFAULT_CONTAINER_IDENTIFIER] &&
+        [[NSUUID alloc] initWithUUIDString:containerID])
+        return containerID;
+    return hasCustomUUID ? customValue : nil;
 }
 
 - (void)setDeviceIdentifier:(NSString *)identifier
