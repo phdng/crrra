@@ -201,6 +201,128 @@
 }
 @end
 
+/* CranePrefs 0xDFD4/0xE030/0xE08C/0xE1E0/0xE31C: Filza browsing.
+ * Only application paths are exposed in this reconstruction. The original
+ * manager enumerates group/plug-in paths as well; those mappings are not
+ * available and must not be guessed or synthesized from identifiers. */
+@interface CRPBrowseContainerListController : PSListController
+@property (nonatomic, strong) NSArray *craneBrowseSpecifiers;
+- (NSString *)applicationIdentifier;
+- (NSString *)containerIdentifier;
+- (void)openPathForSpecifier:(PSSpecifier *)specifier;
+@end
+
+@implementation CRPBrowseContainerListController
+
+- (NSString *)applicationIdentifier
+{
+    return [[self specifier] propertyForKey:@"applicationIdentifier"];
+}
+
+- (NSString *)containerIdentifier
+{
+    return [[self specifier] propertyForKey:@"containerIdentifier"];
+}
+
+- (void)viewDidLoad
+{
+    [self specifiers];
+    [super viewDidLoad];
+}
+
+- (void)setSpecifier:(PSSpecifier *)specifier
+{
+    self.craneBrowseSpecifiers = nil;
+    @try { [self setValue:nil forKey:@"_specifiers"]; }
+    @catch (__unused NSException *exception) {}
+    [super setSpecifier:specifier];
+}
+
+- (PSSpecifier *)specifierForIdentifier:(NSString *)identifier
+                                   path:(NSString *)path
+{
+    PSSpecifier *row = [PSSpecifier preferenceSpecifierNamed:
+        CRLocalize(identifier) target:self set:NULL get:NULL
+        detail:NULL cell:13 edit:0];
+    [row setProperty:@YES forKey:@"enabled"];
+    [row setProperty:path forKey:@"pathToOpen"];
+    [row setButtonAction:@selector(openPathForSpecifier:)];
+    return row;
+}
+
+- (id)specifiers
+{
+    if (!self.craneBrowseSpecifiers) {
+        NSMutableArray *rows = [NSMutableArray new];
+        NSString *appID = self.applicationIdentifier;
+        NSString *containerID = self.containerIdentifier;
+        if (appID.length && containerID.length) {
+            NSArray<NSString *> *paths = [CraneManager.sharedManager
+                pathsAssociatedToContainerWithIdentifier:containerID
+                              ofApplicationWithIdentifier:appID];
+            NSFileManager *fm = NSFileManager.defaultManager;
+            NSMutableSet<NSString *> *seen = [NSMutableSet new];
+            for (NSString *path in paths) {
+                if (![path isKindOfClass:NSString.class] || !path.length ||
+                    [seen containsObject:path])
+                    continue;
+                BOOL directory = NO;
+                if (![fm fileExistsAtPath:path isDirectory:&directory] ||
+                    !directory ||
+                    [fm destinationOfSymbolicLinkAtPath:path error:NULL])
+                    continue;
+                if (!rows.count) {
+                    PSSpecifier *group = [PSSpecifier emptyGroupSpecifier];
+                    [group setName:CRLocalize(@"APPLICATION")];
+                    [rows addObject:group];
+                }
+                [seen addObject:path];
+                [rows addObject:[self specifierForIdentifier:@"APPLICATION"
+                                                      path:path]];
+            }
+        }
+        self.craneBrowseSpecifiers = [rows copy];
+    }
+    @try { [self setValue:self.craneBrowseSpecifiers forKey:@"_specifiers"]; }
+    @catch (NSException *exception) {
+        NSLog(@"CranePrefs: browse specifier backing failed: %@", exception);
+    }
+    return self.craneBrowseSpecifiers;
+}
+
+- (void)openPathForSpecifier:(PSSpecifier *)specifier
+{
+    NSString *appID = self.applicationIdentifier;
+    NSString *containerID = self.containerIdentifier;
+    NSString *path = [specifier propertyForKey:@"pathToOpen"];
+    if (!appID.length || !containerID.length ||
+        ![path isKindOfClass:NSString.class] || !path.length)
+        return;
+    /* The displayed specifier may be stale after reinstall/switch.
+     * Revalidate against the current verified manager paths at click time. */
+    NSArray<NSString *> *paths = [CraneManager.sharedManager
+        pathsAssociatedToContainerWithIdentifier:containerID
+                          ofApplicationWithIdentifier:appID];
+    BOOL directory = NO;
+    NSFileManager *fm = NSFileManager.defaultManager;
+    if (![paths containsObject:path] ||
+        ![fm fileExistsAtPath:path isDirectory:&directory] || !directory ||
+        [fm destinationOfSymbolicLinkAtPath:path error:NULL])
+        return;
+
+    /* Native 0xE08C: filza://view + URLPath-escaped path + /./ */
+    NSString *encoded = [path stringByAddingPercentEncodingWithAllowedCharacters:
+        NSCharacterSet.URLPathAllowedCharacterSet];
+    if (!encoded.length)
+        return;
+    NSURL *url = [NSURL URLWithString:
+        [NSString stringWithFormat:@"filza://view%@/./", encoded]];
+    UIApplication *application = UIApplication.sharedApplication;
+    if (url && [application canOpenURL:url])
+        [application openURL:url options:@{} completionHandler:nil];
+}
+@end
+
 /* Initial container detail controller reconstructed from CranePrefs 0x8920,
  * 0xEF38, 0xF0EC and 0xF268. Advanced groups remain unsupported. */
 @interface CRPContainerConfigurationListController : PSListController
@@ -347,6 +469,23 @@
         self.sizeGroupSpecifier = sizeGroup;
         [rows addObject:sizeGroup];
         [self updateSizeGroupSpecifierAndReload:NO];
+
+        /* Native CranePrefs 0x11734 only adds Browse Data if Filza's
+         * URL scheme is available. The detail page resolves fresh
+         * application-scoped container paths through CraneManager. */
+        NSURL *filzaURL = [NSURL URLWithString:@"filza://"];
+        if (filzaURL && [UIApplication.sharedApplication canOpenURL:filzaURL]) {
+            PSSpecifier *browse = [PSSpecifier preferenceSpecifierNamed:
+                CRLocalize(@"BROWSE_DATA") target:self set:NULL get:NULL
+                detail:[CRPBrowseContainerListController class] cell:2 edit:0];
+            [browse setProperty:@YES forKey:@"enabled"];
+            [browse setDetailControllerClass:[CRPBrowseContainerListController class]];
+            [browse setProperty:self.applicationIdentifier
+                         forKey:@"applicationIdentifier"];
+            [browse setProperty:self.containerIdentifier
+                         forKey:@"containerIdentifier"];
+            [rows addObject:browse];
+        }
         self.craneContainerSpecifiers = rows;
     }
     @try { [self setValue:self.craneContainerSpecifiers forKey:@"_specifiers"]; }
