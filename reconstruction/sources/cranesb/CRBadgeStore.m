@@ -1533,7 +1533,11 @@ static id CRBadgeRecordCopyWithoutContainer(id self, SEL cmd)
     id representation = [self respondsToSelector:@selector(dictionaryRepresentation)]
         ? ((id (*)(id, SEL))objc_msgSend)(self, @selector(dictionaryRepresentation)) : nil;
     Class recordClass = NSClassFromString(@"UNSNotificationRecord");
-    id record = [[recordClass alloc] initWithDictionaryRepresentation:representation];
+    id allocated = ((id (*)(id, SEL))objc_msgSend)(recordClass, @selector(alloc));
+    SEL initSEL = NSSelectorFromString(@"initWithDictionaryRepresentation:");
+    id record = [allocated respondsToSelector:initSEL]
+        ? ((id (*)(id, SEL, id))objc_msgSend)(allocated, initSEL, representation)
+        : nil;
     if ([record respondsToSelector:@selector(setUserInfo:)])
         ((void (*)(id, SEL, id))objc_msgSend)(record, @selector(setUserInfo:), [stripped copy]);
     return record;
