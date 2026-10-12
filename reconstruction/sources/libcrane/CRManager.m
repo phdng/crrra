@@ -268,13 +268,15 @@ static void CRManagerVerifyRuntimeComponent(NSString *component,
 /* CraneSB 0x11CA4 expects a synchronous reply from its "sync" proxy.
  * This reconstruction's raw-XPC component check is asynchronous, so bridge
  * it with a bounded wait; never turn a timeout/error into proof of injection.
- * Only pkd is required by this hook and is allowed on this narrow adapter. */
+ * Only pkd and apsd are allowed: these are the two recovered CraneSB
+ * notification registration gates 0x11CA4 and 0x11E44. */
 - (void)verifyCraneSupportLoadedIntoDaemon:(NSString *)daemon
                                       reply:(void (^)(BOOL))reply
 {
     if (!reply)
         return;
-    if (![daemon isEqualToString:@"pkd"]) {
+    if (![daemon isEqualToString:@"pkd"] &&
+        ![daemon isEqualToString:@"apsd"]) {
         reply(NO);
         return;
     }

@@ -1057,6 +1057,8 @@ static id CRBadgeProxyBundleID(id self, SEL cmd)
 /* 0xDC5C/0xE194: encode token invalidation per originating container.
  * The source is resolved from the listener's current XPC connection. */
 static IMP gCRBadgeInvalidateTokenOriginal;
+static BOOL CRBadgeDaemonSupportVerified(NSString *daemon);
+extern void CRPresentApsdRegistrationError(NSString *appID);
 
 static void CRBadgeInvalidateToken(id self, SEL cmd, NSString *appID)
 {
@@ -1064,7 +1066,10 @@ static void CRBadgeInvalidateToken(id self, SEL cmd, NSString *appID)
         (void (*)(id, SEL, id))gCRBadgeInvalidateTokenOriginal;
     if (!original)
         return;
-    if (CRBadgeRedirectionEnabled(appID)) {
+    /* Native 0xDC5C/0xE194 checks 0x11D74 before encoding the topic.
+     * Failure must keep Apple's original registration/invalidation path. */
+    if (CRBadgeRedirectionEnabled(appID) &&
+        CRBadgeDaemonSupportVerified(@"apsd")) {
         SEL currentSEL = NSSelectorFromString(@"_currentConnection");
         id connection = [self respondsToSelector:currentSEL]
             ? ((id (*)(id, SEL))objc_msgSend)(self, currentSEL) : nil;
@@ -1079,8 +1084,9 @@ static void CRBadgeInvalidateToken(id self, SEL cmd, NSString *appID)
     original(self, cmd, appID);
 }
 
-/* 0xDA30/0xDF68: route token requests to a container-specific APNS
- * topic. Scope origin on the calling thread for synchronous callbacks. */
+/* 0xDA30/0xDF68: route token requests to container-specific APNs topics.
+ * Only modern 0xDA30 scopes origin on the thread; legacy 0xDF68 aliases
+ * the source-description table or forwards the unencoded original ID. */
 static IMP gCRBadgeRequestTokenOriginal;
 
 static void CRBadgeRequestToken(id self, SEL cmd, NSString *appID,
@@ -1091,6 +1097,14 @@ static void CRBadgeRequestToken(id self, SEL cmd, NSString *appID,
     if (!original)
         return;
     if (!CRBadgeRedirectionEnabled(appID)) {
+        original(self, cmd, appID, completion);
+        return;
+    }
+    /* Native 0xDA30/0xDF68 invokes 0x11D74 before obtaining the PID.
+     * Do not manufacture a container APNs topic if apsd has no verified
+     * CraneSupport runtime report. */
+    if (!CRBadgeDaemonSupportVerified(@"apsd")) {
+        CRPresentApsdRegistrationError(appID);
         original(self, cmd, appID, completion);
         return;
     }
@@ -1107,36 +1121,56 @@ static void CRBadgeRequestToken(id self, SEL cmd, NSString *appID,
     NSMutableDictionary *context = [NSThread currentThread].threadDictionary;
     NSString *key = @"crane_requestOriginContainerID";
     id previous = context[key];
-    context[key] = container;
+    /* 0xDA30 scopes LSApplicationProxy's bundle rewrite to the modern
+     * listener. Native 0xDF68 uses a source-description alias instead and
+     * does NOT establish crane_requestOriginContainerID. */
+    BOOL legacyListener = class_getInstanceVariable(object_getClass(self),
+        "_bundleIdentifierToSourceDescription") != NULL;
+    if (!legacyListener)
+        context[key] = container;
     /* 0xDF68: older UNCLocal listener implementations keep a source
      * description indexed by the original bundle ID. Temporarily alias it
      * under the encoded topic while the original request runs. */
     NSMutableDictionary *descriptions = nil;
     id sourceDescription = nil;
     BOOL aliasInstalled = NO;
-    @try {
-        id mapping = [self valueForKey:@"_bundleIdentifierToSourceDescription"];
-        if ([mapping isKindOfClass:[NSMutableDictionary class]]) {
-            id candidate = mapping[appID];
-            if (candidate && !mapping[topic]) {
-                descriptions = mapping;
-                sourceDescription = candidate;
-                descriptions[topic] = sourceDescription;
-                aliasInstalled = YES;
+    /* 0xDF68 (legacy): if the source-description ivar exists but no
+     * description is registered for the base app, native forwards the
+     * original bundle identifier rather than an unresolvable Crane topic.
+     * 0xDA30 (modern) does not consult this ivar. */
+    BOOL legacyDescriptionMissing = NO;
+    if (legacyListener) {
+        legacyDescriptionMissing = YES;
+        @try {
+            id mapping = [self valueForKey:@"_bundleIdentifierToSourceDescription"];
+            if ([mapping isKindOfClass:[NSMutableDictionary class]]) {
+                id candidate = mapping[appID];
+                if (candidate) {
+                    legacyDescriptionMissing = NO;
+                    if (!mapping[topic]) {
+                        descriptions = mapping;
+                        sourceDescription = candidate;
+                        descriptions[topic] = sourceDescription;
+                        aliasInstalled = YES;
+                    }
+                }
             }
+        } @catch (NSException *exception) {
+            (void)exception;
         }
-    } @catch (NSException *exception) {
-        (void)exception;
     }
     @try {
-        original(self, cmd, topic, completion);
+        original(self, cmd, legacyDescriptionMissing ? appID : topic,
+                 completion);
     } @finally {
         if (aliasInstalled && descriptions[topic] == sourceDescription)
             [descriptions removeObjectForKey:topic];
-        if (previous)
-            context[key] = previous;
-        else
-            [context removeObjectForKey:key];
+        if (!legacyListener) {
+            if (previous)
+                context[key] = previous;
+            else
+                [context removeObjectForKey:key];
+        }
     }
 }
 
@@ -1385,7 +1419,7 @@ static NSString *CRBadgeMutationContainer(id request, id appID)
  * cranehelperd before setting extension_containerIDToAppend. Fail closed
  * when the synchronous helper proxy cannot provide a verified reply. */
 extern void CRPresentPkdRegistrationError(NSString *appID);
-static BOOL CRBadgePkdSupportVerified(void)
+static BOOL CRBadgeDaemonSupportVerified(NSString *daemon)
 {
     CraneManager *manager = [CraneManager sharedManager];
     SEL safeSEL = NSSelectorFromString(@"runSafeXPCBlock:");
@@ -1404,10 +1438,15 @@ static BOOL CRBadgePkdSupportVerified(void)
             replied = YES;
         };
         ((void (*)(id, SEL, id, id))objc_msgSend)(
-            proxy, verifySEL, @"pkd", reply);
+            proxy, verifySEL, daemon, reply);
     };
     ((void (*)(id, SEL, id))objc_msgSend)(manager, safeSEL, check);
     return replied && verified;
+}
+
+static BOOL CRBadgePkdSupportVerified(void)
+{
+    return CRBadgeDaemonSupportVerified(@"pkd");
 }
 
 static IMP gCRBadgeModifyPushOriginal;

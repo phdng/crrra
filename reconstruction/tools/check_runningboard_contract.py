@@ -135,7 +135,19 @@ assert 'return [CRBadgeRecordSource(record) isEqualToString:container];' in badg
 assert 'static NSString *CRBadgeMutationContainer(id request, id appID)' in badge
 assert 'static BOOL CRBadgePkdSupportVerified(void)' in badge
 assert '@"verifyCraneSupportLoadedIntoDaemon:reply:"' in badge
-assert 'proxy, verifySEL, @"pkd", reply' in badge
+assert 'proxy, verifySEL, daemon, reply' in badge
+assert 'return CRBadgeDaemonSupportVerified(@"pkd");' in badge
+# Original 0x11D74 / 0x11E44 gates all Crane APNs token operations on
+# authenticated CraneSupport injection into apsd, falling back to native.
+assert 'static BOOL CRBadgeDaemonSupportVerified(NSString *daemon)' in badge
+assert 'if (!CRBadgeDaemonSupportVerified(@"apsd")) {' in badge
+assert 'CRPresentApsdRegistrationError(appID);' in badge
+assert 'CRBadgeRedirectionEnabled(appID) &&\n        CRBadgeDaemonSupportVerified(@"apsd")' in badge
+assert 'legacyDescriptionMissing ? appID : topic' in badge
+assert 'BOOL legacyListener = class_getInstanceVariable(object_getClass(self),' in badge
+assert 'if (!legacyListener)\n        context[key] = container;' in badge
+assert 'if (legacyListener) {\n        legacyDescriptionMissing = YES;' in badge
+assert 'if (!legacyListener) {\n            if (previous)' in badge
 assert 'return replied && verified;' in badge
 assert badge.count('if (container && !CRBadgePkdSupportVerified())') == 2
 assert badge.count('CRPresentPkdRegistrationError(appID);') == 2

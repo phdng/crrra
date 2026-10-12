@@ -151,7 +151,9 @@ assert '- (void)runSafeXPCBlock:(dispatch_block_t)block;' in manager_header
 assert '- (void)runSafeXPCBlock:(dispatch_block_t)block' in manager
 assert '- (void)verifyCraneSupportLoadedIntoDaemon:(NSString *)daemon' in manager_header
 assert '- (void)verifyCraneSupportLoadedIntoDaemon:(NSString *)daemon' in manager
-assert 'if (![daemon isEqualToString:@"pkd"])' in manager
+assert 'if (![daemon isEqualToString:@"pkd"] &&' in manager
+assert '![daemon isEqualToString:@"apsd"])' in manager
+assert '@"apsd": @"com.apple.apsd"' in helper
 assert 'CRManagerVerifyRuntimeComponent(@"CraneSupport", daemon,' in manager
 assert 'dispatch_semaphore_wait(done,' in manager
 assert 'dispatch_after(dispatch_time(DISPATCH_TIME_NOW,' in manager
