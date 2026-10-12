@@ -158,4 +158,47 @@ assert 'static void CRBadgeExtensionsSync(id self, SEL cmd, id attributes,' in b
 assert 'static void CRBadgeExtensionsAsync(id self, SEL cmd, id attributes,' in badge
 assert '@"extensionsWithMatchingAttributes:synchronously:completion:"' in badge
 assert '@"extensionsWithMatchingAttributes:completion:"' in badge
+assert 'static BOOL CRBadgeNotificationPermission(id self, SEL cmd, NSString *topic)' in badge
+assert '@"uns_isAllowedToRequestUserNotificationsForBundleIdentifier:"' in badge
+assert 'NSString *active = CRBadgeContainerForConnection(self);' in badge
+assert 'NSArray *parts = [topic componentsSeparatedByString:@".c_r_a_n_e."];' in badge
+assert 'NSString *container = [parts lastObject];' in badge
+assert 'if (![active isEqualToString:container])' in badge
+assert 'id record = [allocated respondsToSelector:initSEL] && representation' in badge
+assert '0x1172C constructs a UNSNotificationRecord from its dictionary' in badge
+assert 'if (!record && [self respondsToSelector:@selector(copyWithZone:)])' not in badge
+assert 'if (!record || record == self ||' in badge
+assert 'verifiedInfo[@"crane_sourceContainerID"]' in badge
+assert 'if (![verifiedInfo isKindOfClass:[NSDictionary class]] ||' in badge
+assert '![record respondsToSelector:@selector(setUserInfo:)])' in badge
+assert 'record, @selector(setUserInfo:), [stripped copy]);\n    } @catch (NSException *exception)' in badge
+assert 'static id CRBadgeRecordSource(id record)' in badge
+assert 'return value ?: @"DEFAULT";' in badge
+assert 'static NSString *CRBadgeContainerForConnectionAndApplication(' in badge
+# Original 0xFD9C updates the badge with intValue and clears scoped
+# notifications when the NSNumber is exactly equal to zero.
+assert 'CRBadgeStoreSetContainerCount(appID, container,\n                                          [number intValue]);' in badge
+assert 'if ([number isEqual:[NSNumber numberWithInt:0]])' in badge
+assert '@"removeAllNotificationRecordsForBundleIdentifier:"' in badge
+assert '((void (*)(id, SEL, id))objc_msgSend)(self, removeSEL, appID);' in badge
+assert 'version.majorVersion < 17' in badge
+assert 'processesForBundleIdentifier:' in badge
+assert 'if ([processes count] != 1)' in badge
+assert badge.count('CRBadgeContainerForConnectionAndApplication(') == 10
+assert 'static id CRBadgeSanitizedRecord(id record)' in badge
+assert 'if (tagged && clean == record)' in badge
+assert 'return clean;\n    } @catch (NSException *exception) {' in badge
+assert badge.count('CRBadgeSanitizedRecord(record);') == 3
+assert 'info[@"crane_sourceContainerID"]' in badge
+assert '((id (*)(id, SEL))objc_msgSend)(record, copySEL) : record;' not in badge
+assert 'if (!copiedContent || copiedContent == content)' in badge
+assert 'verifiedInfo[@"crane_sourceContainerID"]' in badge
+assert 'id request = [self copy];' in badge
+assert 'if (!request || request == self)' in badge
+assert 'id copiedInfo = [copiedContent respondsToSelector:@selector(userInfo)]' in badge
+assert 'copiedInfo[@"crane_sourceContainerID"]' in badge
+assert 'Original 0xE730 skips decoration only when the name is nil.' in badge
+assert 'if (![name isKindOfClass:[NSString class]] || ![name length])' not in badge
+assert '0xEBA0 skips DEFAULT, not an empty identifier.' in badge
+assert '![identifier length] ||' not in badge
 print('CraneSB runningboardd + notification ABI contracts: PASS (runtime unverified)')

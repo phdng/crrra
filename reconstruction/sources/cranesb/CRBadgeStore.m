@@ -246,6 +246,37 @@ static NSString *CRBadgeContainerForConnection(NSXPCConnection *connection)
     return [result isKindOfClass:[NSString class]] ? result : nil;
 }
 
+/* Original 0xA4A0 takes (connection, bundleID). Its 0x20F58 probe checks
+ * iOS >= 17.0.0; on that branch it resolves through FBProcessManager by
+ * bundle ID, while older systems use the source PID's ClientContainerCache. */
+static NSString *CRBadgeContainerForConnectionAndApplication(
+    NSXPCConnection *connection, NSString *appID)
+{
+    NSOperatingSystemVersion version =
+        [[NSProcessInfo processInfo] operatingSystemVersion];
+    if (version.majorVersion < 17)
+        return CRBadgeContainerForConnection(connection);
+    if (!appID)
+        return nil;
+    Class managerClass = NSClassFromString(@"FBProcessManager");
+    SEL sharedSEL = NSSelectorFromString(@"sharedInstance");
+    if (![managerClass respondsToSelector:sharedSEL])
+        return nil;
+    id manager = ((id (*)(id, SEL))objc_msgSend)(managerClass, sharedSEL);
+    SEL processesSEL = NSSelectorFromString(@"processesForBundleIdentifier:");
+    if (![manager respondsToSelector:processesSEL])
+        return nil;
+    id processes = ((id (*)(id, SEL, id))objc_msgSend)(
+        manager, processesSEL, appID);
+    if ([processes count] != 1)
+        return nil;
+    id process = [processes firstObject];
+    SEL containerSEL = NSSelectorFromString(@"crane_containerIdentifier");
+    id container = [process respondsToSelector:containerSEL]
+        ? ((id (*)(id, SEL))objc_msgSend)(process, containerSEL) : nil;
+    return [container isEqualToString:@"DEFAULT"] ? nil : container;
+}
+
 /* 0xFD9C: public setter uses current XPC caller rather than save-thread ID.
  * On unknown caller identity, preserve Apple's setter without store mutation. */
 static void CRBadgePublicSet(id self, SEL cmd, NSNumber *number,
@@ -255,19 +286,26 @@ static void CRBadgePublicSet(id self, SEL cmd, NSNumber *number,
         (void (*)(id, SEL, id, id, id))gCRBadgePublicSetterOriginal;
     if (!original)
         return;
-    if (CRBadgeRedirectionEnabled(appID) &&
-        [number respondsToSelector:@selector(integerValue)]) {
+    if (CRBadgeRedirectionEnabled(appID)) {
         SEL currentSEL = NSSelectorFromString(@"currentConnection");
         NSXPCConnection *connection =
             [NSXPCConnection respondsToSelector:currentSEL]
                 ? ((id (*)(id, SEL))objc_msgSend)([NSXPCConnection class], currentSEL)
                 : nil;
         if (connection) {
-            NSString *container = CRBadgeContainerForConnection(connection);
+            NSString *container = CRBadgeContainerForConnectionAndApplication(connection, appID);
             if (!container.length)
                 container = @"DEFAULT";
             CRBadgeStoreSetContainerCount(appID, container,
-                                          [number integerValue]);
+                                          [number intValue]);
+            /* Original 0xFD9C clears this caller's notification records
+             * before forwarding a badge value equal to NSNumber(0). */
+            if ([number isEqual:[NSNumber numberWithInt:0]]) {
+                SEL removeSEL = NSSelectorFromString(
+                    @"removeAllNotificationRecordsForBundleIdentifier:");
+                if ([self respondsToSelector:removeSEL])
+                    ((void (*)(id, SEL, id))objc_msgSend)(self, removeSEL, appID);
+            }
         }
     }
     original(self, cmd, number, appID, completion);
@@ -633,7 +671,7 @@ static void CRBadgeAddRequests(id self, SEL cmd, NSArray *requests,
             [NSXPCConnection respondsToSelector:currentSEL]
                 ? ((id (*)(id, SEL))objc_msgSend)(
                     [NSXPCConnection class], currentSEL) : nil;
-        NSString *container = CRBadgeContainerForConnection(connection);
+        NSString *container = CRBadgeContainerForConnectionAndApplication(connection, appID);
         if (container.length && ![container isEqualToString:@"DEFAULT"]) {
             for (id request in requests) {
                 if (![request respondsToSelector:@selector(content)])
@@ -677,7 +715,7 @@ static void CRBadgeSaveRequest(id self, SEL cmd, id request, BOOL repost,
             [NSXPCConnection respondsToSelector:currentSEL]
                 ? ((id (*)(id, SEL))objc_msgSend)(
                     [NSXPCConnection class], currentSEL) : nil;
-        NSString *container = CRBadgeContainerForConnection(connection);
+        NSString *container = CRBadgeContainerForConnectionAndApplication(connection, appID);
         if (container.length && ![container isEqualToString:@"DEFAULT"]) {
             id content = ((id (*)(id, SEL))objc_msgSend)(
                 request, @selector(content));
@@ -719,7 +757,7 @@ static void CRBadgeSaveDatedRequest(id self, SEL cmd, id request, BOOL repost,
             [NSXPCConnection respondsToSelector:currentSEL]
                 ? ((id (*)(id, SEL))objc_msgSend)(
                     [NSXPCConnection class], currentSEL) : nil;
-        NSString *container = CRBadgeContainerForConnection(connection);
+        NSString *container = CRBadgeContainerForConnectionAndApplication(connection, appID);
         if (container.length && ![container isEqualToString:@"DEFAULT"]) {
             id content = ((id (*)(id, SEL))objc_msgSend)(
                 request, @selector(content));
@@ -759,7 +797,7 @@ static void CRBadgePendingRequests(id self, SEL cmd, NSString *appID, id complet
         original(self, cmd, appID, completion);
         return;
     }
-    NSString *container = CRBadgeContainerForConnection(connection) ?: @"DEFAULT";
+    NSString *container = CRBadgeContainerForConnectionAndApplication(connection, appID) ?: @"DEFAULT";
     void (^reply)(NSArray *) = completion;
     original(self, cmd, appID, ^(NSArray *requests) {
         NSMutableArray *filtered = [NSMutableArray array];
@@ -779,8 +817,18 @@ static void CRBadgePendingRequests(id self, SEL cmd, NSString *appID, id complet
             if (![request respondsToSelector:copySEL])
                 continue;
             id copied = ((id (*)(id, SEL))objc_msgSend)(request, copySEL);
-            if (copied)
-                [filtered addObject:copied];
+            if (!copied)
+                continue;
+            /* Recheck the returned request: the private copy selector can
+             * be provided by a different implementation on some builds. */
+            id copiedContent = [copied respondsToSelector:@selector(content)]
+                ? ((id (*)(id, SEL))objc_msgSend)(copied, @selector(content)) : nil;
+            id copiedInfo = [copiedContent respondsToSelector:@selector(userInfo)]
+                ? ((id (*)(id, SEL))objc_msgSend)(copiedContent, @selector(userInfo)) : nil;
+            if (![copiedInfo isKindOfClass:[NSDictionary class]] ||
+                copiedInfo[@"crane_sourceContainerID"])
+                continue;
+            [filtered addObject:copied];
         }
         reply([filtered copy]);
     });
@@ -1136,8 +1184,8 @@ static id CRBadgeAllTopics(id self, SEL cmd, NSString *appID)
     if (![expanded respondsToSelector:@selector(addObject:)])
         return topics;
     for (id identifier in identifiers) {
+        /* 0xEBA0 skips DEFAULT, not an empty identifier. */
         if (![identifier isKindOfClass:[NSString class]] ||
-            ![identifier length] ||
             [identifier isEqualToString:@"DEFAULT"])
             continue;
         NSString *topic = [NSString stringWithFormat:
@@ -1398,7 +1446,8 @@ static id CRBadgeNotificationTitle(id self, SEL cmd)
     id info = [content respondsToSelector:@selector(userInfo)]
         ? ((id (*)(id, SEL))objc_msgSend)(content, @selector(userInfo)) : nil;
     id name = ((id (*)(id, SEL, id, id))objc_msgSend)(manager, nameSEL, info, appID);
-    if (![name isKindOfClass:[NSString class]] || ![name length])
+    /* Original 0xE730 skips decoration only when the name is nil. */
+    if (!name)
         return title;
     return [NSString stringWithFormat:@"%@ (%@)", title, [name uppercaseString]];
 }
@@ -1535,11 +1584,28 @@ static id CRBadgeRecordCopyWithoutContainer(id self, SEL cmd)
     Class recordClass = NSClassFromString(@"UNSNotificationRecord");
     id allocated = ((id (*)(id, SEL))objc_msgSend)(recordClass, @selector(alloc));
     SEL initSEL = NSSelectorFromString(@"initWithDictionaryRepresentation:");
-    id record = [allocated respondsToSelector:initSEL]
+    id record = [allocated respondsToSelector:initSEL] && representation
         ? ((id (*)(id, SEL, id))objc_msgSend)(allocated, initSEL, representation)
         : nil;
-    if ([record respondsToSelector:@selector(setUserInfo:)])
-        ((void (*)(id, SEL, id))objc_msgSend)(record, @selector(setUserInfo:), [stripped copy]);
+    /* 0x1172C constructs a UNSNotificationRecord from its dictionary
+     * representation; it does not fall back to NSCopying. */
+    if (!record || record == self ||
+        ![record respondsToSelector:@selector(setUserInfo:)])
+        return nil;
+    @try {
+        ((void (*)(id, SEL, id))objc_msgSend)(
+            record, @selector(setUserInfo:), [stripped copy]);
+    } @catch (NSException *exception) {
+        (void)exception;
+        return nil;
+    }
+    /* Private setters can silently decline updates on some iOS builds.
+     * Only return a copy after confirming the source marker is gone. */
+    id verifiedInfo = [record respondsToSelector:@selector(userInfo)]
+        ? ((id (*)(id, SEL))objc_msgSend)(record, @selector(userInfo)) : nil;
+    if (![verifiedInfo isKindOfClass:[NSDictionary class]] ||
+        verifiedInfo[@"crane_sourceContainerID"])
+        return nil;
     return record;
 }
 
@@ -1554,10 +1620,25 @@ static id CRBadgeRequestCopyWithoutContainer(id self, SEL cmd)
         return self;
     NSMutableDictionary *stripped = [info mutableCopy];
     [stripped removeObjectForKey:@"crane_sourceContainerID"];
+    /* Original 0x11984 invokes copy directly on UNNotificationRequest. */
     id request = [self copy];
+    if (!request || request == self)
+        return nil;
     id copiedContent = [request respondsToSelector:@selector(content)]
         ? ((id (*)(id, SEL))objc_msgSend)(request, @selector(content)) : nil;
-    [copiedContent setValue:[stripped copy] forKey:@"_userInfo"];
+    if (!copiedContent || copiedContent == content)
+        return nil;
+    @try {
+        [copiedContent setValue:[stripped copy] forKey:@"_userInfo"];
+    } @catch (NSException *exception) {
+        (void)exception;
+        return nil;
+    }
+    id verifiedInfo = [copiedContent respondsToSelector:@selector(userInfo)]
+        ? ((id (*)(id, SEL))objc_msgSend)(copiedContent, @selector(userInfo)) : nil;
+    if (![verifiedInfo isKindOfClass:[NSDictionary class]] ||
+        verifiedInfo[@"crane_sourceContainerID"])
+        return nil;
     return request;
 }
 
@@ -1584,14 +1665,44 @@ static BOOL CRBadgeRecordIsSimilar(id self, SEL cmd, id other)
 
 /* CraneSB 0xF59C/0xF750: repository reads expose only records from
  * the caller's container and strip the private source tag. */
-static NSString *CRBadgeRecordSource(id record)
+static id CRBadgeRecordSource(id record)
 {
     id info = [record respondsToSelector:@selector(userInfo)]
         ? ((id (*)(id, SEL))objc_msgSend)(record, @selector(userInfo)) : nil;
     if (![info isKindOfClass:[NSDictionary class]])
         return nil;
     id value = info[@"crane_sourceContainerID"];
+    /* Original 0xBE18 preserves a present source object verbatim and
+     * substitutes DEFAULT only when the marker is absent. */
     return value ?: @"DEFAULT";
+}
+
+/* Verify the copy postcondition even if another implementation supplies
+ * crane_copyWithoutContainerID at runtime. */
+static id CRBadgeSanitizedRecord(id record)
+{
+    SEL copySEL = NSSelectorFromString(@"crane_copyWithoutContainerID");
+    if (![record respondsToSelector:copySEL])
+        return nil;
+    @try {
+        id originalInfo = [record respondsToSelector:@selector(userInfo)]
+            ? ((id (*)(id, SEL))objc_msgSend)(record, @selector(userInfo)) : nil;
+        BOOL tagged = [originalInfo isKindOfClass:[NSDictionary class]] &&
+            originalInfo[@"crane_sourceContainerID"] != nil;
+        id clean = ((id (*)(id, SEL))objc_msgSend)(record, copySEL);
+        /* Tagged repository records must not be sanitized in place. */
+        if (tagged && clean == record)
+            return nil;
+        id info = [clean respondsToSelector:@selector(userInfo)]
+            ? ((id (*)(id, SEL))objc_msgSend)(clean, @selector(userInfo)) : nil;
+        if (![info isKindOfClass:[NSDictionary class]] ||
+            info[@"crane_sourceContainerID"])
+            return nil;
+        return clean;
+    } @catch (NSException *exception) {
+        (void)exception;
+        return nil;
+    }
 }
 
 static IMP gCRBadgeRecordLookupOriginal;
@@ -1603,14 +1714,12 @@ static id CRBadgeRecordLookup(id self, SEL cmd, id identifier, NSString *appID)
         return nil;
     if (!CRBadgeRedirectionEnabled(appID) || ![NSXPCConnection currentConnection])
         return original(self, cmd, identifier, appID);
-    NSString *container = CRBadgeContainerForConnection(
-        [NSXPCConnection currentConnection]) ?: @"DEFAULT";
+    NSString *container = CRBadgeContainerForConnectionAndApplication(
+        [NSXPCConnection currentConnection], appID) ?: @"DEFAULT";
     id record = original(self, cmd, identifier, appID);
     if (![CRBadgeRecordSource(record) isEqualToString:container])
         return nil;
-    SEL copySEL = NSSelectorFromString(@"crane_copyWithoutContainerID");
-    return [record respondsToSelector:copySEL]
-        ? ((id (*)(id, SEL))objc_msgSend)(record, copySEL) : record;
+    return CRBadgeSanitizedRecord(record);
 }
 
 static IMP gCRBadgeRecordsLookupOriginal;
@@ -1622,16 +1731,14 @@ static id CRBadgeRecordsLookup(id self, SEL cmd, NSString *appID)
         return nil;
     if (!CRBadgeRedirectionEnabled(appID) || ![NSXPCConnection currentConnection])
         return original(self, cmd, appID);
-    NSString *container = CRBadgeContainerForConnection(
-        [NSXPCConnection currentConnection]) ?: @"DEFAULT";
+    NSString *container = CRBadgeContainerForConnectionAndApplication(
+        [NSXPCConnection currentConnection], appID) ?: @"DEFAULT";
     NSArray *records = original(self, cmd, appID);
     NSMutableArray *filtered = [NSMutableArray array];
     for (id record in records) {
         if (![CRBadgeRecordSource(record) isEqualToString:container])
             continue;
-        SEL copySEL = NSSelectorFromString(@"crane_copyWithoutContainerID");
-        id clean = [record respondsToSelector:copySEL]
-            ? ((id (*)(id, SEL))objc_msgSend)(record, copySEL) : record;
+        id clean = CRBadgeSanitizedRecord(record);
         if (clean)
             [filtered addObject:clean];
     }
@@ -1653,16 +1760,14 @@ static void CRBadgeRecordsLookupWithReply(id self, SEL cmd,
         original(self, cmd, appID, completion);
         return;
     }
-    NSString *container = CRBadgeContainerForConnection(connection) ?: @"DEFAULT";
+    NSString *container = CRBadgeContainerForConnectionAndApplication(connection, appID) ?: @"DEFAULT";
     void (^reply)(NSArray *) = completion;
     original(self, cmd, appID, ^(NSArray *records) {
         NSMutableArray *filtered = [NSMutableArray array];
         for (id record in records) {
             if (![CRBadgeRecordSource(record) isEqualToString:container])
                 continue;
-            SEL copySEL = NSSelectorFromString(@"crane_copyWithoutContainerID");
-            id clean = [record respondsToSelector:copySEL]
-                ? ((id (*)(id, SEL))objc_msgSend)(record, copySEL) : record;
+            id clean = CRBadgeSanitizedRecord(record);
             if (clean)
                 [filtered addObject:clean];
         }
@@ -1685,7 +1790,7 @@ static void CRBadgeRemoveRecordsPassingTest(id self, SEL cmd, id predicate,
         original(self, cmd, predicate, appID);
         return;
     }
-    NSString *container = CRBadgeContainerForConnection(connection) ?: @"DEFAULT";
+    NSString *container = CRBadgeContainerForConnectionAndApplication(connection, appID) ?: @"DEFAULT";
     BOOL (^test)(id) = predicate;
     original(self, cmd, ^BOOL(id record) {
         if (!test(record))
@@ -1899,6 +2004,31 @@ static void CRBadgeExtensionsAsync(id self, SEL cmd, id attributes,
                  completion);
 }
 
+/* CraneSB 0xEA50: a Crane-encoded notification topic is authorized
+ * only when its container ID matches the current XPC client's PID. */
+static IMP gCRBadgeNotificationPermissionOriginal;
+static BOOL CRBadgeNotificationPermission(id self, SEL cmd, NSString *topic)
+{
+    BOOL (*original)(id, SEL, id) =
+        (BOOL (*)(id, SEL, id))gCRBadgeNotificationPermissionOriginal;
+    if (!original)
+        return NO;
+    if (![topic isKindOfClass:[NSString class]])
+        return original(self, cmd, topic);
+    NSRange separator = [topic rangeOfString:@".c_r_a_n_e."];
+    if (separator.location == NSNotFound)
+        return original(self, cmd, topic);
+    /* 0x1FF7C uses firstObject for the bundle and lastObject for
+     * the container, including topics with repeated separators. */
+    NSArray *parts = [topic componentsSeparatedByString:@".c_r_a_n_e."];
+    NSString *appID = [parts firstObject];
+    NSString *container = [parts lastObject];
+    NSString *active = CRBadgeContainerForConnection(self);
+    if (![active isEqualToString:container])
+        return NO;
+    return original(self, cmd, appID);
+}
+
 void CRInitBadgeListenerMethods(void)
 {
     /* Prefer EXConcreteExtension; otherwise use NSExtension's supported
@@ -1922,6 +2052,13 @@ void CRInitBadgeListenerMethods(void)
                             &gCRBadgeExtensionAsyncOriginal);
     }
     CRBadgeRegisterNotificationAdditionsProtocol();
+    Class xpcClass = NSClassFromString(@"NSXPCConnection");
+    SEL permissionSEL = NSSelectorFromString(
+        @"uns_isAllowedToRequestUserNotificationsForBundleIdentifier:");
+    if (xpcClass && [xpcClass instancesRespondToSelector:permissionSEL])
+        MSHookMessageEx(xpcClass, permissionSEL,
+                        (IMP)CRBadgeNotificationPermission,
+                        &gCRBadgeNotificationPermissionOriginal);
     Class xpcInterface = NSClassFromString(@"NSXPCInterface");
     SEL setProtocolSEL = NSSelectorFromString(@"setProtocol:");
     if (xpcInterface && [xpcInterface instancesRespondToSelector:setProtocolSEL])
