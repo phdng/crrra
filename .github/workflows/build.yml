@@ -58,6 +58,9 @@ jobs:
       - name: Verify container lifecycle safety
         run: python3 reconstruction/tools/check_container_lifecycle_contract.py
 
+      - name: Verify cfprefsd preference isolation
+        run: python3 reconstruction/tools/check_preferences_isolation_contract.py
+
       - name: Set up Theos
         uses: waruhachi/theos-action@v2.6.3
         with:
@@ -85,6 +88,17 @@ jobs:
             echo "THEOS=${THEOS:-unset}"
             echo '~~~'
           } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Smoke-test Clang XPC protocol metadata with Foundation
+        working-directory: reconstruction
+        run: |
+          set -euo pipefail
+          clang -fobjc-arc -fblocks -Wall -Wextra -Werror \
+            -I sources/common \
+            tools/xpc_protocol_metadata_smoke.m \
+            -framework Foundation \
+            -o xpc_protocol_metadata_smoke
+          ./xpc_protocol_metadata_smoke 2>&1 | tee xpc_protocol_metadata_smoke.log
 
       - name: Select Roothide package dependencies
         if: matrix.variant == 'roothide'
@@ -179,6 +193,7 @@ jobs:
             reconstruction/build.log
             reconstruction/deb.sha256
             reconstruction/linkage.txt
+            reconstruction/xpc_protocol_metadata_smoke.log
 
       - name: Upload package
         if: success()

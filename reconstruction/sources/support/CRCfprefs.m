@@ -12,6 +12,7 @@
 #import <xpc/xpc.h>
 #import <dlfcn.h>
 #import <unistd.h>
+#import <string.h>
 
 #import "CRManager.h"
 #import "CRPaths.h"
@@ -374,14 +375,15 @@ static uintptr_t CRPrefsGetPathForTriplet(uintptr_t a1,
         [path.stringByDeletingLastPathComponent
             stringByAppendingPathComponent:filename];
 
-    NSUInteger length = rewritten.length;
-    NSUInteger copied = MIN(length, (NSUInteger)0x400);
-    for (NSUInteger index = 0; index < copied; index++)
-        pathBuffer[index] = (char)[rewritten characterAtIndex:index];
-
-    /* B4D0 only writes a terminator when the rewritten path fits in < 0x400. */
-    if (length < 0x400)
-        pathBuffer[length] = '\0';
+    /* Native B4D0 narrows each UTF-16 character to char (ASCII parity).
+     * This corrupts Unicode and leaves an unterminated truncated buffer.
+     * Adaptation: only write a complete NUL-terminated UTF-8 path;
+     * otherwise retain the untouched original path from CoreFoundation. */
+    NSData *utf8 = [rewritten dataUsingEncoding:NSUTF8StringEncoding];
+    if (!utf8 || utf8.length == 0 || utf8.length >= 0x400)
+        return result;
+    memcpy(pathBuffer, utf8.bytes, utf8.length);
+    pathBuffer[utf8.length] = '\0';
 
     return result;
 }
