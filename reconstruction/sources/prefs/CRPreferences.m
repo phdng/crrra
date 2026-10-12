@@ -426,6 +426,39 @@
         [rename setButtonAction:@selector(renameContainer)];
         [rows addObject:rename];
 
+        /* Native CranePrefs 0x11734: expose container notification
+         * permission when global notifications are not disabled and the
+         * application's separate registration switch is not disabled.
+         * Both unset switches default to enabled. */
+        id globalNotifications =
+            [manager preferenceValueForKey:CRPref_NotificationsSupportEnabled];
+        NSDictionary *appSettings =
+            [manager applicationSettingsForApplicationWithIdentifier:
+                self.applicationIdentifier];
+        id separateRegistrations =
+            appSettings[CRAppSetting_SeparateNotificationRegistrationsEnabled];
+        if ((!globalNotifications || [globalNotifications boolValue]) &&
+            (!separateRegistrations || [separateRegistrations boolValue])) {
+            PSSpecifier *notificationsGroup = [PSSpecifier emptyGroupSpecifier];
+            [notificationsGroup setName:CRLocalize(@"NOTIFICATIONS")];
+            [notificationsGroup setProperty:CRLocalize(@"NOTIFICATIONS_FOOTER")
+                                    forKey:@"footerText"];
+            [rows addObject:notificationsGroup];
+
+            PSSpecifier *allow = [PSSpecifier preferenceSpecifierNamed:
+                CRLocalize(@"ALLOW_NOTIFICATIONS")
+                target:self set:@selector(setContainerNotificationsAllowed:specifier:)
+                get:@selector(readContainerNotificationsAllowed:)
+                detail:NULL cell:6 edit:0];
+            [allow setProperty:@YES forKey:@"enabled"];
+            [allow setProperty:@YES forKey:@"default"];
+            [allow setProperty:CRCContainer_NotificationsAllowed forKey:@"key"];
+            [rows addObject:allow];
+            /* The original also has Reset Notification Registration.
+             * CraneManager's backend selector is still a no-op in this
+             * reconstruction; do not expose an action that cannot work. */
+        }
+
         /* CranePrefs 0x10BD4/0x10E68/0x11734: optional Choicy integration
          * is shown only for non-DEFAULT containers when Choicy exists.
          * The original dynamic subclass editor remains unported; expose
@@ -545,6 +578,46 @@
             [strongSelf updateSizeGroupSpecifierAndReload:YES];
         });
     }];
+}
+
+/* Native 0x11734 sets default=1 on the notification permission switch.
+ * The CraneSB routing hook checks the same "notificationsAllowed" key;
+ * absent per-container value must therefore read as enabled. */
+- (id)readContainerNotificationsAllowed:(PSSpecifier *)specifier
+{
+    if (![[specifier propertyForKey:@"key"]
+          isEqualToString:CRCContainer_NotificationsAllowed] ||
+        !self.applicationIdentifier.length || !self.containerIdentifier.length)
+        return @YES;
+    NSDictionary *settings = [CraneManager.sharedManager
+        containerSettingsForContainerWithIdentifier:self.containerIdentifier
+                          ofApplicationWithIdentifier:self.applicationIdentifier];
+    id allowed = settings[CRCContainer_NotificationsAllowed];
+    return allowed ? @([allowed boolValue]) : @YES;
+}
+
+- (void)setContainerNotificationsAllowed:(id)value
+                               specifier:(PSSpecifier *)specifier
+{
+    if (![[specifier propertyForKey:@"key"]
+          isEqualToString:CRCContainer_NotificationsAllowed] ||
+        ![value respondsToSelector:@selector(boolValue)] ||
+        !self.applicationIdentifier.length || !self.containerIdentifier.length)
+        return;
+    CraneManager *manager = CraneManager.sharedManager;
+    NSMutableDictionary *settings = [[manager
+        containerSettingsForContainerWithIdentifier:self.containerIdentifier
+                          ofApplicationWithIdentifier:self.applicationIdentifier]
+        mutableCopy];
+    if (!settings)
+        settings = [NSMutableDictionary new];
+    NSNumber *allowed = @([value boolValue]);
+    if ([settings[CRCContainer_NotificationsAllowed] isEqual:allowed])
+        return;
+    settings[CRCContainer_NotificationsAllowed] = allowed;
+    [manager setContainerSettings:settings
+        forContainerWithIdentifier:self.containerIdentifier
+         ofApplicationWithIdentifier:self.applicationIdentifier];
 }
 
 /* ChoicyPrefs is optional; original 0x10BD4 loads its bundle before

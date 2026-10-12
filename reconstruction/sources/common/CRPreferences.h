@@ -74,6 +74,7 @@
 #define CRCContainer_Name                          @"name"
 #define CRCContainer_ActiveContainer               @"activeContainer"
 #define CRCContainer_AssociatedGameCenterAccount   @"associatedGameCenterAccount"
+#define CRCContainer_NotificationsAllowed          @"notificationsAllowed"
 #define CRCContainer_IncludeKeychain               @"includeKeychain"
 #define CRCContainer_EncryptBackup                 @"encryptBackupEnabled"
 #define CRCContainer_ChoicyConfigurationOverwriteEnabled @"choicyConfigurationOverwriteEnabled"

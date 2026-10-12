@@ -73,6 +73,9 @@ jobs:
       - name: Verify Filza Browse Data view
         run: python3 reconstruction/tools/check_browse_container_contract.py
 
+      - name: Verify per-container notification permission
+        run: python3 reconstruction/tools/check_prefs_notification_contract.py
+
       - name: Set up Theos
         uses: waruhachi/theos-action@v2.6.3
         with:
