@@ -291,8 +291,36 @@ static id CRPkdEnableBasic(id self, SEL _cmd, id client, NSDictionary *environme
 
 /* Transaction.matchPlugIns (0xFD70). Crane's private rule is consumed inside
  * pkd so the stock PlugInKit matcher never sees it. */
+static NSString *CRPkdVerifiedContainerID(const char *value)
+{
+    if (!value)
+        return nil;
+    NSString *candidate = [NSString stringWithUTF8String:value];
+    if (![candidate isKindOfClass:NSString.class] ||
+        !candidate.length || candidate.length > 128 ||
+        [candidate isEqualToString:@"."] ||
+        [candidate isEqualToString:@".."])
+        return nil;
+    /* Crane normally generates UUIDs but existing/imported container IDs
+     * can be other safe path components. Preserve those while rejecting
+     * separators and control characters from the XPC rule. */
+    static NSCharacterSet *unsafeCharacters;
+    static dispatch_once_t once;
+    dispatch_once(&once, ^{
+        NSCharacterSet *allowed = [NSCharacterSet characterSetWithCharactersInString:
+            @"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789._-"];
+        unsafeCharacters = [allowed invertedSet];
+    });
+    return [candidate rangeOfCharacterFromSet:unsafeCharacters].location == NSNotFound
+        ? candidate : nil;
+}
+
 static void CRPkdMatchPlugIns(id self, SEL _cmd)
 {
+    /* Unlike original 0xFD70, discard an unconsumed ID before a new match.
+     * Otherwise a request with no Crane rule could inherit the previous
+     * request's container when no findPlugIns hook consumed the old value. */
+    gCRPkdContainerID = nil;
     xpc_object_t request = [self request];
     xpc_object_t rules = request
         ? xpc_dictionary_get_dictionary(request, "rules")
@@ -301,7 +329,9 @@ static void CRPkdMatchPlugIns(id self, SEL _cmd)
     if (rules && xpc_get_type(rules) == XPC_TYPE_DICTIONARY) {
         const char *container = xpc_dictionary_get_string(rules, "crane_containerID");
         if (container) {
-            gCRPkdContainerID = [NSString stringWithUTF8String:container];
+            /* Reject unsafe path components, but retain non-UUID imported
+             * IDs. Strip the private key even when it is invalid. */
+            gCRPkdContainerID = CRPkdVerifiedContainerID(container);
             xpc_dictionary_set_value(rules, "crane_containerID", NULL);
             xpc_dictionary_set_value(request, "rules", rules);
 
@@ -384,19 +414,26 @@ static NSArray *CRPkdPluginsMatchingQuery(id self, SEL _cmd,
     if (result.count != 0)
         return result;
 
+    /* Native 0x101CC only checks these values for nil. An unexpected
+     * query payload (e.g. NSNull in an XPC dictionary) must not crash pkd
+     * when we call NSString-specific selectors. Preserve native matching
+     * semantics for valid string inputs. */
+    if (![query isKindOfClass:NSDictionary.class])
+        return result;
     id intentsSupported = query[@"IntentsSupported"];
-    NSString *containingApp = query[@"NSExtensionContainingApp"];
-    NSString *extensionPoint = query[@"NSExtensionPointName"];
+    id containingApp = query[@"NSExtensionContainingApp"];
+    id extensionPoint = query[@"NSExtensionPointName"];
     if (!intentsSupported ||
-        !containingApp ||
-        !extensionPoint ||
+        ![containingApp isKindOfClass:NSString.class] ||
+        ![extensionPoint isKindOfClass:NSString.class] ||
         ![containingApp containsString:@"/Applications/CraneApplication.app"] ||
         ![extensionPoint isEqualToString:@"com.apple.intents-service"]) {
         return result;
     }
 
     Class proxyClass = NSClassFromString(@"LSPlugInKitProxy");
-    id proxy = proxyClass
+    id proxy = proxyClass &&
+        [(id)proxyClass respondsToSelector:@selector(pluginKitProxyForIdentifier:)]
         ? [(id)proxyClass
             pluginKitProxyForIdentifier:@"com.opa334.CraneApplication.CraneShortcuts"]
         : nil;

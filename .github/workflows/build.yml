@@ -73,6 +73,12 @@ jobs:
       - name: Verify PlugInKit reload and bounded termination
         run: python3 reconstruction/tools/check_pkd_lifecycle_contract.py
 
+      - name: Verify PlugInKit private-rule query state
+        run: python3 reconstruction/tools/check_pkd_query_state_contract.py
+
+      - name: Verify Crane Shortcuts extension discovery
+        run: python3 reconstruction/tools/check_pkd_shortcuts_contract.py
+
       - name: Verify Preferences Game Center settings
         run: python3 reconstruction/tools/check_prefs_settings_contract.py
 
