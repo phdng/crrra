@@ -55,9 +55,17 @@ Ngày kiểm kê: 2026-10-12. Nhánh quan sát: `chore/reconstruction-build-ci`.
 | `0xF254` | `CRBadgeOuterSave` | Now uses shared 0xBA6C resolver before forwarding and async foreground clear |
 | Save revisions/options | `CRBadgeSourceForRecord` | Uses same 0xBA6C resolver; no longer discards nil userInfo/appID or present non-string tagged source in this path |
 
+**Batch queue-save + badge-zero removal:** `0x10138/0xBF00` queue-save now delegates to the original `0xBA6C`-based shared resolver instead of dictionary-only source extraction; `0xBD98/0xBE80` zero-badge record removal now uses `CRBadgeRecordSource` (`0xBE18`) for keyed userInfo, preventing inconsistent DEFAULT handling. Both have contract regression assertions. Native ABI/device validation still pending.
+
+**Batch 0x10D10 / 0x12424:** pending-request asynchronous callback now uses the same `0xBE18` marker helper as record reads/mutation. Native callback retains its caller container from XPC before dispatch; the remaining divergence is defensive selector/sanitization validation, pending native-device comparison. Verified alongside native `0xFF30/0x10050/0x10138` callback signatures, which remain wired in reconstruction.
+
 **Batch 0xBE18 / 0x11884 / 0x115F4:** cùng dùng `CRBadgeSourceMarkerFromInfo` trong record lookup, record similarity và notification-content mutation, bảo toàn `nil` vs `DEFAULT` và keyed `userInfo` gốc. Đã bổ sung regression assertions. Không tuyên bố runtime pass.
 
 **Batch bổ sung:** `0x1119C` bulletin provider và `0x11420` bulletin action giờ dùng chung resolver `0xBA6C` thay vì nhánh kiểm tra riêng chỉ nhận NSDictionary. `0x115F4` content mutation đọc marker từ userInfo keyed collection, giữ phân biệt nil và thiếu marker theo `0xBE18`. Các contract assertions đã được cập nhật.
+
+**Foreground concurrency hardening:** generation guard is now paired with synchronized reads/writes via `CRBadgeForegroundLock`, including `0x10218` comparison snapshot and guarded async clear. If repository `_queue` is unavailable, perform synchronous guarded clear to avoid stale process-wide foreground metadata. These are reconstruction safety changes not present in the recovered unconditional native `0x11FB0` implementation, and require concurrency/device verification.
+
+**Foreground lifecycle audit (0xF254/0x10218/0x11FB0):** retained original save-first/`_queue`-async-clear behavior and added a **reconstruction-only generation guard** so an older asynchronous clear does not erase a newer foreground context. This is intentionally a safety divergence, not binary-exact parity; runtime concurrency test remains needed.
 
 Remaining unresolved: exhaustive `0xCBEC` hook registration matrix, original asynchronous foreground-check propagation, native badge cell/view fidelity, dynamic system-private class availability. This is a **targeted** matrix, not a claim to have audited all 40+ hooks.
 

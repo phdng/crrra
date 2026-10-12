@@ -83,10 +83,16 @@ assert 'id source = CRBadgeContainerForNotificationInfo(info, appID);' in badge
 assert 'source, @selector(objectForKeyedSubscript:)' not in badge
 assert 'static BOOL CRBadgeSystemForeground(id self, SEL cmd, NSString *appID)' in badge
 assert 'gCRBadgeForegroundContainer = [container copy];' in badge
+assert 'static NSObject *CRBadgeForegroundLock(void)' in badge
+assert 'foregroundContainer = gCRBadgeForegroundContainer;' in badge
+assert 'return [foregroundContainer isEqualToString:active];' in badge
 assert 'if (!info || !appID)' in badge
 assert 'NSString *container = CRBadgeContainerForNotificationInfo(userInfo, appID);' in badge
 assert 'return CRBadgeRedirectionEnabled(appID) ? @"DEFAULT" : nil;' in badge
-assert 'dispatch_async(queue, ^{ gCRBadgeForegroundContainer = nil; });' in badge
+assert 'foregroundGeneration = ++gCRBadgeForegroundGeneration;' in badge
+assert 'if (foregroundGeneration == gCRBadgeForegroundGeneration)' in badge
+assert 'dispatch_async(queue, clearForeground);' in badge
+assert 'clearForeground();' in badge
 assert '@"isApplicationForeground:"' in badge
 assert '@"processesForBundleIdentifier:"' in badge
 assert 'static void CRBadgeBulletinAction(id self, SEL cmd, id response, id completion)' in badge
@@ -181,9 +187,14 @@ assert 'static id CRBadgeRecordSource(id record)' in badge
 # CraneSB 0xBE18: nil userInfo differs from present keyed userInfo with
 # missing tag (DEFAULT); never narrow the original to NSDictionary.
 assert 'static id CRBadgeSourceMarkerFromInfo(id info)' in badge
+# 0xBF00 / 0x10138 must use the same 0xBA6C resolver for queue saves.
+assert 'NSString *containerID = CRBadgeSourceForRecord(record, appID);' in badge
+assert 'id source = CRBadgeRecordSource(record);' in badge
+assert 'return [source isEqualToString:containerID];' in badge
+assert 'static void CRBadgeSaveRecord(id self, SEL cmd, id record,' in badge
 assert 'if (!info || ![info respondsToSelector:@selector(objectForKeyedSubscript:)])' in badge
 assert 'return marker ?: @"DEFAULT";' in badge
-assert 'id source = CRBadgeSourceMarkerFromInfo(info);' in badge
+assert badge.count('id source = CRBadgeSourceMarkerFromInfo(info);') >= 2
 assert 'id lhsContainer = CRBadgeSourceMarkerFromInfo(lhs);' in badge
 assert 'id rhsContainer = CRBadgeSourceMarkerFromInfo(rhs);' in badge
 assert 'return CRBadgeSourceMarkerFromInfo(info);' in badge

@@ -357,6 +357,8 @@ static NSInteger CRBadgeAggregateCount(NSString *appID, BOOL validate)
     return positive != 0 ? positive : (negative < 0 ? negative : 0);
 }
 
+static id CRBadgeRecordSource(id record);
+
 /* 0xBD98/0xBE80: remove only records belonging to the container whose
  * badge was cleared, using crane_sourceContainerID from the record userInfo. */
 static void CRBadgeRemoveRecordsForContainer(id repository,
@@ -371,14 +373,9 @@ static void CRBadgeRemoveRecordsForContainer(id repository,
     if (![repository respondsToSelector:selector])
         return;
     BOOL (^predicate)(id) = ^BOOL(id record) {
-        id info = [record respondsToSelector:@selector(userInfo)]
-            ? ((id (*)(id, SEL))objc_msgSend)(record, @selector(userInfo))
-            : nil;
-        if (![info isKindOfClass:[NSDictionary class]])
-            return NO;
-        id source = info[@"crane_sourceContainerID"] ?: @"DEFAULT";
-        return [source isKindOfClass:[NSString class]] &&
-               [source isEqualToString:containerID];
+        /* Original 0xBD98/0xBE80 delegates to the 0xBE18 marker rule. */
+        id source = CRBadgeRecordSource(record);
+        return [source isEqualToString:containerID];
     };
     ((void (*)(id, SEL, id, id))objc_msgSend)(
         repository, selector, predicate, appID);
@@ -430,6 +427,7 @@ static void CRBadgeNonQueueSet(id self, SEL cmd, NSNumber *number,
  * repository's synchronous save path, including its badge setter calls.
  * The source ID belongs to record.userInfo; never infer active container. */
 static IMP gCRBadgeSaveRecordOriginal;
+static NSString *CRBadgeSourceForRecord(id record, NSString *appID);
 
 static void CRBadgeSaveRecord(id self, SEL cmd, id record,
                               id options, NSString *appID)
@@ -439,17 +437,9 @@ static void CRBadgeSaveRecord(id self, SEL cmd, id record,
     if (!original)
         return;
 
-    id info = [record respondsToSelector:@selector(userInfo)]
-        ? ((id (*)(id, SEL))objc_msgSend)(record, @selector(userInfo))
-        : nil;
-    NSString *containerID = nil;
-    if ([info isKindOfClass:[NSDictionary class]] && appID.length) {
-        id source = info[@"crane_sourceContainerID"];
-        if ([source isKindOfClass:[NSString class]] && [source length])
-            containerID = source;
-        else if (CRBadgeRedirectionEnabled(appID))
-            containerID = @"DEFAULT";
-    }
+    /* Original 0x10138 delegates to 0xBF00 -> 0xBA6C, including
+     * nil userInfo and present keyed collection semantics. */
+    NSString *containerID = CRBadgeSourceForRecord(record, appID);
     if (!containerID) {
         original(self, cmd, record, options, appID);
         return;
@@ -479,13 +469,27 @@ static IMP gCRBadgeSaveOptionsOriginal;
 /* CraneSB 0xF254/0x10218/0x11FB0: global foreground context is
  * set before the outer save, then cleared asynchronously on _queue. */
 static NSString *gCRBadgeForegroundContainer;
+/* Reconstruction-only guard: an older queued clear must not erase a newer
+ * notification's foreground context (original 0x11FB0 clears unconditionally). */
+static uint64_t gCRBadgeForegroundGeneration;
+static NSObject *CRBadgeForegroundLock(void)
+{
+    static NSObject *lock;
+    static dispatch_once_t once;
+    dispatch_once(&once, ^{ lock = [NSObject new]; });
+    return lock;
+}
 static IMP gCRBadgeSystemForegroundOriginal;
 static BOOL CRBadgeSystemForeground(id self, SEL cmd, NSString *appID)
 {
     BOOL (*original)(id, SEL, id) =
         (BOOL (*)(id, SEL, id))gCRBadgeSystemForegroundOriginal;
     BOOL foreground = original ? original(self, cmd, appID) : NO;
-    if (!foreground || !gCRBadgeForegroundContainer)
+    NSString *foregroundContainer = nil;
+    @synchronized (CRBadgeForegroundLock()) {
+        foregroundContainer = gCRBadgeForegroundContainer;
+    }
+    if (!foreground || !foregroundContainer)
         return foreground;
     Class processClass = NSClassFromString(@"FBProcessManager");
     SEL sharedSEL = NSSelectorFromString(@"sharedInstance");
@@ -500,7 +504,7 @@ static BOOL CRBadgeSystemForeground(id self, SEL cmd, NSString *appID)
     SEL containerSEL = NSSelectorFromString(@"crane_containerIdentifier");
     id active = [process respondsToSelector:containerSEL]
         ? ((id (*)(id, SEL))objc_msgSend)(process, containerSEL) : nil;
-    return [gCRBadgeForegroundContainer isEqualToString:active];
+    return [foregroundContainer isEqualToString:active];
 }
 
 /* CraneSB 0xBA6C: nil userInfo/appID selects DEFAULT; a present
@@ -530,7 +534,11 @@ static void CRBadgeOuterSave(id self, SEL cmd, id record, BOOL repost,
     id userInfo = [record respondsToSelector:@selector(userInfo)]
         ? ((id (*)(id, SEL))objc_msgSend)(record, @selector(userInfo)) : nil;
     NSString *container = CRBadgeContainerForNotificationInfo(userInfo, appID);
-    gCRBadgeForegroundContainer = [container copy];
+    uint64_t foregroundGeneration;
+    @synchronized (CRBadgeForegroundLock()) {
+        gCRBadgeForegroundContainer = [container copy];
+        foregroundGeneration = ++gCRBadgeForegroundGeneration;
+    }
     NSMutableDictionary *threadInfo = [NSThread currentThread].threadDictionary;
     NSString *key = @"saveNotification_containerID";
     id previous = threadInfo[key];
@@ -546,13 +554,19 @@ static void CRBadgeOuterSave(id self, SEL cmd, id record, BOOL repost,
                 [threadInfo removeObjectForKey:key];
         }
     }
-    if (gCRBadgeForegroundContainer) {
-        dispatch_queue_t queue = nil;
-        @try { queue = [self valueForKey:@"_queue"]; }
-        @catch (NSException *exception) { (void)exception; }
-        if (queue)
-            dispatch_async(queue, ^{ gCRBadgeForegroundContainer = nil; });
-    }
+    dispatch_queue_t queue = nil;
+    @try { queue = [self valueForKey:@"_queue"]; }
+    @catch (NSException *exception) { (void)exception; }
+    void (^clearForeground)(void) = ^{
+        @synchronized (CRBadgeForegroundLock()) {
+            if (foregroundGeneration == gCRBadgeForegroundGeneration)
+                gCRBadgeForegroundContainer = nil;
+        }
+    };
+    if (queue)
+        dispatch_async(queue, clearForeground);
+    else
+        clearForeground();
 }
 
 static NSString *CRBadgeSourceForRecord(id record, NSString *appID)
@@ -781,6 +795,8 @@ static void CRBadgeSaveDatedRequest(id self, SEL cmd, id request, BOOL repost,
     original(self, cmd, request, repost, deliveredDate, appID, completion);
 }
 
+static id CRBadgeSourceMarkerFromInfo(id info);
+
 /* CraneSB 0x10D10/0x12424: pending requests are returned only for the
  * caller's container, and copied without the private source tag. */
 static IMP gCRBadgePendingRequestsOriginal;
@@ -809,10 +825,8 @@ static void CRBadgePendingRequests(id self, SEL cmd, NSString *appID, id complet
             id content = ((id (*)(id, SEL))objc_msgSend)(request, @selector(content));
             id info = [content respondsToSelector:@selector(userInfo)]
                 ? ((id (*)(id, SEL))objc_msgSend)(content, @selector(userInfo)) : nil;
-            /* Original sub_BE18: absent userInfo yields nil; a dictionary
-             * without the source tag maps to DEFAULT. */
-            id source = [info isKindOfClass:[NSDictionary class]]
-                ? (info[@"crane_sourceContainerID"] ?: @"DEFAULT") : nil;
+            /* Original 0x12424 delegates to 0xBE18 for source matching. */
+            id source = CRBadgeSourceMarkerFromInfo(info);
             if (![container isEqualToString:source])
                 continue;
             SEL copySEL = NSSelectorFromString(@"crane_copyWithoutContainerID");
