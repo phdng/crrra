@@ -93,6 +93,8 @@ assert 'foregroundGeneration = ++gCRBadgeForegroundGeneration;' in badge
 assert 'if (foregroundGeneration == gCRBadgeForegroundGeneration)' in badge
 assert 'dispatch_async(queue, clearForeground);' in badge
 assert 'clearForeground();' in badge
+assert 'foreground metadata cannot persist after a failed save' in badge
+assert 'if (queue)\n            dispatch_async(queue, clearForeground);' in badge
 assert '@"isApplicationForeground:"' in badge
 assert '@"processesForBundleIdentifier:"' in badge
 assert 'static void CRBadgeBulletinAction(id self, SEL cmd, id response, id completion)' in badge
@@ -130,6 +132,20 @@ assert 'static void CRBadgeRemoveRecordsPassingTest(id self, SEL cmd, id predica
 assert '@"removeNotificationRecordsPassingTest:forBundleIdentifier:"' in badge
 assert 'if (!test(record))' in badge
 assert 'return [CRBadgeRecordSource(record) isEqualToString:container];' in badge
+assert 'static NSString *CRBadgeMutationContainer(id request, id appID)' in badge
+assert 'static BOOL CRBadgePkdSupportVerified(void)' in badge
+assert '@"verifyCraneSupportLoadedIntoDaemon:reply:"' in badge
+assert 'proxy, verifySEL, @"pkd", reply' in badge
+assert 'return replied && verified;' in badge
+assert badge.count('if (container && !CRBadgePkdSupportVerified())') == 2
+assert badge.count('CRPresentPkdRegistrationError(appID);') == 2
+assert 'SEL keyedSEL = @selector(objectForKeyedSubscript:);' in badge
+assert 'info, keyedSEL, @"crane_sourceContainerID"' in badge
+assert 'if (!CRBadgeRedirectionEnabled(appID))\n        return nil;' in badge
+assert 'static void CRBadgeIncomingMessage(id self, SEL cmd, id connection, id message)' in badge
+# Native 0xEDF4 always calls 0xBE18, even for nil/non-dictionary userInfo.
+assert 'id source = CRBadgeSourceMarkerFromInfo(info);' in badge
+assert 'containerSettingsForContainerWithIdentifier:source' in badge
 assert 'static void CRBadgeRemoveAllRecords(id self, SEL cmd, NSString *appID)' in badge
 assert '@"removeAllNotificationRecordsForBundleIdentifier:"' in badge
 assert 'self, removeSEL, ^BOOL(id record) { (void)record; return YES; }, appID' in badge

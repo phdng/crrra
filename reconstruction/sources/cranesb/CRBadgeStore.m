@@ -553,20 +553,22 @@ static void CRBadgeOuterSave(id self, SEL cmd, id record, BOOL repost,
             else
                 [threadInfo removeObjectForKey:key];
         }
+        /* Cleanup also runs when the original method raises, so process-wide
+         * foreground metadata cannot persist after a failed save. */
+        dispatch_queue_t queue = nil;
+        @try { queue = [self valueForKey:@"_queue"]; }
+        @catch (NSException *exception) { (void)exception; }
+        void (^clearForeground)(void) = ^{
+            @synchronized (CRBadgeForegroundLock()) {
+                if (foregroundGeneration == gCRBadgeForegroundGeneration)
+                    gCRBadgeForegroundContainer = nil;
+            }
+        };
+        if (queue)
+            dispatch_async(queue, clearForeground);
+        else
+            clearForeground();
     }
-    dispatch_queue_t queue = nil;
-    @try { queue = [self valueForKey:@"_queue"]; }
-    @catch (NSException *exception) { (void)exception; }
-    void (^clearForeground)(void) = ^{
-        @synchronized (CRBadgeForegroundLock()) {
-            if (foregroundGeneration == gCRBadgeForegroundGeneration)
-                gCRBadgeForegroundContainer = nil;
-        }
-    };
-    if (queue)
-        dispatch_async(queue, clearForeground);
-    else
-        clearForeground();
 }
 
 static NSString *CRBadgeSourceForRecord(id record, NSString *appID)
@@ -1321,6 +1323,7 @@ static void CRBadgePrepareResolvingSet(void)
 /* 0xEDF4/0xBE18: enforce per-container notification permission on the
  * remote server's incoming message path before forwarding to the system. */
 static IMP gCRBadgeIncomingMessageOriginal;
+static id CRBadgeSourceMarkerFromInfo(id info);
 
 static void CRBadgeIncomingMessage(id self, SEL cmd, id connection, id message)
 {
@@ -1335,20 +1338,16 @@ static void CRBadgeIncomingMessage(id self, SEL cmd, id connection, id message)
         id topic = ((id (*)(id, SEL))objc_msgSend)(message, topicSEL);
         if (CRBadgeRedirectionEnabled(topic)) {
             id info = ((id (*)(id, SEL))objc_msgSend)(message, infoSEL);
-            if ([info isKindOfClass:[NSDictionary class]]) {
-                id source = info[@"crane_sourceContainerID"];
-                if (!source)
-                    source = @"DEFAULT";
-                if ([source isKindOfClass:[NSString class]]) {
-                    NSDictionary *settings = [[CraneManager sharedManager]
-                        containerSettingsForContainerWithIdentifier:source
-                        ofApplicationWithIdentifier:topic];
-                    id allowed = [settings objectForKey:@"notificationsAllowed"];
-                    if (allowed && [allowed respondsToSelector:@selector(boolValue)] &&
-                        ![allowed boolValue])
-                        return;
-                }
-            }
+            /* 0xEDF4 calls 0xBE18 even when userInfo is nil.  The
+             * settings lookup must receive the original nil/DEFAULT marker. */
+            id source = CRBadgeSourceMarkerFromInfo(info);
+            NSDictionary *settings = [[CraneManager sharedManager]
+                containerSettingsForContainerWithIdentifier:source
+                ofApplicationWithIdentifier:topic];
+            id allowed = [settings objectForKey:@"notificationsAllowed"];
+            if (allowed && [allowed respondsToSelector:@selector(boolValue)] &&
+                ![allowed boolValue])
+                return;
         }
     }
     original(self, cmd, connection, message);
@@ -1369,13 +1368,46 @@ static NSString *CRBadgeMutationContainer(id request, id appID)
     if (![content respondsToSelector:@selector(userInfo)])
         return @"DEFAULT";
     id info = ((id (*)(id, SEL))objc_msgSend)(content, @selector(userInfo));
-    if (![info isKindOfClass:[NSDictionary class]])
+    /* Mirror 0xBA6C keyed lookup for enabled applications, but keep the
+     * current conservative pkd-unverified gate above until it is ported. */
+    SEL keyedSEL = @selector(objectForKeyedSubscript:);
+    if (!info || ![info respondsToSelector:keyedSEL])
         return @"DEFAULT";
-    id source = info[@"crane_sourceContainerID"];
+    id source = ((id (*)(id, SEL, id))objc_msgSend)(
+        info, keyedSEL, @"crane_sourceContainerID");
     if (!source)
         return @"DEFAULT";
     return [source isKindOfClass:[NSString class]] && [source length]
         ? source : nil;
+}
+
+/* CraneSB 0xB7B8 -> 0x11CA4 -> 0x11D64: verify pkd through
+ * cranehelperd before setting extension_containerIDToAppend. Fail closed
+ * when the synchronous helper proxy cannot provide a verified reply. */
+extern void CRPresentPkdRegistrationError(NSString *appID);
+static BOOL CRBadgePkdSupportVerified(void)
+{
+    CraneManager *manager = [CraneManager sharedManager];
+    SEL safeSEL = NSSelectorFromString(@"runSafeXPCBlock:");
+    SEL verifySEL = NSSelectorFromString(
+        @"verifyCraneSupportLoadedIntoDaemon:reply:");
+    if (![manager respondsToSelector:safeSEL])
+        return NO;
+    __block BOOL verified = NO;
+    __block BOOL replied = NO;
+    dispatch_block_t check = ^{
+        id proxy = [manager cranehelperdGlobalSyncRemoteObjectProxy];
+        if (![proxy respondsToSelector:verifySEL])
+            return;
+        void (^reply)(BOOL) = ^(BOOL supported) {
+            verified = supported;
+            replied = YES;
+        };
+        ((void (*)(id, SEL, id, id))objc_msgSend)(
+            proxy, verifySEL, @"pkd", reply);
+    };
+    ((void (*)(id, SEL, id))objc_msgSend)(manager, safeSEL, check);
+    return replied && verified;
 }
 
 static IMP gCRBadgeModifyPushOriginal;
@@ -1387,6 +1419,10 @@ static void CRBadgeModifyPush(id self, SEL cmd, id request, id appID,
     if (!original)
         return;
     NSString *container = CRBadgeMutationContainer(request, appID);
+    if (container && !CRBadgePkdSupportVerified()) {
+        CRPresentPkdRegistrationError(appID);
+        container = nil;
+    }
     NSMutableDictionary *context = [NSThread currentThread].threadDictionary;
     NSString *key = @"extension_containerIDToAppend";
     id previous = context[key];
@@ -1413,6 +1449,10 @@ static void CRBadgeModifyLegacy(id self, SEL cmd, id request, id appID,
     if (!original)
         return;
     NSString *container = CRBadgeMutationContainer(request, appID);
+    if (container && !CRBadgePkdSupportVerified()) {
+        CRPresentPkdRegistrationError(appID);
+        container = nil;
+    }
     NSMutableDictionary *context = [NSThread currentThread].threadDictionary;
     NSString *key = @"extension_containerIDToAppend";
     id previous = context[key];

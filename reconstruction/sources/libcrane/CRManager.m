@@ -162,6 +162,14 @@ static void CRManagerVerifyRuntimeComponent(NSString *component,
                 xpc_dictionary_get_bool(response, "authorized");
             finish(valid && xpc_dictionary_get_bool(response, "loaded"));
         });
+    /* Every component-health lookup, including pkd and apsd, must finish
+     * even if helperd silently drops the message. finish() is single-shot
+     * and cancels the raw-XPC connection on timeout. */
+    dispatch_after(dispatch_time(DISPATCH_TIME_NOW,
+                       (int64_t)(2 * NSEC_PER_SEC)),
+                   dispatch_get_global_queue(QOS_CLASS_UTILITY, 0), ^{
+        finish(NO);
+    });
 }
 
 /* ------------------------------------------------------------------------- */
@@ -174,6 +182,8 @@ static void CRManagerVerifyRuntimeComponent(NSString *component,
 - (void)verifySupportLoadedIntoProcessNamed:(NSString *)name
                                       reply:(void (^)(BOOL))reply;
 - (void)verifyCraneSBLoadedAndReply:(void (^)(BOOL))reply;
+- (void)verifyCraneSupportLoadedIntoDaemon:(NSString *)daemon
+                                      reply:(void (^)(BOOL))reply;
 - (void)fetchActiveContainerIDForProcessWithPid:(pid_t)pid
                                            reply:(void (^)(NSString *, BOOL))reply;
 @end
@@ -253,6 +263,44 @@ static void CRManagerVerifyRuntimeComponent(NSString *component,
     /* CraneSupport 0x9B68 asks specifically whether SpringBoard-side CraneSB
      * is live before rewriting incoming APS traffic. */
     CRManagerVerifyRuntimeComponent(@"CraneSB", @"SpringBoard", reply);
+}
+
+/* CraneSB 0x11CA4 expects a synchronous reply from its "sync" proxy.
+ * This reconstruction's raw-XPC component check is asynchronous, so bridge
+ * it with a bounded wait; never turn a timeout/error into proof of injection.
+ * Only pkd is required by this hook and is allowed on this narrow adapter. */
+- (void)verifyCraneSupportLoadedIntoDaemon:(NSString *)daemon
+                                      reply:(void (^)(BOOL))reply
+{
+    if (!reply)
+        return;
+    if (![daemon isEqualToString:@"pkd"]) {
+        reply(NO);
+        return;
+    }
+    NSObject *lock = [NSObject new];
+    dispatch_semaphore_t done = dispatch_semaphore_create(0);
+    __block BOOL finished = NO;
+    __block BOOL loaded = NO;
+    CRManagerVerifyRuntimeComponent(@"CraneSupport", daemon, ^(BOOL value) {
+        @synchronized(lock) {
+            if (finished)
+                return;
+            loaded = value;
+            finished = YES;
+            dispatch_semaphore_signal(done);
+        }
+    });
+    /* Allow the underlying two-second raw-XPC deadline to deliver its
+     * fail-closed callback before this outer synchronous wait expires. */
+    long wait = dispatch_semaphore_wait(done,
+        dispatch_time(DISPATCH_TIME_NOW, (int64_t)(3 * NSEC_PER_SEC)));
+    BOOL result = NO;
+    @synchronized(lock) {
+        result = (wait == 0 && loaded);
+        finished = YES; /* A late callback cannot alter the result. */
+    }
+    reply(result);
 }
 
 - (void)fetchActiveContainerIDForProcessWithPid:(pid_t)pid
@@ -900,6 +948,22 @@ usingBiometricsIfNeededWithSuccessHandler:(dispatch_block_t)handler
     }
     xpc_connection_cancel(connection);
     return NO;
+}
+
+/* Recovered libcrane selector. The original NSXPC locking/retry internals
+ * are unavailable; execute synchronously and serialize callers while the
+ * bounded proxy adapter handles error/timeout fail-closed. */
+- (void)runSafeXPCBlock:(dispatch_block_t)block
+{
+    if (!block)
+        return;
+    static NSObject *lock;
+    static dispatch_once_t once;
+    dispatch_once(&once, ^{ lock = [NSObject new]; });
+    @synchronized(lock) {
+        @try { block(); }
+        @catch (NSException *exception) { (void)exception; }
+    }
 }
 
 - (id)cranehelperdGlobalSyncRemoteObjectProxy

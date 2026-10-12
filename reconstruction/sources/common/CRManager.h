@@ -39,6 +39,10 @@
 - (void)verifyCraneInsuranceAndReply:(void (^)(BOOL works, NSString *brokenDaemons, NSError *error, BOOL connectionWorks))reply;
 - (void)verifySupportLoadedIntoProcessNamed:(NSString *)name reply:(void (^)(BOOL loaded))reply;
 - (void)verifyCraneSBLoadedAndReply:(void (^)(BOOL loaded))reply;
+/* Recovered CraneSB 0x11CA4 selector; backed by an authenticated,
+ * bounded raw-XPC component-health check in this reconstruction. */
+- (void)verifyCraneSupportLoadedIntoDaemon:(NSString *)daemon
+                                      reply:(void (^)(BOOL loaded))reply;
 - (void)fetchActiveContainerIDForProcessWithPid:(pid_t)pid
                                            reply:(void (^)(NSString *containerID, BOOL connectionWorks))reply;
 - (void)reloadApplicationWithIdentifier:(NSString *)appID;
@@ -145,6 +149,7 @@ usingBiometricsIfNeededWithSuccessHandler:(dispatch_block_t)handler;      /* [AP
 - (void)fetchActiveContainerIDForProcessWithPid:(pid_t)pid
                                 reply:(void (^)(NSString *containerID, BOOL connectionWorks))reply; /* [API] */
 - (BOOL)cranehelperdConnectionWorks;                                     /* [API] */
+- (void)runSafeXPCBlock:(dispatch_block_t)block; /* [recovered selector; reconstruction adapter] */
 - (id)cranehelperdGlobalSyncRemoteObjectProxy;                           /* [API] */
 - (id)cranehelperdGlobalAsyncRemoteObjectProxy;                          /* [API] */
 - (BOOL)isDylibLoaded;                                                   /* [API] */

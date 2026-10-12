@@ -144,6 +144,25 @@ assert 'xpc_dictionary_set_bool(reply, "loaded", loaded)' in peer_code
 assert 'CRManagerVerifyRuntimeComponent(@"CraneSB", @"SpringBoard", reply)' in manager
 assert 'CRManagerVerifyRuntimeComponent(@"CraneSupport", name, reply)' in manager
 assert '"operation", "component_loaded"' in manager
+# Original CraneSB 0x11CA4/0x11D64 requires a synchronous pkd result.
+# The reconstruction must bridge its authenticated asynchronous raw-XPC
+# component report with a bounded, fail-closed wait (never a guessed YES).
+assert '- (void)runSafeXPCBlock:(dispatch_block_t)block;' in manager_header
+assert '- (void)runSafeXPCBlock:(dispatch_block_t)block' in manager
+assert '- (void)verifyCraneSupportLoadedIntoDaemon:(NSString *)daemon' in manager_header
+assert '- (void)verifyCraneSupportLoadedIntoDaemon:(NSString *)daemon' in manager
+assert 'if (![daemon isEqualToString:@"pkd"])' in manager
+assert 'CRManagerVerifyRuntimeComponent(@"CraneSupport", daemon,' in manager
+assert 'dispatch_semaphore_wait(done,' in manager
+assert 'dispatch_after(dispatch_time(DISPATCH_TIME_NOW,' in manager
+assert '(int64_t)(2 * NSEC_PER_SEC)),' in manager
+assert '(int64_t)(3 * NSEC_PER_SEC))' in manager
+assert 'finish(NO);' in manager
+assert 'result = (wait == 0 && loaded);' in manager
+assert 'finished = YES; /* A late callback cannot alter the result. */' in manager
+assert '[process isEqualToString:@"pkd"]' in support
+assert '@"pkd": @"com.apple.pluginkit.pkd"' in helper
+assert 'CRRuntimeHasComponentInProcess(component, process)' in helper
 
 # Each injected side emits its own runtime proof. The app claim carries the
 # actual container ID consumed from the launch environment.
