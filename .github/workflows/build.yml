@@ -61,6 +61,12 @@ jobs:
       - name: Verify cfprefsd preference isolation
         run: python3 reconstruction/tools/check_preferences_isolation_contract.py
 
+      - name: Verify Preferences Game Center settings
+        run: python3 reconstruction/tools/check_prefs_settings_contract.py
+
+      - name: Verify optional Choicy integration
+        run: python3 reconstruction/tools/check_choicy_integration_contract.py
+
       - name: Set up Theos
         uses: waruhachi/theos-action@v2.6.3
         with:

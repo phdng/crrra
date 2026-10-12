@@ -48,6 +48,8 @@
 - (void)reloadSpecifierAtIndex:(NSUInteger)index;
 - (void)replaceContiguousSpecifiers:(NSArray *)oldSpecifiers withSpecifiers:(NSArray *)newSpecifiers animated:(BOOL)animated;
 - (void)insertSpecifier:(id)specifier atIndex:(NSUInteger)index animated:(BOOL)animated;
+- (void)insertSpecifier:(id)specifier afterSpecifier:(id)after animated:(BOOL)animated;
+- (void)removeSpecifier:(id)specifier animated:(BOOL)animated;
 @end
 
 @interface PSSpecifier : NSObject
@@ -204,6 +206,8 @@
 @property (nonatomic, copy) NSString *applicationIdentifier;
 @property (nonatomic, copy) NSString *containerIdentifier;
 @property (nonatomic, strong) NSArray *craneContainerSpecifiers;
+@property (nonatomic, strong) PSSpecifier *choicyOverwriteToggleSpecifier;
+@property (nonatomic, strong) PSSpecifier *choicyConfigurationPreviewSpecifier;
 @end
 
 @implementation CRPContainerConfigurationListController
@@ -282,6 +286,44 @@
             target:self set:NULL get:NULL detail:NULL cell:13 edit:0];
         [rename setButtonAction:@selector(renameContainer)];
         [rows addObject:rename];
+
+        /* CranePrefs 0x10BD4/0x10E68/0x11734: optional Choicy integration
+         * is shown only for non-DEFAULT containers when Choicy exists.
+         * The original dynamic subclass editor remains unported; expose
+         * only the persisted override toggle and a read-only preview. */
+        if (![self.containerIdentifier isEqualToString:CR_DEFAULT_CONTAINER_IDENTIFIER] &&
+            [self craneChoicyIntegrationAvailable]) {
+            PSSpecifier *choicyGroup = [PSSpecifier emptyGroupSpecifier];
+            [choicyGroup setName:CRLocalize(@"CHOICY_INTEGRATION")];
+            [rows addObject:choicyGroup];
+
+            PSSpecifier *toggle = [PSSpecifier preferenceSpecifierNamed:
+                CRLocalize(@"OVERWRITE_CHOICY_CONFIGURATION")
+                target:self set:@selector(setChoicyOverwriteEnabled:specifier:)
+                get:@selector(readPreferenceValue:) detail:NULL cell:6 edit:0];
+            [toggle setProperty:@YES forKey:@"enabled"];
+            [toggle setProperty:CRCContainer_ChoicyConfigurationOverwriteEnabled
+                        forKey:@"key"];
+            self.choicyOverwriteToggleSpecifier = toggle;
+            [rows addObject:toggle];
+
+            PSSpecifier *preview = [PSSpecifier preferenceSpecifierNamed:
+                CRLocalize(@"CHOICY_CONFIGURATION") target:self set:NULL
+                get:@selector(previewStringForChoicyConfiguration:)
+                detail:NULL cell:4 edit:0];
+            [preview setProperty:CRCContainer_ChoicyConfigurationOverwrite
+                         forKey:@"key"];
+            [preview setProperty:self.applicationIdentifier
+                         forKey:@"applicationIdentifier"];
+            [preview setProperty:self.containerIdentifier
+                         forKey:@"containerIdentifier"];
+            self.choicyConfigurationPreviewSpecifier = preview;
+            if ([settings[CRCContainer_ChoicyConfigurationOverwriteEnabled] boolValue])
+                [rows addObject:preview];
+        } else {
+            self.choicyOverwriteToggleSpecifier = nil;
+            self.choicyConfigurationPreviewSpecifier = nil;
+        }
         self.craneContainerSpecifiers = rows;
     }
     @try { [self setValue:self.craneContainerSpecifiers forKey:@"_specifiers"]; }
@@ -289,6 +331,100 @@
         NSLog(@"CranePrefs: container detail backing failed: %@", exception);
     }
     return self.craneContainerSpecifiers;
+}
+
+/* ChoicyPrefs is optional; original 0x10BD4 loads its bundle before
+ * testing for CHPProcessConfigurationListController. */
+- (BOOL)craneChoicyIntegrationAvailable
+{
+    Class cls = NSClassFromString(@"CHPProcessConfigurationListController");
+    if (cls)
+        return YES;
+    NSString *path = CRJailbreakRootPath(CR_CHOICY_PREFS_BUNDLE);
+    if (![NSFileManager.defaultManager fileExistsAtPath:path])
+        return NO;
+    @try {
+        NSBundle *bundle = [NSBundle bundleWithPath:path];
+        if (bundle)
+            [bundle load];
+    } @catch (NSException *exception) {
+        NSLog(@"CranePrefs: optional Choicy bundle failed: %@", exception);
+        return NO;
+    }
+    return NSClassFromString(@"CHPProcessConfigurationListController") != Nil;
+}
+
+- (id)readPreferenceValue:(PSSpecifier *)specifier
+{
+    NSString *key = [specifier propertyForKey:@"key"];
+    if (!key || !self.applicationIdentifier || !self.containerIdentifier)
+        return nil;
+    NSDictionary *settings = [CraneManager.sharedManager
+        containerSettingsForContainerWithIdentifier:self.containerIdentifier
+                          ofApplicationWithIdentifier:self.applicationIdentifier];
+    return settings[key];
+}
+
+- (NSString *)previewStringForChoicyConfiguration:(PSSpecifier *)specifier
+{
+    (void)specifier;
+    NSDictionary *settings = [CraneManager.sharedManager
+        containerSettingsForContainerWithIdentifier:self.containerIdentifier
+                          ofApplicationWithIdentifier:self.applicationIdentifier];
+    id config = settings[CRCContainer_ChoicyConfigurationOverwrite];
+    if (!config)
+        return @"";
+    SEL method = NSSelectorFromString(@"previewStringForProcessPreferences:");
+    for (NSString *name in @[@"CHPListController", @"CHPApplication"]) {
+        Class cls = NSClassFromString(name);
+        if (cls && [cls respondsToSelector:method]) {
+            @try {
+                id preview = ((id (*)(id, SEL, id))objc_msgSend)(cls, method, config);
+                if ([preview isKindOfClass:[NSString class]])
+                    return preview;
+            } @catch (NSException *exception) {
+                NSLog(@"CranePrefs: Choicy preview rejected: %@", exception);
+            }
+        }
+    }
+    return @"";
+}
+
+/* Native 0x10CD0: toggle row persistence and immediate preview visibility. */
+- (void)setChoicyOverwriteEnabled:(id)value specifier:(PSSpecifier *)specifier
+{
+    if (!self.applicationIdentifier.length || !self.containerIdentifier.length)
+        return;
+    CraneManager *manager = CraneManager.sharedManager;
+    NSMutableDictionary *settings = [[manager
+        containerSettingsForContainerWithIdentifier:self.containerIdentifier
+                          ofApplicationWithIdentifier:self.applicationIdentifier]
+        mutableCopy];
+    if (!settings)
+        settings = [NSMutableDictionary new];
+    settings[CRCContainer_ChoicyConfigurationOverwriteEnabled] = @([value boolValue]);
+    [manager setContainerSettings:settings
+        forContainerWithIdentifier:self.containerIdentifier
+         ofApplicationWithIdentifier:self.applicationIdentifier];
+
+    PSSpecifier *preview = self.choicyConfigurationPreviewSpecifier;
+    NSArray *current = self.craneContainerSpecifiers;
+    if (!preview || !current.count)
+        return;
+    BOOL visible = [current containsObject:preview];
+    NSMutableArray *updated = [current mutableCopy];
+    if ([value boolValue] && !visible &&
+        [self respondsToSelector:@selector(insertSpecifier:afterSpecifier:animated:)]) {
+        [self insertSpecifier:preview afterSpecifier:specifier animated:YES];
+        NSUInteger index = [updated indexOfObject:specifier];
+        if (index != NSNotFound)
+            [updated insertObject:preview atIndex:index + 1];
+    } else if (![value boolValue] && visible &&
+               [self respondsToSelector:@selector(removeSpecifier:animated:)]) {
+        [self removeSpecifier:preview animated:YES];
+        [updated removeObject:preview];
+    }
+    self.craneContainerSpecifiers = [updated copy];
 }
 
 - (void)makeActiveContainer
@@ -868,17 +1004,48 @@
 
 - (void)setSeparateSystemAccountsValue:(id)value specifier:(id)specifier
 {
+    /* Native CranePrefs 0xA4B8 inserts/removes the Game Center row
+     * after the System Accounts switch, then reloads the app when a
+     * non-DEFAULT container is active. Keep our cached rows consistent. */
     [self setPreferenceValue:value specifier:specifier];
-    /* Enabling system accounts invalidates the Game Center specifier, which is
-     * why the original caches it in an ivar. */
-    if (self.gameCenterSupportEnabledSpecifier &&
-        [self.craneConfigurationSpecifiers containsObject:self.gameCenterSupportEnabledSpecifier])
-        [self reloadSpecifier:self.gameCenterSupportEnabledSpecifier];
+    PSSpecifier *gameCenter = self.gameCenterSupportEnabledSpecifier;
+    if (gameCenter) {
+        NSArray *current = self.craneConfigurationSpecifiers;
+        BOOL visible = [current containsObject:gameCenter];
+        BOOL shouldShow = [value boolValue];
+        if (shouldShow && !visible &&
+            [self respondsToSelector:@selector(insertSpecifier:afterSpecifier:animated:)]) {
+            [self insertSpecifier:gameCenter afterSpecifier:specifier animated:YES];
+            NSMutableArray *updated = [current mutableCopy];
+            NSUInteger index = [updated indexOfObject:specifier];
+            if (index != NSNotFound)
+                [updated insertObject:gameCenter atIndex:index + 1];
+            self.craneConfigurationSpecifiers = [updated copy];
+        } else if (!shouldShow && visible &&
+                   [self respondsToSelector:@selector(removeSpecifier:animated:)]) {
+            [self removeSpecifier:gameCenter animated:YES];
+            NSMutableArray *updated = [current mutableCopy];
+            [updated removeObject:gameCenter];
+            self.craneConfigurationSpecifiers = [updated copy];
+        }
+    }
+    CraneManager *manager = CraneManager.sharedManager;
+    NSString *active = [manager activeContainerIdentifierForApplicationWithIdentifier:
+        self.applicationIdentifier];
+    if (![active isEqualToString:CR_DEFAULT_CONTAINER_IDENTIFIER])
+        [manager reloadApplicationWithIdentifier:self.applicationIdentifier];
 }
 
 - (void)setGameCenterSupportValue:(id)value specifier:(id)specifier
 {
+    /* Native CranePrefs 0xA670 triggers Game Center state refresh after
+     * saving, and reloads the app when support is switched off. The
+     * manager's global Game Center refresh remains a reconstruction stub. */
     [self setPreferenceValue:value specifier:specifier];
+    CraneManager *manager = CraneManager.sharedManager;
+    [manager gameCenter_reloadExceptApplicationWithIdentifier:nil];
+    if (![value boolValue])
+        [manager reloadApplicationWithIdentifier:self.applicationIdentifier];
 }
 
 - (void)setActiveContainer:(id)value specifier:(id)specifier

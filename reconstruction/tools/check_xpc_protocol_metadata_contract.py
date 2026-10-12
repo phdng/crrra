@@ -86,4 +86,21 @@ assert 'original(self, _cmd, protocol);' in lsd
 assert 'LSD extended XPC interface rejected' in lsd
 assert '@catch (NSException *exception)' in lsd[lsd.index('static void CraneLSDSetProtocol('):lsd.index('/* Normal LSD getIdentifier spoof')]
 
+# CI must actually compile and execute the shared protocol header with
+# Apple's Foundation NSXPCInterface, not merely grep the source tree.
+smoke = (root / "tools/xpc_protocol_metadata_smoke.m").read_text(encoding="utf-8")
+ci = (root.parent / ".github/workflows/build.yml").read_text(encoding="utf-8")
+assert '#import "CRXPCProtocols.h"' in smoke
+assert 'NSXPCInterface interfaceWithProtocol:protocol' in smoke
+assert '@protocol(UNUserNotificationProtocolCraneAdditions)' in smoke
+assert '@protocol(_LSDDeviceIdentifierProtocolCraneAdditions)' in smoke
+assert 'protocol_addProtocol(composite, additions);' in smoke
+assert 'objc_registerProtocol(composite);' in smoke
+assert 'return CRSmokeInterface(composite, [NSString stringWithUTF8String:name]);' in smoke
+assert 'return 1;' in smoke and 'return 2;' in smoke
+assert 'return 3;' in smoke and 'return 4;' in smoke
+assert 'clang -fobjc-arc -fblocks -Wall -Wextra -Werror' in ci
+assert 'tools/xpc_protocol_metadata_smoke.m' in ci
+assert './xpc_protocol_metadata_smoke 2>&1 | tee xpc_protocol_metadata_smoke.log' in ci
+
 print("Crane Clang XPC protocol metadata contracts: PASS (device runtime unverified)")
