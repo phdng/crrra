@@ -1864,8 +1864,63 @@ static void CRBadgeApplicationsUninstalled(id self, SEL cmd, id apps)
     CRBadgeCleanupUninstalledSources(self, apps);
 }
 
+/* CraneSB 0xD55C/0xD6B4/0xD80C: pass the requesting
+ * container into extension discovery without mutating caller attributes. */
+static id CRBadgeExtensionMatchingAttributes(id attributes)
+{
+    id container = [NSThread currentThread].threadDictionary[
+        @"extension_containerIDToAppend"];
+    if (!container || ![attributes isKindOfClass:[NSDictionary class]])
+        return attributes;
+    NSMutableDictionary *tagged = [attributes mutableCopy];
+    tagged[@"crane_containerID"] = container;
+    return tagged;
+}
+
+static IMP gCRBadgeExtensionSyncOriginal;
+static IMP gCRBadgeExtensionAsyncOriginal;
+static void CRBadgeExtensionsSync(id self, SEL cmd, id attributes,
+                                   BOOL synchronously, id completion)
+{
+    void (*original)(id, SEL, id, BOOL, id) =
+        (void (*)(id, SEL, id, BOOL, id))gCRBadgeExtensionSyncOriginal;
+    if (original)
+        original(self, cmd, CRBadgeExtensionMatchingAttributes(attributes),
+                 synchronously, completion);
+}
+
+static void CRBadgeExtensionsAsync(id self, SEL cmd, id attributes,
+                                    id completion)
+{
+    void (*original)(id, SEL, id, id) =
+        (void (*)(id, SEL, id, id))gCRBadgeExtensionAsyncOriginal;
+    if (original)
+        original(self, cmd, CRBadgeExtensionMatchingAttributes(attributes),
+                 completion);
+}
+
 void CRInitBadgeListenerMethods(void)
 {
+    /* Prefer EXConcreteExtension; otherwise use NSExtension's supported
+     * synchronous or legacy asynchronous class-method signature (0xCBEC). */
+    Class extensionLookupClass = NSClassFromString(@"EXConcreteExtension");
+    if (!extensionLookupClass)
+        extensionLookupClass = NSClassFromString(@"NSExtension");
+    SEL syncExtensionsSEL = NSSelectorFromString(
+        @"extensionsWithMatchingAttributes:synchronously:completion:");
+    SEL asyncExtensionsSEL = NSSelectorFromString(
+        @"extensionsWithMatchingAttributes:completion:");
+    if (extensionLookupClass) {
+        Class extensionMeta = object_getClass(extensionLookupClass);
+        if ([extensionLookupClass respondsToSelector:syncExtensionsSEL])
+            MSHookMessageEx(extensionMeta, syncExtensionsSEL,
+                            (IMP)CRBadgeExtensionsSync,
+                            &gCRBadgeExtensionSyncOriginal);
+        else if ([extensionLookupClass respondsToSelector:asyncExtensionsSEL])
+            MSHookMessageEx(extensionMeta, asyncExtensionsSEL,
+                            (IMP)CRBadgeExtensionsAsync,
+                            &gCRBadgeExtensionAsyncOriginal);
+    }
     CRBadgeRegisterNotificationAdditionsProtocol();
     Class xpcInterface = NSClassFromString(@"NSXPCInterface");
     SEL setProtocolSEL = NSSelectorFromString(@"setProtocol:");

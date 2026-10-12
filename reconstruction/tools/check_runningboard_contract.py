@@ -152,4 +152,10 @@ assert '@"notificationSourcesDidUninstall:"' in badge
 assert '@"applicationsDidUninstall:"' in badge
 assert '@"_queue_invalidateTokenForBundleIdentifier:"' in badge
 assert '@"_queue_calculateTopics"' in badge
+assert 'static id CRBadgeExtensionMatchingAttributes(id attributes)' in badge
+assert 'tagged[@"crane_containerID"] = container;' in badge
+assert 'static void CRBadgeExtensionsSync(id self, SEL cmd, id attributes,' in badge
+assert 'static void CRBadgeExtensionsAsync(id self, SEL cmd, id attributes,' in badge
+assert '@"extensionsWithMatchingAttributes:synchronously:completion:"' in badge
+assert '@"extensionsWithMatchingAttributes:completion:"' in badge
 print('CraneSB runningboardd + notification ABI contracts: PASS (runtime unverified)')
