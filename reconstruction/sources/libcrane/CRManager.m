@@ -312,12 +312,140 @@ static void CRManagerVerifyRuntimeComponent(NSString *component,
 }
 @end
 
+/* U-04 safety gate: reconstructed libcrane cannot yet resolve the original
+ * per-app home-directory layout. Reject traversal or DEFAULT as a delete
+ * target instead of treating the shared Crane data root as app data. */
+static BOOL CRManagerSafePathComponent(NSString *component)
+{
+    if (![component isKindOfClass:[NSString class]] || !component.length ||
+        [component isEqualToString:@"."] ||
+        [component isEqualToString:@".."])
+        return NO;
+    static NSCharacterSet *invalid;
+    static dispatch_once_t onceToken;
+    dispatch_once(&onceToken, ^{
+        NSCharacterSet *valid = [NSCharacterSet
+            characterSetWithCharactersInString:
+                @"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789._-"];
+        invalid = [valid invertedSet];
+    });
+    return [component rangeOfCharacterFromSet:invalid].location == NSNotFound;
+}
+
+/* CRMCM 0xC2BC/0xC3E4 redirects from the OS-assigned application
+ * data container, NOT from CR_DATA_DIR. The original libcrane resolver is
+ * missing (U-04). Resolve a guarded, existing LSApplicationProxy home,
+ * never synthesize or create an application's data-container UUID. */
+static NSString *CRManagerVerifiedApplicationHome(NSString *appID)
+{
+    if (!CRManagerSafePathComponent(appID))
+        return nil;
+    Class proxyClass = NSClassFromString(@"LSApplicationProxy");
+    SEL lookupSEL = NSSelectorFromString(@"applicationProxyForIdentifier:");
+    SEL homeSEL = NSSelectorFromString(@"dataContainerURL");
+    if (!proxyClass || ![proxyClass respondsToSelector:lookupSEL])
+        return nil;
+    @try {
+        id proxy = ((id (*)(id, SEL, id))objc_msgSend)(
+            proxyClass, lookupSEL, appID);
+        if (!proxy || ![proxy respondsToSelector:homeSEL])
+            return nil;
+        id candidate = ((id (*)(id, SEL))objc_msgSend)(
+            proxy, homeSEL);
+        if (![candidate isKindOfClass:[NSURL class]] ||
+            ![(NSURL *)candidate isFileURL])
+            return nil;
+        NSString *root = [[(NSURL *)candidate path]
+            stringByStandardizingPath];
+        root = [root stringByResolvingSymlinksInPath];
+        NSString *uuidString = [root lastPathComponent];
+        NSString *parent = [root stringByDeletingLastPathComponent];
+        /* OS-owned app data homes normally live directly under this UUID
+         * directory. Reject arbitrary file URLs with a look-alike suffix. */
+        if (![[NSUUID alloc] initWithUUIDString:uuidString] ||
+            !([parent isEqualToString:@"/private/var/mobile/Containers/Data/Application"] ||
+              [parent isEqualToString:@"/var/mobile/Containers/Data/Application"]))
+            return nil;
+        BOOL isDirectory = NO;
+        if (![NSFileManager.defaultManager fileExistsAtPath:root
+                                                isDirectory:&isDirectory] ||
+            !isDirectory)
+            return nil;
+        NSString *craneRoot = [CRJailbreakRootPath(CR_DATA_DIR)
+            stringByResolvingSymlinksInPath];
+        if ([root isEqualToString:craneRoot])
+            return nil;
+        /* Refuse symlinked descendants before any subsequent filesystem
+         * operation. One of these may be absent for an unused container. */
+        for (NSString *relative in @[@"Library", CR_CONTAINERS_DIR_COMPONENT]) {
+            NSString *descendant = [root stringByAppendingPathComponent:relative];
+            if ([NSFileManager.defaultManager
+                    destinationOfSymbolicLinkAtPath:descendant error:NULL])
+                return nil;
+        }
+        return root;
+    } @catch (NSException *exception) {
+        (void)exception;
+        return nil;
+    }
+}
+
+static BOOL CRManagerSafeManagedPath(NSString *appID, NSString *containerID,
+                                     NSString *path)
+{
+    if (!CRManagerSafePathComponent(appID) ||
+        !CRManagerSafePathComponent(containerID) ||
+        [containerID isEqualToString:CR_DEFAULT_CONTAINER_IDENTIFIER] ||
+        ![path isKindOfClass:[NSString class]])
+        return NO;
+    NSString *base = CRManagerVerifiedApplicationHome(appID);
+    if (!base)
+        return NO;
+    NSString *expected = CRContainerPathForContainer(containerID, base);
+    return expected.length && [path isEqualToString:expected] &&
+        ![path isEqualToString:base];
+}
+
+/* Do not descend through a symlink inside an existing container during
+ * create/repopulate. This is a best-effort Foundation check, NOT atomic
+ * protection against concurrent filesystem mutation by another process. */
+static BOOL CRManagerDirectoryComponentIsSafe(NSString *path)
+{
+    NSFileManager *fm = NSFileManager.defaultManager;
+    if ([fm destinationOfSymbolicLinkAtPath:path error:NULL])
+        return NO;
+    BOOL isDirectory = NO;
+    return ![fm fileExistsAtPath:path isDirectory:&isDirectory] || isDirectory;
+}
+
+static BOOL CRManagerCreateEmptyContainer(NSString *path, NSError **error)
+{
+    if (!path.length || !CRManagerDirectoryComponentIsSafe(path))
+        return NO;
+    NSFileManager *fm = NSFileManager.defaultManager;
+    if (![fm createDirectoryAtPath:path withIntermediateDirectories:YES
+                        attributes:nil error:error])
+        return NO;
+    for (NSString *subdir in @[@"tmp", @"Library/Caches",
+                               @"Library/Preferences", @"Documents",
+                               @"SystemData"]) {
+        NSString *next = path;
+        for (NSString *component in [subdir pathComponents]) {
+            next = [next stringByAppendingPathComponent:component];
+            if (!CRManagerDirectoryComponentIsSafe(next) ||
+                ![fm createDirectoryAtPath:next withIntermediateDirectories:NO
+                               attributes:nil error:error])
+                return NO;
+        }
+    }
+    return YES;
+}
+
 @interface CraneManager ()
 /* [INFERRED] The original keeps the registry in cfprefsd-backed preferences.
  * This build keeps it in memory and persists to a plist, which is the smallest
  * thing that makes the documented container paths work. */
 @property (nonatomic, strong) NSMutableDictionary *applications;
-@property (nonatomic, strong) NSMutableDictionary *containerPaths;
 @property (nonatomic, strong) id lastError;
 @property (nonatomic, strong) id unsandboxHandler;
 @property (nonatomic, strong) NSHashTable *observers;
@@ -345,7 +473,6 @@ static void CRManagerVerifyRuntimeComponent(NSString *component,
             CFSTR("applications"), CFSTR("com.opa334.cranereconstruction.apps")));
         _applications = [saved isKindOfClass:NSDictionary.class] ? [saved mutableCopy] : [NSMutableDictionary new];
         NSLog(@"CraneManager: registry loaded app count=%lu", (unsigned long)_applications.count);
-        _containerPaths = [NSMutableDictionary new];
         _observers = [NSHashTable weakObjectsHashTable];
         _queue = dispatch_queue_create("com.opa334.crane.manager", DISPATCH_QUEUE_SERIAL);
     }
@@ -617,49 +744,168 @@ usingBiometricsIfNeededWithSuccessHandler:(void (^)(BOOL authenticated))handler
          usingBiometricsIfNeededWithSuccessHandler:handler];
 }
 
+/* CraneSupport 0xC2BC and 0xC8E8 send this observed private selector.
+ * libcrane's original implementation is unavailable. Only populate the
+ * non-default app-data path whose exact structure is confirmed by
+ * CRContainerPathForContainer; refuse group, DEFAULT, and arbitrary paths. */
+- (void)_populateContainerDirectory:(NSString *)path ofType:(NSUInteger)type
+{
+    if (type != 1 || ![path isKindOfClass:[NSString class]] ||
+        !path.length || ![[path stringByStandardizingPath] isEqualToString:path])
+        return;
+
+    NSString *containerID = [path lastPathComponent];
+    if (!CRManagerSafePathComponent(containerID) ||
+        [containerID isEqualToString:CR_DEFAULT_CONTAINER_IDENTIFIER] ||
+        [containerID hasPrefix:@".crane-"])
+        return;
+    NSString *appHome = [[[path stringByDeletingLastPathComponent]
+        stringByDeletingLastPathComponent] stringByDeletingLastPathComponent];
+    if (![CRContainerPathForContainer(containerID, appHome)
+          isEqualToString:path])
+        return;
+    NSString *canonicalHome = [appHome stringByResolvingSymlinksInPath];
+    NSString *homeParent = [canonicalHome stringByDeletingLastPathComponent];
+    NSString *homeUUID = [canonicalHome lastPathComponent];
+    if (![[NSUUID alloc] initWithUUIDString:homeUUID] ||
+        !([homeParent isEqualToString:@"/private/var/mobile/Containers/Data/Application"] ||
+          [homeParent isEqualToString:@"/var/mobile/Containers/Data/Application"]))
+        return;
+    NSFileManager *fm = NSFileManager.defaultManager;
+    BOOL isDirectory = NO;
+    if (![fm fileExistsAtPath:appHome isDirectory:&isDirectory] ||
+        !isDirectory)
+        return;
+    NSString *library = [appHome stringByAppendingPathComponent:@"Library"];
+    NSString *containers = [appHome stringByAppendingPathComponent:
+        CR_CONTAINERS_DIR_COMPONENT];
+    if (!CRManagerDirectoryComponentIsSafe(library) ||
+        !CRManagerDirectoryComponentIsSafe(containers) ||
+        !CRManagerDirectoryComponentIsSafe(path))
+        return;
+
+    NSError *error = nil;
+    if (!CRManagerCreateEmptyContainer(path, &error))
+        NSLog(@"CraneManager: refusing/failed container population %@: %@", path, error);
+}
+
 - (NSString *)containerDirectoryForContainerWithIdentifier:(NSString *)containerID
                                ofApplicationWithIdentifier:(NSString *)appID
 {
-    NSString *key = [NSString stringWithFormat:@"%@/%@", appID, containerID];
-    NSString *cached = self.containerPaths[key];
-    if (cached)
-        return cached;
-    /* [INFERRED] U-04: upstream's base directory is the app's own container.
-     * This build uses the shared Crane data dir, which is observationally
-     * equivalent for a single-device test but will not match containers written
-     * by Crane 6.0. */
-    NSString *base = CRJailbreakRootPath(CR_DATA_DIR);
-    NSString *path = CRContainerPathForContainer(containerID, base);
-    self.containerPaths[key] = path;
-    return path;
+    if (!CRManagerSafePathComponent(appID) ||
+        !CRManagerSafePathComponent(containerID))
+        return nil;
+    /* Resolve on every call: reinstalling an app can change its data UUID.
+     * Never fall back to a synthetic shared Crane directory. */
+    NSString *base = CRManagerVerifiedApplicationHome(appID);
+    return base ? CRContainerPathForContainer(containerID, base) : nil;
+}
+
+/* Conservatively reject duplicate identifiers registered to another app
+ * while the reconstruction registry is still a single shared CFPreferences
+ * document. This is stricter than necessarily required for per-app homes. */
+- (BOOL)cr_containerIdentifierShared:(NSString *)identifier
+                       withOtherThan:(NSString *)appID
+{
+    NSDictionary *apps = CFBridgingRelease(CFPreferencesCopyAppValue(
+        CFSTR("applications"), CFSTR("com.opa334.cranereconstruction.apps")));
+    if (apps && ![apps isKindOfClass:[NSDictionary class]])
+        return YES;
+    if (!apps)
+        apps = [self.applications copy];
+    for (id otherID in apps) {
+        if ([otherID isEqual:appID])
+            continue;
+        id settings = apps[otherID];
+        if (![settings isKindOfClass:[NSDictionary class]])
+            continue;
+        id containers = settings[CRAppSetting_Containers];
+        if (![containers isKindOfClass:[NSArray class]])
+            continue;
+        for (id entry in containers) {
+            if ([entry isKindOfClass:[NSDictionary class]] &&
+                [entry[CRCContainer_Identifier] isEqual:identifier])
+                return YES;
+        }
+    }
+    return NO;
+}
+
+- (BOOL)cr_canModifyStoredContainer:(NSString *)identifier
+                       application:(NSString *)appID
+                               path:(NSString *)path
+{
+    if (!CRManagerSafePathComponent(appID) ||
+        !CRManagerSafeManagedPath(appID, identifier, path) ||
+        ![[self containerIdentifiersOfApplicationWithIdentifier:appID]
+            containsObject:identifier] ||
+        [[self activeContainerIdentifierForApplicationWithIdentifier:appID]
+            isEqualToString:identifier] ||
+        [self cr_containerIdentifierShared:identifier withOtherThan:appID])
+        return NO;
+    return ![NSFileManager.defaultManager
+        destinationOfSymbolicLinkAtPath:path error:NULL];
 }
 
 - (NSString *)createNewContainerWithName:(NSString *)name
             forApplicationWithIdentifier:(NSString *)appID
 {
+    if (!CRManagerSafePathComponent(appID))
+        return nil;
     NSString *identifier = [[NSUUID UUID] UUIDString];
     [self createNewContainerWithName:name
                       andIdentifier:identifier
             forApplicationWithIdentifier:appID];
-    return identifier;
+    /* Do not return a made-up identifier when storage setup failed. */
+    return [[self containerIdentifiersOfApplicationWithIdentifier:appID]
+        containsObject:identifier] ? identifier : nil;
 }
 
 - (void)createNewContainerWithName:(NSString *)name
                     andIdentifier:(NSString *)identifier
             forApplicationWithIdentifier:(NSString *)appID
 {
-    if (!identifier || !appID)
+    if (!CRManagerSafePathComponent(appID) ||
+        !CRManagerSafePathComponent(identifier) ||
+        [identifier isEqualToString:CR_DEFAULT_CONTAINER_IDENTIFIER])
         return;
     NSString *path = [self containerDirectoryForContainerWithIdentifier:identifier
                                            ofApplicationWithIdentifier:appID];
-    CRCreateDirectoryIfNotExists(path);
-    CRCreateDirectoryIfNotExists([path stringByAppendingPathComponent:@"tmp"]);
-    CRCreateDirectoryIfNotExists([path stringByAppendingPathComponent:@"Library"]);
-    CRCreateDirectoryIfNotExists([path stringByAppendingPathComponent:@"Library/Caches"]);
-    CRCreateDirectoryIfNotExists([path stringByAppendingPathComponent:@"Library/Preferences"]);
-    CRCreateDirectoryIfNotExists([path stringByAppendingPathComponent:@"Documents"]);
-    CRCreateDirectoryIfNotExists([path stringByAppendingPathComponent:@"SystemData"]);
-
+    if (!CRManagerSafeManagedPath(appID, identifier, path) ||
+        [self cr_containerIdentifierShared:identifier withOtherThan:appID])
+        return;
+    NSFileManager *fm = NSFileManager.defaultManager;
+    /* Even an already registered container may have been replaced by a
+     * symlink; do not follow it while creating the directory scaffold. */
+    if ([fm destinationOfSymbolicLinkAtPath:path error:NULL])
+        return;
+    BOOL registered = [[self containerIdentifiersOfApplicationWithIdentifier:appID]
+        containsObject:identifier];
+    /* Never adopt an unknown on-disk directory just because a caller
+     * supplied its identifier. The layout is not app-scoped yet. */
+    BOOL existed = [fm fileExistsAtPath:path];
+    if (!registered && existed) {
+        NSLog(@"CraneManager: refusing unregistered path %@", path);
+        return;
+    }
+    NSError *error = nil;
+    /* New identifiers use a private temporary scaffold, then an atomic
+     * same-volume rename. An unexpected destination collision cannot lead
+     * to deleting somebody else's partially created container. */
+    NSString *staging = registered ? path :
+        [[path stringByDeletingLastPathComponent] stringByAppendingPathComponent:
+            [NSString stringWithFormat:@".crane-create-%@", [[NSUUID UUID] UUIDString]]];
+    if (!CRManagerCreateEmptyContainer(staging, &error)) {
+        if (!registered)
+            [fm removeItemAtPath:staging error:NULL];
+        NSLog(@"CraneManager: container creation failed %@: %@", identifier, error);
+        return;
+    }
+    if (!registered && ![fm moveItemAtPath:staging toPath:path error:&error]) {
+        [fm removeItemAtPath:staging error:NULL];
+        NSLog(@"CraneManager: container creation collision %@: %@", identifier, error);
+        return;
+    }
     NSDictionary *existing = [self containerSettingsForContainerWithIdentifier:identifier
                                                    ofApplicationWithIdentifier:appID];
     NSMutableDictionary *settings = [existing mutableCopy];
@@ -672,23 +918,34 @@ usingBiometricsIfNeededWithSuccessHandler:(void (^)(BOOL authenticated))handler
 - (void)deleteContentOfContainerWithIdentifier:(NSString *)containerID
                       forApplicationWithIdentifier:(NSString *)appID
 {
-    if (!containerID || !appID)
-        return;
     NSString *path = [self containerDirectoryForContainerWithIdentifier:containerID
                                            ofApplicationWithIdentifier:appID];
-    [NSFileManager.defaultManager removeItemAtPath:path error:NULL];
-    [self.containerPaths removeObjectForKey:
-        [NSString stringWithFormat:@"%@/%@", appID, containerID]];
-
+    if (![self cr_canModifyStoredContainer:containerID
+                              application:appID path:path]) {
+        NSLog(@"CraneManager: refusing unsafe/active delete app=%@ id=%@",
+              appID, containerID);
+        return;
+    }
+    NSFileManager *fm = NSFileManager.defaultManager;
+    NSError *error = nil;
+    if ([fm fileExistsAtPath:path] &&
+        ![fm removeItemAtPath:path error:&error]) {
+        /* A failed filesystem operation MUST NOT erase the registry. */
+        NSLog(@"CraneManager: deletion failed %@: %@", path, error);
+        return;
+    }
     NSMutableDictionary *app = [[self applicationSettingsForApplicationWithIdentifier:appID]
                                 mutableCopy];
     NSMutableArray *containers = [app[CRAppSetting_Containers] mutableCopy];
-    NSUInteger index = [containers indexOfObjectPassingTest:
-                        ^BOOL(NSDictionary *c, NSUInteger i, BOOL *stop) {
-        return [c[CRCContainer_Identifier] isEqualToString:containerID];
+    if (!containers)
+        return;
+    NSIndexSet *matches = [containers indexesOfObjectsPassingTest:
+        ^BOOL(id item, NSUInteger idx, BOOL *stop) {
+        (void)idx; (void)stop;
+        return [item isKindOfClass:[NSDictionary class]] &&
+            [item[CRCContainer_Identifier] isEqual:containerID];
     }];
-    if (index != NSNotFound)
-        [containers removeObjectAtIndex:index];
+    [containers removeObjectsAtIndexes:matches];
     app[CRAppSetting_Containers] = containers;
     [self setApplicationSettings:app forApplicationWithIdentifier:appID];
 }
@@ -697,11 +954,54 @@ usingBiometricsIfNeededWithSuccessHandler:(void (^)(BOOL authenticated))handler
             forApplicationWithIdentifier:(NSString *)appID
                     shouldRepopulate:(BOOL)repopulate
 {
-    [self deleteContentOfContainerWithIdentifier:containerID
-                      forApplicationWithIdentifier:appID];
-    if (repopulate)
-        [self createNewContainerWithName:nil andIdentifier:containerID
-                 forApplicationWithIdentifier:appID];
+    NSString *path = [self containerDirectoryForContainerWithIdentifier:containerID
+                                           ofApplicationWithIdentifier:appID];
+    if (![self cr_canModifyStoredContainer:containerID
+                              application:appID path:path]) {
+        NSLog(@"CraneManager: refusing unsafe/active wipe app=%@ id=%@",
+              appID, containerID);
+        return;
+    }
+    /* Wiping data must not erase container name, biometric policy, or
+     * registration. The former implementation called deleteContent..., which
+     * removed settings and silently ignored failed filesystem deletion. */
+    NSFileManager *fm = NSFileManager.defaultManager;
+    NSError *error = nil;
+    if (!repopulate) {
+        if ([fm fileExistsAtPath:path] &&
+            ![fm removeItemAtPath:path error:&error])
+            NSLog(@"CraneManager: wipe failed %@: %@", path, error);
+        return;
+    }
+    /* Stage the replacement and keep the old contents until the empty
+     * scaffold has been created successfully. Both paths share a parent,
+     * so the swaps are on the same volume. */
+    NSString *parent = [path stringByDeletingLastPathComponent];
+    NSString *suffix = [[NSUUID UUID] UUIDString];
+    NSString *replacement = [parent stringByAppendingPathComponent:
+        [NSString stringWithFormat:@".crane-new-%@", suffix]];
+    NSString *backup = [parent stringByAppendingPathComponent:
+        [NSString stringWithFormat:@".crane-old-%@", suffix]];
+    if (!CRManagerCreateEmptyContainer(replacement, &error)) {
+        [fm removeItemAtPath:replacement error:NULL];
+        NSLog(@"CraneManager: wipe preparation failed: %@", error);
+        return;
+    }
+    BOOL hadOriginal = [fm fileExistsAtPath:path];
+    if (hadOriginal && ![fm moveItemAtPath:path toPath:backup error:&error]) {
+        [fm removeItemAtPath:replacement error:NULL];
+        NSLog(@"CraneManager: wipe staging failed: %@", error);
+        return;
+    }
+    if (![fm moveItemAtPath:replacement toPath:path error:&error]) {
+        if (hadOriginal && ![fm moveItemAtPath:backup toPath:path error:NULL])
+            NSLog(@"CraneManager: wipe rollback failed; old data at %@", backup);
+        [fm removeItemAtPath:replacement error:NULL];
+        NSLog(@"CraneManager: wipe replacement failed: %@", error);
+        return;
+    }
+    if (hadOriginal && ![fm removeItemAtPath:backup error:&error])
+        NSLog(@"CraneManager: wipe completed, old backup at %@: %@", backup, error);
 }
 
 - (void)makeDefaultForContainerWithIdentifier:(NSString *)containerID
@@ -749,17 +1049,38 @@ usingBiometricsIfNeededWithSuccessHandler:(void (^)(BOOL authenticated))handler
 - (NSArray<NSString *> *)unknownContainersInsideApplicationWithIdentifier:(NSString *)appID
                                                        knownContainers:(NSSet<NSString *> *)known
 {
-    /* [INFERRED] U-04. Directories under the containers root with no entry in
-     * the registry. */
-    NSMutableArray *unknown = [NSMutableArray new];
-    NSString *base = CRJailbreakRootPath(CR_DATA_DIR);
-    NSString *root = CRContainerPathForContainer(CR_DEFAULT_CONTAINER_IDENTIFIER, base);
-    root = [root stringByAppendingPathComponent:CR_CONTAINERS_DIR_TRAILER];
-    for (NSString *entry in [NSFileManager.defaultManager contentsOfDirectoryAtPath:root error:NULL]) {
-        if (![known containsObject:entry])
-            [unknown addObject:entry];
+    /* Only enumerate the scoped, LaunchServices-confirmed app data home.
+     * Never enumerate CR_DATA_DIR, which could contain another app's data. */
+    NSString *base = CRManagerVerifiedApplicationHome(appID);
+    if (!base)
+        return @[];
+    NSString *root = [base stringByAppendingPathComponent:
+        CR_CONTAINERS_DIR_COMPONENT];
+    BOOL rootIsDir = NO;
+    NSFileManager *fm = NSFileManager.defaultManager;
+    if (![fm fileExistsAtPath:root isDirectory:&rootIsDir] || !rootIsDir ||
+        [fm destinationOfSymbolicLinkAtPath:root error:NULL])
+        return @[];
+    NSSet<NSString *> *registered = [NSSet setWithArray:
+        [self containerIdentifiersOfApplicationWithIdentifier:appID]];
+    NSMutableArray<NSString *> *result = [NSMutableArray new];
+    NSArray<NSString *> *entries = [fm contentsOfDirectoryAtPath:root error:NULL];
+    for (NSString *entry in entries) {
+        if (!CRManagerSafePathComponent(entry) ||
+            [entry isEqualToString:CR_DEFAULT_CONTAINER_IDENTIFIER] ||
+            [entry hasPrefix:@".crane-"] ||
+            [registered containsObject:entry] ||
+            [known containsObject:entry])
+            continue;
+        NSString *candidate = [root stringByAppendingPathComponent:entry];
+        BOOL isDirectory = NO;
+        if (![fm fileExistsAtPath:candidate isDirectory:&isDirectory] ||
+            !isDirectory ||
+            [fm destinationOfSymbolicLinkAtPath:candidate error:NULL])
+            continue;
+        [result addObject:entry];
     }
-    return unknown;
+    return [result sortedArrayUsingSelector:@selector(compare:)];
 }
 
 /* ---- naming ------------------------------------------------------------- */

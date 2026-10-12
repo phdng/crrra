@@ -361,12 +361,18 @@ static id CRMCMRedirectModernContainer(id client,
     [copyPath setValue:redirectedData forKey:@"_containerDataComponent"];
 
     /*
-     * Original calls _populateContainerDirectory:ofType: after rewriting.
-     * The libcrane body is unavailable; preserve the selector call only when
-     * the reconstructed manager supplies it.
+     * Native 0xC8E8 populates the ORIGINAL data URL here. Preserve that
+     * call, but also offer the reconstructed manager the redirected data
+     * component: our guarded type-1 implementation deliberately refuses
+     * to populate an entire app home and accepts only a scoped Crane path.
+     * This second call is a reconstruction integration fix, not native
+     * instruction-for-instruction parity.
      */
     NSString *dataPath = [[[result containerPath] containerDataURL] path];
     CRMCMPopulateContainerDirectoryIfAvailable(dataPath);
+    if ([redirectedData isKindOfClass:[NSString class]] &&
+        ![redirectedData isEqualToString:dataPath])
+        CRMCMPopulateContainerDirectoryIfAvailable(redirectedData);
     return copy;
 }
 

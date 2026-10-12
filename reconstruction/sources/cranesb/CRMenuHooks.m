@@ -225,9 +225,11 @@ static void CRLaunchAfterContainerSwitch(dispatch_block_t launch,
 
 static void CROpenCraneSettings(NSString *appID)
 {
-    NSString *path = appID.length
+    /* Native 0x12720 distinguishes a nil appID (empty path) from a
+     * non-nil, even empty, appID (APPLICATIONS/). Both remain non-nil. */
+    NSString *path = appID
         ? [NSString stringWithFormat:@"APPLICATIONS/%@", appID]
-        : nil;
+        : @"";
 
     NSString *shufflePath =
         CRJailbreakRootPath(
@@ -244,19 +246,24 @@ static void CROpenCraneSettings(NSString *appID)
         id enabled = [shuffle objectForKey:@"kEnabled"];
         if (!enabled || [enabled boolValue]) {
             NSString *group = [shuffle stringForKey:@"kTweaksGroupName"];
-            if (!group.length)
+            if (!group)
                 group = @"Tweaks";
-            root = [group stringByAddingPercentEncodingWithAllowedCharacters:
-                              NSCharacterSet.URLQueryAllowedCharacterSet];
-            settingsPath = path.length
-                ? [NSString stringWithFormat:@"Crane/%@", path]
-                : @"Crane";
+            /* Original 0x12720 uses the legacy percent-escaping selector
+             * rather than URLQueryAllowedCharacterSet, which can leave
+             * URL separators unescaped in the Shuffle group name. */
+#pragma clang diagnostic push
+#pragma clang diagnostic ignored "-Wdeprecated-declarations"
+            root = [group stringByAddingPercentEscapesUsingEncoding:
+                              NSUTF8StringEncoding];
+#pragma clang diagnostic pop
+            settingsPath = [NSString stringWithFormat:@"Crane/%@", path];
         }
     }
 
-    NSString *urlString = settingsPath.length
-        ? [NSString stringWithFormat:@"prefs:root=%@&path=%@", root, settingsPath]
-        : [NSString stringWithFormat:@"prefs:root=%@", root];
+    /* The native shared menu handler always appends &path=, including
+     * the nil-app variant where that path is intentionally empty. */
+    NSString *urlString = [NSString stringWithFormat:
+        @"prefs:root=%@&path=%@", root, settingsPath];
     NSURL *url = [NSURL URLWithString:urlString];
     if (!url)
         return;
@@ -883,10 +890,11 @@ static id CRLegacyActionFromShortcutItem(id self,
         CRDynamicSetValueForKey(action,
                                 @"_handler",
                                 [^{
+            /* Native 0x18F04 queues presentation exactly once after
+             * dismissing. CRPresentNewContainerAlert already dispatches
+             * SBAlertItemsController activation to the main queue. */
             CRLegacyDismissShortcutController(self, nil);
-            dispatch_async(dispatch_get_main_queue(), ^{
-                CRPresentNewContainerAlert(appID);
-            });
+            CRPresentNewContainerAlert(appID);
         } copy]);
         return action;
     }
@@ -1055,7 +1063,10 @@ static NSArray *CRLegacyApplicationShortcutItems(id self, SEL _cmd)
 
     if (CRPrefBool(CRPref_ExpandContainersShortcut)) {
         NSArray *craneItems = CRLegacyContainerShortcutItems(self);
-        if (!existing.count)
+        /* Native 0x170A4 distinguishes a nil original shortcut list
+         * from a real, but empty, NSArray. The latter still gets the
+         * separator before Crane's expanded container actions. */
+        if (!existing)
             return craneItems;
 
         id separator =

@@ -407,8 +407,13 @@ void CRPresentNewContainerAlert(NSString *appID)
     if (!cls || !appID.length)
         return;
 
+    /* Native 0x1448C/0x18F04 sends setApplicationID: directly, rather
+     * than relying on KVC/private-property inference. */
+    SEL setter = NSSelectorFromString(@"setApplicationID:");
     id alert = [cls new];
-    [alert setValue:appID forKey:@"applicationID"];
+    if (!alert || ![alert respondsToSelector:setter])
+        return;
+    ((void (*)(id, SEL, id))objc_msgSend)(alert, setter, appID);
     CRActivateErrorAlert(alert);
 }
 
