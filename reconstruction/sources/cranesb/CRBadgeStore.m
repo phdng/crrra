@@ -1529,6 +1529,8 @@ static void CRBadgeBulletinAction(id self, SEL cmd, id response, id completion)
     }];
 }
 
+static id CRBadgeSourceMarkerFromInfo(id info);
+
 /* CraneSB 0x115F4: carry request source metadata into mutated content. */
 static IMP gCRBadgeMutateContentOriginal;
 static id CRBadgeMutateContent(id self, SEL cmd, id request, id error)
@@ -1541,13 +1543,7 @@ static id CRBadgeMutateContent(id self, SEL cmd, id request, id error)
         ? ((id (*)(id, SEL))objc_msgSend)(content, @selector(userInfo)) : nil;
     /* CraneSB 0xBE18: absent userInfo means no source; absent key in
      * present userInfo means DEFAULT. */
-    id source = nil;
-    if (info && [info respondsToSelector:@selector(objectForKeyedSubscript:)]) {
-        source = ((id (*)(id, SEL, id))objc_msgSend)(
-            info, @selector(objectForKeyedSubscript:), @"crane_sourceContainerID");
-        if (!source)
-            source = @"DEFAULT";
-    }
+    id source = CRBadgeSourceMarkerFromInfo(info);
     id mutated = original ? original(self, cmd, request, error) : nil;
     if (source && ![source isEqual:@"DEFAULT"] &&
         [mutated respondsToSelector:@selector(userInfo)]) {
@@ -1638,6 +1634,17 @@ static id CRBadgeRequestCopyWithoutContainer(id self, SEL cmd)
 
 /* CraneSB 0x11884/0xBE18: matching records from different source
  * containers must not be considered similar. */
+static id CRBadgeSourceMarkerFromInfo(id info)
+{
+    /* Native 0xBE18: nil userInfo stays nil; present info without a
+     * crane_sourceContainerID marker belongs to DEFAULT. */
+    if (!info || ![info respondsToSelector:@selector(objectForKeyedSubscript:)])
+        return nil;
+    id marker = ((id (*)(id, SEL, id))objc_msgSend)(
+        info, @selector(objectForKeyedSubscript:), @"crane_sourceContainerID");
+    return marker ?: @"DEFAULT";
+}
+
 static IMP gCRBadgeRecordSimilarOriginal;
 static BOOL CRBadgeRecordIsSimilar(id self, SEL cmd, id other)
 {
@@ -1650,10 +1657,8 @@ static BOOL CRBadgeRecordIsSimilar(id self, SEL cmd, id other)
         ? ((id (*)(id, SEL))objc_msgSend)(self, @selector(userInfo)) : nil;
     id rhs = [other respondsToSelector:@selector(userInfo)]
         ? ((id (*)(id, SEL))objc_msgSend)(other, @selector(userInfo)) : nil;
-    id lhsContainer = [lhs isKindOfClass:[NSDictionary class]]
-        ? (lhs[@"crane_sourceContainerID"] ?: @"DEFAULT") : nil;
-    id rhsContainer = [rhs isKindOfClass:[NSDictionary class]]
-        ? (rhs[@"crane_sourceContainerID"] ?: @"DEFAULT") : nil;
+    id lhsContainer = CRBadgeSourceMarkerFromInfo(lhs);
+    id rhsContainer = CRBadgeSourceMarkerFromInfo(rhs);
     return [lhsContainer isEqualToString:rhsContainer];
 }
 
@@ -1663,17 +1668,7 @@ static id CRBadgeRecordSource(id record)
 {
     id info = [record respondsToSelector:@selector(userInfo)]
         ? ((id (*)(id, SEL))objc_msgSend)(record, @selector(userInfo)) : nil;
-    /* Original 0xBE18 returns nil for nil userInfo, but treats a present
-     * keyed collection without a source marker as DEFAULT. It does not
-     * require NSDictionary specifically. */
-    if (!info)
-        return nil;
-    SEL keyedSEL = @selector(objectForKeyedSubscript:);
-    if (![info respondsToSelector:keyedSEL])
-        return nil;
-    id value = ((id (*)(id, SEL, id))objc_msgSend)(
-        info, keyedSEL, @"crane_sourceContainerID");
-    return value ?: @"DEFAULT";
+    return CRBadgeSourceMarkerFromInfo(info);
 }
 
 /* Verify the copy postcondition even if another implementation supplies

@@ -180,10 +180,13 @@ assert 'return CRBadgeContainerForNotificationInfo(info, appID);' in badge
 assert 'static id CRBadgeRecordSource(id record)' in badge
 # CraneSB 0xBE18: nil userInfo differs from present keyed userInfo with
 # missing tag (DEFAULT); never narrow the original to NSDictionary.
-assert 'if (!info)\n        return nil;' in badge
-assert 'if (![info respondsToSelector:keyedSEL])' in badge
-assert 'info, keyedSEL, @"crane_sourceContainerID"' in badge
-assert 'return value ?: @"DEFAULT";' in badge
+assert 'static id CRBadgeSourceMarkerFromInfo(id info)' in badge
+assert 'if (!info || ![info respondsToSelector:@selector(objectForKeyedSubscript:)])' in badge
+assert 'return marker ?: @"DEFAULT";' in badge
+assert 'id source = CRBadgeSourceMarkerFromInfo(info);' in badge
+assert 'id lhsContainer = CRBadgeSourceMarkerFromInfo(lhs);' in badge
+assert 'id rhsContainer = CRBadgeSourceMarkerFromInfo(rhs);' in badge
+assert 'return CRBadgeSourceMarkerFromInfo(info);' in badge
 assert 'static NSString *CRBadgeContainerForConnectionAndApplication(' in badge
 # Original 0xFD9C updates the badge with intValue and clears scoped
 # notifications when the NSNumber is exactly equal to zero.

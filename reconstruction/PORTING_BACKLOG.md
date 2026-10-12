@@ -55,6 +55,8 @@ Ngày kiểm kê: 2026-10-12. Nhánh quan sát: `chore/reconstruction-build-ci`.
 | `0xF254` | `CRBadgeOuterSave` | Now uses shared 0xBA6C resolver before forwarding and async foreground clear |
 | Save revisions/options | `CRBadgeSourceForRecord` | Uses same 0xBA6C resolver; no longer discards nil userInfo/appID or present non-string tagged source in this path |
 
+**Batch 0xBE18 / 0x11884 / 0x115F4:** cùng dùng `CRBadgeSourceMarkerFromInfo` trong record lookup, record similarity và notification-content mutation, bảo toàn `nil` vs `DEFAULT` và keyed `userInfo` gốc. Đã bổ sung regression assertions. Không tuyên bố runtime pass.
+
 **Batch bổ sung:** `0x1119C` bulletin provider và `0x11420` bulletin action giờ dùng chung resolver `0xBA6C` thay vì nhánh kiểm tra riêng chỉ nhận NSDictionary. `0x115F4` content mutation đọc marker từ userInfo keyed collection, giữ phân biệt nil và thiếu marker theo `0xBE18`. Các contract assertions đã được cập nhật.
 
 Remaining unresolved: exhaustive `0xCBEC` hook registration matrix, original asynchronous foreground-check propagation, native badge cell/view fidelity, dynamic system-private class availability. This is a **targeted** matrix, not a claim to have audited all 40+ hooks.
