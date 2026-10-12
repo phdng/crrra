@@ -3,7 +3,7 @@
  * 0xA990, 0xAC68, 0xACD0, 0xAE20 and 0x11BB8.
  *
  * Store shape: app bundle identifier -> container identifier -> NSNumber.
- * Notification hooks that call CRBadgeStoreSetContainerCount are not yet wired.
+ * Notification setters and listener lifecycle hooks project aggregate counts.
  */
 #import <Foundation/Foundation.h>
 #import <objc/runtime.h>
@@ -16,6 +16,8 @@ void CRBadgeStoreSetContainerCount(NSString *appID, NSString *containerID, NSInt
 
 static NSMutableDictionary *gCRBadgeStore;
 static NSObject *gCRBadgeStoreLock;
+static NSArray<NSString *> *gCRBadgeInitialRefresh;
+static void CRBadgeProjectApplicationCount(NSString *appID, BOOL validate);
 static void CRBadgeStoreReconcileContainerKeys(void);
 static BOOL CRBadgeRedirectionEnabled(NSString *appID);
 
@@ -35,6 +37,17 @@ void CRBadgeStoreInitialize(void)
             ? [saved mutableCopy] : [NSMutableDictionary new];
         CRBadgeStoreReconcileContainerKeys();
     });
+    /* 0xB00C invokes 0xAC2C after pruning stale containers or reconciling
+     * the badge icon. Defer that projection until dispatch_once is complete:
+     * CRBadgeProjectApplicationCount -> CRBadgeAggregateCount calls this
+     * initializer, so projecting inside the once block would deadlock. */
+    NSArray<NSString *> *refresh = nil;
+    @synchronized (gCRBadgeStoreLock) {
+        refresh = gCRBadgeInitialRefresh;
+        gCRBadgeInitialRefresh = nil;
+    }
+    for (NSString *appID in refresh)
+        CRBadgeProjectApplicationCount(appID, YES);
 }
 
 /* 0xB00C: LSApplicationProxy reports whether a bundle is installed.
@@ -87,6 +100,7 @@ static void CRBadgeStoreReconcileContainerKeys(void)
 {
     CraneManager *manager = CraneManager.sharedManager;
     BOOL changed = NO;
+    NSMutableArray<NSString *> *refresh = [NSMutableArray new];
     NSDictionary *snapshot = [gCRBadgeStore copy];
     for (id appID in snapshot) {
         id counts = snapshot[appID];
@@ -111,36 +125,36 @@ static void CRBadgeStoreReconcileContainerKeys(void)
             continue;
         }
         NSMutableDictionary *updated = [counts mutableCopy];
+        /* Native 0xB688 totals the ORIGINAL stored values, before deleting
+         * unknown IDs. Summing only surviving values changes DEFAULT repair. */
+        uint32_t storedPositive = 0;
+        for (id countValue in [counts allValues]) {
+            if ([countValue respondsToSelector:@selector(intValue)]) {
+                int32_t count = [countValue intValue];
+                if (count > 0)
+                    storedPositive += (uint32_t)count; /* original _DWORD wraps */
+            }
+        }
         for (id containerID in counts) {
             if (![validIDs containsObject:containerID])
                 [updated removeObjectForKey:containerID];
         }
-        /* 0xB00C reconciles persisted positive counts with the icon's
-         * existing badge by storing that count under DEFAULT. */
+        /* 0xB00C writes DEFAULT directly on a badge mismatch, even if the
+         * transient container registry does not list DEFAULT. Do not gate
+         * this native repair path on membership in validIDs. */
         NSNumber *iconCount = CRBadgeExistingIconCount(appID);
-        if (iconCount && [validIDs containsObject:@"DEFAULT"]) {
-            NSInteger storedPositive = 0;
-            for (id countValue in [updated allValues]) {
-                if ([countValue respondsToSelector:@selector(integerValue)]) {
-                    NSInteger count = [countValue integerValue];
-                    if (count > 0)
-                        storedPositive += count;
-                }
-            }
-            if (storedPositive != [iconCount integerValue]) {
-                if ([iconCount integerValue] == 0)
-                    [updated removeObjectForKey:@"DEFAULT"];
-                else
-                    updated[@"DEFAULT"] = iconCount;
-            }
-        }
+        if (iconCount &&
+            storedPositive != (uint32_t)[iconCount intValue])
+            updated[@"DEFAULT"] = @([iconCount intValue]);
         if (![updated isEqualToDictionary:counts]) {
             gCRBadgeStore[appID] = [updated copy];
+            [refresh addObject:appID];
             changed = YES;
         }
     }
     if (changed)
         [gCRBadgeStore writeToFile:CRBadgeStorePath() atomically:YES];
+    gCRBadgeInitialRefresh = [refresh copy];
 }
 
 NSInteger CRBadgeStoreContainerCount(NSString *appID,
@@ -160,8 +174,9 @@ NSInteger CRBadgeStoreContainerCount(NSString *appID,
         NSDictionary *counts = gCRBadgeStore[appID];
         id value = [counts isKindOfClass:[NSDictionary class]]
             ? counts[containerID] : nil;
-        return [value respondsToSelector:@selector(integerValue)]
-            ? [value integerValue] : 0;
+        /* Native 0xA860 returns NSNumber.intValue (32-bit), not NSInteger. */
+        return [value respondsToSelector:@selector(intValue)]
+            ? [value intValue] : 0;
     }
 }
 
@@ -173,7 +188,8 @@ static void CRBadgeProjectApplicationCount(NSString *appID, BOOL validate)
     if (!appID.length)
         return;
     NSInteger count = CRBadgeAggregateCount(appID, validate);
-    NSNumber *value = @(count);
+    /* 0xA774 constructs numberWithInt:, preserving native badge ABI. */
+    NSNumber *value = @((int)count);
     Class stateClass = NSClassFromString(@"UISApplicationState");
     SEL initSEL = NSSelectorFromString(@"initWithBundleIdentifier:");
     SEL setSEL = NSSelectorFromString(@"setBadgeValue:");
@@ -330,8 +346,9 @@ static BOOL CRBadgeRedirectionEnabled(NSString *appID)
     return !perApp || [perApp boolValue];
 }
 
-/* 0xAA00/0xAB44: preserve the negative-only fallback when positive
- * badge counts sum to zero (e.g. special system badge sentinel values). */
+/* 0xAA00/0xAB44: native _DWORD accumulators wrap at 32 bits. Positive
+ * badge totals take priority; only a zero positive total can fall back to
+ * a signed-negative sentinel total. Use unsigned addition to avoid UB. */
 static NSInteger CRBadgeAggregateCount(NSString *appID, BOOL validate)
 {
     if (!appID.length)
@@ -343,18 +360,22 @@ static NSInteger CRBadgeAggregateCount(NSString *appID, BOOL validate)
         snapshot = [appCounts isKindOfClass:[NSDictionary class]]
             ? [appCounts copy] : @{};
     }
-    NSInteger positive = 0;
-    NSInteger negative = 0;
+    uint32_t positive = 0;
+    uint32_t negative = 0;
     for (id identifier in snapshot) {
         if (![identifier isKindOfClass:[NSString class]])
             continue;
-        NSInteger count = CRBadgeStoreContainerCount(appID, identifier, validate);
+        int32_t count = (int32_t)CRBadgeStoreContainerCount(
+            appID, identifier, validate);
         if (count >= 0)
-            positive += count;
+            positive += (uint32_t)count;
         else
-            negative += count;
+            negative += (uint32_t)count;
     }
-    return positive != 0 ? positive : (negative < 0 ? negative : 0);
+    /* Match 0xAA00: the sign bit of the *wrapped* negative accumulator
+     * controls fallback, rather than the sign of any individual entry. */
+    return (NSInteger)(int32_t)(positive != 0 ? positive :
+        ((int32_t)negative < 0 ? negative : 0));
 }
 
 static id CRBadgeRecordSource(id record);
@@ -395,17 +416,22 @@ static void CRBadgePrivateSet(id self, SEL cmd, NSNumber *number,
 
     id containerID = [NSThread currentThread].threadDictionary[
         @"saveNotification_containerID"];
+    /* 0xBB04 sends intValue even for a nil NSNumber (Objective-C returns 0).
+     * An empty value clears the stored count but does not match NSNumber(0)
+     * for record-removal purposes. Keep the source-container type guard. */
     if ([containerID isKindOfClass:[NSString class]] &&
-        [containerID length] && [number respondsToSelector:@selector(integerValue)]) {
+        [containerID length]) {
         CRBadgeStoreSetContainerCount(appID, containerID,
-                                     [number integerValue]);
-        if ([number isEqualToNumber:@0]) {
+                                     [number intValue]);
+        if ([number isEqual:@0]) {
             CRBadgeRemoveRecordsForContainer(self, appID, containerID,
                                              originalIMP == gCRBadgeQueueSetterOriginal);
         }
     }
 
-    NSNumber *aggregate = @(CRBadgeAggregateCount(appID, YES));
+    /* 0xBB04 forwards +[NSNumber numberWithInt:] of 0xAA00's sum,
+     * rather than an NSInteger-sized NSNumber. */
+    NSNumber *aggregate = @((int)CRBadgeAggregateCount(appID, YES));
     original(self, cmd, aggregate, appID, completion);
 }
 
@@ -798,6 +824,7 @@ static void CRBadgeSaveDatedRequest(id self, SEL cmd, id request, BOOL repost,
 }
 
 static id CRBadgeSourceMarkerFromInfo(id info);
+static id CRBadgeExplicitSourceTagFromInfo(id info);
 
 /* CraneSB 0x10D10/0x12424: pending requests are returned only for the
  * caller's container, and copied without the private source tag. */
@@ -835,7 +862,8 @@ static void CRBadgePendingRequests(id self, SEL cmd, NSString *appID, id complet
             if (![request respondsToSelector:copySEL])
                 continue;
             id copied = ((id (*)(id, SEL))objc_msgSend)(request, copySEL);
-            if (!copied)
+            if (!copied ||
+                (CRBadgeExplicitSourceTagFromInfo(info) && copied == request))
                 continue;
             /* Recheck the returned request: the private copy selector can
              * be provided by a different implementation on some builds. */
@@ -843,8 +871,9 @@ static void CRBadgePendingRequests(id self, SEL cmd, NSString *appID, id complet
                 ? ((id (*)(id, SEL))objc_msgSend)(copied, @selector(content)) : nil;
             id copiedInfo = [copiedContent respondsToSelector:@selector(userInfo)]
                 ? ((id (*)(id, SEL))objc_msgSend)(copiedContent, @selector(userInfo)) : nil;
-            if (![copiedInfo isKindOfClass:[NSDictionary class]] ||
-                copiedInfo[@"crane_sourceContainerID"])
+            if (!copiedInfo ||
+                ![copiedInfo respondsToSelector:@selector(objectForKeyedSubscript:)] ||
+                CRBadgeExplicitSourceTagFromInfo(copiedInfo))
                 continue;
             [filtered addObject:copied];
         }
@@ -1623,6 +1652,7 @@ static void CRBadgeBulletinAction(id self, SEL cmd, id response, id completion)
 }
 
 static id CRBadgeSourceMarkerFromInfo(id info);
+static id CRBadgeExplicitSourceTagFromInfo(id info);
 
 /* CraneSB 0x115F4: carry request source metadata into mutated content. */
 static IMP gCRBadgeMutateContentOriginal;
@@ -1641,14 +1671,47 @@ static id CRBadgeMutateContent(id self, SEL cmd, id request, id error)
     if (source && ![source isEqual:@"DEFAULT"] &&
         [mutated respondsToSelector:@selector(userInfo)]) {
         id mutatedInfo = ((id (*)(id, SEL))objc_msgSend)(mutated, @selector(userInfo));
-        if ([mutatedInfo isKindOfClass:[NSDictionary class]]) {
-            NSMutableDictionary *tagged = [mutatedInfo mutableCopy];
-            tagged[@"crane_sourceContainerID"] = source;
-            @try { [mutated setValue:[tagged copy] forKey:@"_userInfo"]; }
-            @catch (NSException *exception) { (void)exception; }
+        /* Native 0x1235C copies the returned keyed userInfo and installs
+         * the original source marker. Do not assume NSDictionary identity. */
+        if ([mutatedInfo respondsToSelector:@selector(mutableCopy)]) {
+            @try {
+                id tagged = [mutatedInfo mutableCopy];
+                SEL setSEL = @selector(setObject:forKeyedSubscript:);
+                if (tagged && tagged != mutatedInfo &&
+                    [tagged respondsToSelector:setSEL]) {
+                    ((void (*)(id, SEL, id, id))objc_msgSend)(tagged, setSEL,
+                        source, @"crane_sourceContainerID");
+                    [mutated setValue:[tagged copy] forKey:@"_userInfo"];
+                }
+            } @catch (NSException *exception) { (void)exception; }
         }
     }
     return mutated;
+}
+
+/* Native 0x126E8 reads keyed userInfo and both copy selectors remove only
+ * its source marker. Keep the mutation on an independent copy, and reject
+ * unknown collection implementations if copying/removal fails. */
+static id CRBadgeUserInfoCopyWithoutTag(id info)
+{
+    if (!CRBadgeExplicitSourceTagFromInfo(info))
+        return nil;
+    @try {
+        id stripped = [info respondsToSelector:@selector(mutableCopy)]
+            ? [info mutableCopy] : nil;
+        if (!stripped || stripped == info ||
+            ![stripped respondsToSelector:@selector(removeObjectForKey:)])
+            return nil;
+        [stripped removeObjectForKey:@"crane_sourceContainerID"];
+        id clean = [stripped copy];
+        if (!clean || ![clean respondsToSelector:@selector(objectForKeyedSubscript:)] ||
+            CRBadgeExplicitSourceTagFromInfo(clean))
+            return nil;
+        return clean;
+    } @catch (NSException *exception) {
+        (void)exception;
+        return nil;
+    }
 }
 
 /* CraneSB 0x1172C/0x11984/0x126E8: remove only the source marker.
@@ -1657,11 +1720,11 @@ static id CRBadgeRecordCopyWithoutContainer(id self, SEL cmd)
 {
     id info = [self respondsToSelector:@selector(userInfo)]
         ? ((id (*)(id, SEL))objc_msgSend)(self, @selector(userInfo)) : nil;
-    if (![info isKindOfClass:[NSDictionary class]] ||
-        !info[@"crane_sourceContainerID"])
+    if (!CRBadgeExplicitSourceTagFromInfo(info))
         return self;
-    NSMutableDictionary *stripped = [info mutableCopy];
-    [stripped removeObjectForKey:@"crane_sourceContainerID"];
+    id stripped = CRBadgeUserInfoCopyWithoutTag(info);
+    if (!stripped)
+        return nil;
     id representation = [self respondsToSelector:@selector(dictionaryRepresentation)]
         ? ((id (*)(id, SEL))objc_msgSend)(self, @selector(dictionaryRepresentation)) : nil;
     Class recordClass = NSClassFromString(@"UNSNotificationRecord");
@@ -1686,8 +1749,9 @@ static id CRBadgeRecordCopyWithoutContainer(id self, SEL cmd)
      * Only return a copy after confirming the source marker is gone. */
     id verifiedInfo = [record respondsToSelector:@selector(userInfo)]
         ? ((id (*)(id, SEL))objc_msgSend)(record, @selector(userInfo)) : nil;
-    if (![verifiedInfo isKindOfClass:[NSDictionary class]] ||
-        verifiedInfo[@"crane_sourceContainerID"])
+    if (!verifiedInfo ||
+        ![verifiedInfo respondsToSelector:@selector(objectForKeyedSubscript:)] ||
+        CRBadgeExplicitSourceTagFromInfo(verifiedInfo))
         return nil;
     return record;
 }
@@ -1698,11 +1762,11 @@ static id CRBadgeRequestCopyWithoutContainer(id self, SEL cmd)
         ? ((id (*)(id, SEL))objc_msgSend)(self, @selector(content)) : nil;
     id info = [content respondsToSelector:@selector(userInfo)]
         ? ((id (*)(id, SEL))objc_msgSend)(content, @selector(userInfo)) : nil;
-    if (![info isKindOfClass:[NSDictionary class]] ||
-        !info[@"crane_sourceContainerID"])
+    if (!CRBadgeExplicitSourceTagFromInfo(info))
         return self;
-    NSMutableDictionary *stripped = [info mutableCopy];
-    [stripped removeObjectForKey:@"crane_sourceContainerID"];
+    id stripped = CRBadgeUserInfoCopyWithoutTag(info);
+    if (!stripped)
+        return nil;
     /* Original 0x11984 invokes copy directly on UNNotificationRequest. */
     id request = [self copy];
     if (!request || request == self)
@@ -1719,10 +1783,21 @@ static id CRBadgeRequestCopyWithoutContainer(id self, SEL cmd)
     }
     id verifiedInfo = [copiedContent respondsToSelector:@selector(userInfo)]
         ? ((id (*)(id, SEL))objc_msgSend)(copiedContent, @selector(userInfo)) : nil;
-    if (![verifiedInfo isKindOfClass:[NSDictionary class]] ||
-        verifiedInfo[@"crane_sourceContainerID"])
+    if (!verifiedInfo ||
+        ![verifiedInfo respondsToSelector:@selector(objectForKeyedSubscript:)] ||
+        CRBadgeExplicitSourceTagFromInfo(verifiedInfo))
         return nil;
     return request;
+}
+
+/* Native 0x126E8: a present, keyed userInfo returns the explicit marker;
+ * nil userInfo or a missing key has no explicit marker. */
+static id CRBadgeExplicitSourceTagFromInfo(id info)
+{
+    if (!info || ![info respondsToSelector:@selector(objectForKeyedSubscript:)])
+        return nil;
+    return ((id (*)(id, SEL, id))objc_msgSend)(
+        info, @selector(objectForKeyedSubscript:), @"crane_sourceContainerID");
 }
 
 /* CraneSB 0x11884/0xBE18: matching records from different source
@@ -1774,16 +1849,16 @@ static id CRBadgeSanitizedRecord(id record)
     @try {
         id originalInfo = [record respondsToSelector:@selector(userInfo)]
             ? ((id (*)(id, SEL))objc_msgSend)(record, @selector(userInfo)) : nil;
-        BOOL tagged = [originalInfo isKindOfClass:[NSDictionary class]] &&
-            originalInfo[@"crane_sourceContainerID"] != nil;
+        BOOL tagged = CRBadgeExplicitSourceTagFromInfo(originalInfo) != nil;
         id clean = ((id (*)(id, SEL))objc_msgSend)(record, copySEL);
         /* Tagged repository records must not be sanitized in place. */
         if (tagged && clean == record)
             return nil;
         id info = [clean respondsToSelector:@selector(userInfo)]
             ? ((id (*)(id, SEL))objc_msgSend)(clean, @selector(userInfo)) : nil;
-        if (![info isKindOfClass:[NSDictionary class]] ||
-            info[@"crane_sourceContainerID"])
+        if (!info ||
+            ![info respondsToSelector:@selector(objectForKeyedSubscript:)] ||
+            CRBadgeExplicitSourceTagFromInfo(info))
             return nil;
         return clean;
     } @catch (NSException *exception) {
@@ -2419,8 +2494,10 @@ void CRBadgeStoreSetContainerCount(NSString *appID,
         NSMutableDictionary *counts =
             [previous isKindOfClass:[NSDictionary class]]
                 ? [previous mutableCopy] : [NSMutableDictionary new];
-        if (count != 0)
-            counts[containerID] = @(count);
+        /* 0xACD0 stores numberWithInt: and deletes on a 32-bit zero. */
+        int nativeCount = (int)count;
+        if (nativeCount != 0)
+            counts[containerID] = @(nativeCount);
         else
             [counts removeObjectForKey:containerID];
         gCRBadgeStore[appID] = [counts copy];

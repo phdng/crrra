@@ -43,6 +43,73 @@ assert 'CRPresentMainDylibNotLoadedError(processName);' in source
 assert 'CRPresentDaemonError(@[@"runningboardd"], nil, NO);' in source
 assert 'reply lacks the original second status' not in source
 badge = (Path(__file__).resolve().parents[1] / 'sources/cranesb/CRBadgeStore.m').read_text(encoding='utf-8')
+# Native 0xB00C -> 0xAC2C projects corrected badge counts after startup
+# reconciliation. Defer until dispatch_once completes to avoid recursion via
+# CRBadgeAggregateCount -> CRBadgeStoreInitialize and ensure once-only replay.
+initialization = badge[badge.index('void CRBadgeStoreInitialize(void)'):badge.index('/* 0xB00C: LSApplicationProxy')]
+assert initialization.index('CRBadgeStoreReconcileContainerKeys();') < initialization.index('NSArray<NSString *> *refresh = nil;')
+assert 'refresh = gCRBadgeInitialRefresh;' in initialization
+assert 'gCRBadgeInitialRefresh = nil;' in initialization
+assert 'for (NSString *appID in refresh)\n        CRBadgeProjectApplicationCount(appID, YES);' in initialization
+reconcile = badge[badge.index('static void CRBadgeStoreReconcileContainerKeys(void)\n{'):badge.index('NSInteger CRBadgeStoreContainerCount(')]
+assert 'for (id countValue in [counts allValues])' in reconcile
+assert 'for (id countValue in [updated allValues])' not in reconcile
+assert reconcile.index('for (id countValue in [counts allValues])') < reconcile.index('for (id containerID in counts)')
+assert reconcile.index('[refresh addObject:appID];') < reconcile.index('gCRBadgeInitialRefresh = [refresh copy];')
+assert 'updated[@"DEFAULT"] = @([iconCount intValue]);' in reconcile
+assert 'if (iconCount &&\n            storedPositive != (uint32_t)[iconCount intValue])' in reconcile
+assert '[validIDs containsObject:@"DEFAULT"]' not in reconcile
+assert '[refresh addObject:appID];' in reconcile
+assert 'gCRBadgeInitialRefresh = [refresh copy];' in reconcile
+assert 'uint32_t storedPositive = 0;' in reconcile
+assert 'int32_t count = [countValue intValue];' in reconcile
+assert 'storedPositive += (uint32_t)count;' in reconcile
+assert 'storedPositive != (uint32_t)[iconCount intValue]' in reconcile
+assert 'if ([iconCount integerValue] == 0)' not in reconcile
+assert '? [value intValue] : 0;' in badge
+assert 'NSNumber *value = @((int)count);' in badge
+assert 'int nativeCount = (int)count;' in badge
+assert 'counts[containerID] = @(nativeCount);' in badge
+# 0xAA00/0xAB44 use signed 32-bit counts but _DWORD (wrapping) sum.
+aggregate = badge[badge.index('static NSInteger CRBadgeAggregateCount(NSString *appID, BOOL validate)\n{'):badge.index('static id CRBadgeRecordSource(id record);')]
+assert 'uint32_t positive = 0;' in aggregate
+assert 'uint32_t negative = 0;' in aggregate
+assert 'int32_t count = (int32_t)CRBadgeStoreContainerCount(' in aggregate
+assert 'positive += (uint32_t)count;' in aggregate
+assert 'negative += (uint32_t)count;' in aggregate
+assert '(int32_t)negative < 0 ? negative : 0' in aggregate
+assert 'NSInteger positive = 0;' not in aggregate
+private_set = badge[badge.index('static void CRBadgePrivateSet(id self, SEL cmd, NSNumber *number,'):badge.index('static void CRBadgeQueueSet(')]
+assert '[number respondsToSelector:@selector(intValue)]' not in private_set
+assert 'Objective-C returns 0' in private_set
+assert '[number intValue]' in private_set
+assert '[number isEqual:@0]' in private_set
+assert 'NSNumber *aggregate = @((int)CRBadgeAggregateCount(appID, YES));' in private_set
+assert '[number integerValue]' not in private_set
+
+# Independent boundary models for the recovered 0xAA00 priority/fallback.
+# They guard expected 32-bit semantics, not native-device execution.
+def _i32(value):
+    value &= 0xFFFFFFFF
+    return value if value < 0x80000000 else value - 0x100000000
+
+def _aggregate_native(values):
+    positive = 0
+    negative = 0
+    for value in values:
+        value = _i32(value)
+        if value >= 0:
+            positive = (positive + value) & 0xFFFFFFFF
+        else:
+            negative = (negative + value) & 0xFFFFFFFF
+    return _i32(positive if positive else negative if _i32(negative) < 0 else 0)
+
+assert _aggregate_native([3, 5, -1]) == 8
+assert _aggregate_native([-2, -3]) == -5
+assert _aggregate_native([0, -1]) == -1
+assert _aggregate_native([0x7FFFFFFF, 1]) == -0x80000000
+assert _aggregate_native([0x7FFFFFFF, 0x7FFFFFFF, 2, -9]) == -9
+assert _aggregate_native([-0x80000000, -0x80000000]) == 0
 # CraneSB original 0x108F4: deliveredDate: variant tags content before
 # forwarding request, BOOL repost, date, bundle ID, and completion unchanged.
 assert 'static void CRBadgeSaveDatedRequest(id self, SEL cmd, id request, BOOL repost,' in badge
@@ -109,6 +176,15 @@ assert 'extension = NSClassFromString(@"UNCNotificationServiceExtension");' in b
 assert 'gCRBadgeMutateContentOriginal' in badge
 assert 'tagged[@"crane_sourceContainerID"] = source;' in badge
 assert '[mutated setValue:[tagged copy] forKey:@"_userInfo"]' in badge
+# 0x115F4 -> 0x1235C copies arbitrary keyed userInfo (not just NSDictionary),
+# with an independent mutable copy and a typed private objc_msgSend.
+mutation = badge[badge.index('static id CRBadgeMutateContent(id self, SEL cmd, id request, id error)'):badge.index('static id CRBadgeUserInfoCopyWithoutTag(id info)')]
+assert '[mutatedInfo respondsToSelector:@selector(mutableCopy)]' in mutation
+assert 'tagged != mutatedInfo' in mutation
+assert 'SEL setSEL = @selector(setObject:forKeyedSubscript:);' in mutation
+assert '((void (*)(id, SEL, id, id))objc_msgSend)(tagged, setSEL,' in mutation
+assert 'source, @"crane_sourceContainerID"' in mutation
+assert '[mutatedInfo isKindOfClass:[NSDictionary class]]' not in mutation
 assert 'static id CRBadgeRecordCopyWithoutContainer(id self, SEL cmd)' in badge
 assert 'static id CRBadgeRequestCopyWithoutContainer(id self, SEL cmd)' in badge
 assert 'class_addMethod(recordClass, copySEL' in badge
@@ -202,8 +278,8 @@ assert 'id record = [allocated respondsToSelector:initSEL] && representation' in
 assert '0x1172C constructs a UNSNotificationRecord from its dictionary' in badge
 assert 'if (!record && [self respondsToSelector:@selector(copyWithZone:)])' not in badge
 assert 'if (!record || record == self ||' in badge
-assert 'verifiedInfo[@"crane_sourceContainerID"]' in badge
-assert 'if (![verifiedInfo isKindOfClass:[NSDictionary class]] ||' in badge
+assert badge.count('CRBadgeExplicitSourceTagFromInfo(verifiedInfo)') == 2
+assert badge.count('![verifiedInfo respondsToSelector:@selector(objectForKeyedSubscript:)]') == 2
 assert '![record respondsToSelector:@selector(setUserInfo:)])' in badge
 assert 'record, @selector(setUserInfo:), [stripped copy]);\n    } @catch (NSException *exception)' in badge
 assert 'static id CRBadgeContainerForNotificationInfo(id info, NSString *appID)' in badge
@@ -215,6 +291,20 @@ assert 'static id CRBadgeRecordSource(id record)' in badge
 # CraneSB 0xBE18: nil userInfo differs from present keyed userInfo with
 # missing tag (DEFAULT); never narrow the original to NSDictionary.
 assert 'static id CRBadgeSourceMarkerFromInfo(id info)' in badge
+# Native 0x126E8 finds explicit tag from keyed userInfo, not exclusively
+# NSDictionary. Tag-bearing items must be copied and checked fail-closed.
+assert 'static id CRBadgeExplicitSourceTagFromInfo(id info)' in badge
+assert 'info, @selector(objectForKeyedSubscript:), @"crane_sourceContainerID"' in badge
+assert 'static id CRBadgeUserInfoCopyWithoutTag(id info)' in badge
+assert badge.count('if (!CRBadgeExplicitSourceTagFromInfo(info))') == 3
+assert badge.count('id stripped = CRBadgeUserInfoCopyWithoutTag(info);') == 2
+assert 'if (!stripped || stripped == info ||' in badge
+assert '[stripped removeObjectForKey:@"crane_sourceContainerID"]' in badge
+assert 'CRBadgeExplicitSourceTagFromInfo(clean))' in badge
+assert '@catch (NSException *exception)' in badge
+assert 'BOOL tagged = CRBadgeExplicitSourceTagFromInfo(originalInfo) != nil;' in badge
+assert 'CRBadgeExplicitSourceTagFromInfo(info))' in badge
+assert 'if (![info isKindOfClass:[NSDictionary class]] ||\n        !info[@"crane_sourceContainerID"])' not in badge
 # 0xBF00 / 0x10138 must use the same 0xBA6C resolver for queue saves.
 assert 'NSString *containerID = CRBadgeSourceForRecord(record, appID);' in badge
 assert 'id source = CRBadgeRecordSource(record);' in badge
@@ -241,14 +331,14 @@ assert 'static id CRBadgeSanitizedRecord(id record)' in badge
 assert 'if (tagged && clean == record)' in badge
 assert 'return clean;\n    } @catch (NSException *exception) {' in badge
 assert badge.count('CRBadgeSanitizedRecord(record);') == 3
-assert 'info[@"crane_sourceContainerID"]' in badge
+assert 'CRBadgeExplicitSourceTagFromInfo(info))' in badge
 assert '((id (*)(id, SEL))objc_msgSend)(record, copySEL) : record;' not in badge
 assert 'if (!copiedContent || copiedContent == content)' in badge
-assert 'verifiedInfo[@"crane_sourceContainerID"]' in badge
 assert 'id request = [self copy];' in badge
 assert 'if (!request || request == self)' in badge
 assert 'id copiedInfo = [copiedContent respondsToSelector:@selector(userInfo)]' in badge
-assert 'copiedInfo[@"crane_sourceContainerID"]' in badge
+assert 'CRBadgeExplicitSourceTagFromInfo(copiedInfo))' in badge
+assert '(CRBadgeExplicitSourceTagFromInfo(info) && copied == request)' in badge
 assert 'Original 0xE730 skips decoration only when the name is nil.' in badge
 assert 'if (![name isKindOfClass:[NSString class]] || ![name length])' not in badge
 assert '0xEBA0 skips DEFAULT, not an empty identifier.' in badge
