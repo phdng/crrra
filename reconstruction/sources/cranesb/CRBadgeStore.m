@@ -1669,11 +1669,16 @@ static id CRBadgeRecordSource(id record)
 {
     id info = [record respondsToSelector:@selector(userInfo)]
         ? ((id (*)(id, SEL))objc_msgSend)(record, @selector(userInfo)) : nil;
-    if (![info isKindOfClass:[NSDictionary class]])
+    /* Original 0xBE18 returns nil for nil userInfo, but treats a present
+     * keyed collection without a source marker as DEFAULT. It does not
+     * require NSDictionary specifically. */
+    if (!info)
         return nil;
-    id value = info[@"crane_sourceContainerID"];
-    /* Original 0xBE18 preserves a present source object verbatim and
-     * substitutes DEFAULT only when the marker is absent. */
+    SEL keyedSEL = @selector(objectForKeyedSubscript:);
+    if (![info respondsToSelector:keyedSEL])
+        return nil;
+    id value = ((id (*)(id, SEL, id))objc_msgSend)(
+        info, keyedSEL, @"crane_sourceContainerID");
     return value ?: @"DEFAULT";
 }
 

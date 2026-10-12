@@ -39,6 +39,21 @@ Ngày kiểm kê: 2026-10-12. Nhánh quan sát: `chore/reconstruction-build-ci`.
 | F-22 | Siri/Shortcuts | ABSENT | Recover `CraneIntentHandlerShared` and intent response codes; extension packaging | U-08; missing Shortcuts export | P2 BLOCKED BY EVIDENCE | Siri intents correctly invoke container actions |
 | F-23 | Activator | PARTIAL | Observer dispatch and callback semantics, runtime icon/event verification | `CraneActivatorManager`, `CRManager.m` | P2 | Event registration, switch, abort, icon differentiation |
 
+## 1A. Audit hook-level notification: batch 2026-10-12
+
+| Native offset | Reconstruction | Tình trạng / giới hạn |
+|---|---|---|
+| `0xA4A0`, `0x20F58` | `CRBadgeContainerForConnectionAndApplication` | Ported gate iOS 17+ and 9 caller sites; runtime unverified |
+| `0xFD9C` | `CRBadgePublicSet` | Ported XPC resolver, `intValue`, badge-zero scoped removal; static contract |
+| `0xF524` | `CRBadgeRemoveAllRecords` | Ported predicate-based remove-all (does not call unscoped original when enabled) |
+| `0xF398`, `0x11FC0` | `CRBadgeRemoveRecordsPassingTest` | Ported predicate then container filter; requires device validation |
+| `0xF59C` | `CRBadgeRecordLookup` | Ported filtering and copyWithoutContainerID; type/runtime safety differs defensively |
+| `0xF750` | `CRBadgeRecordsLookup` | Ported collection filtering, copied output |
+| `0xFA20`, `0x120B0` | `CRBadgeRecordsLookupWithReply` | Ported asynchronous reply mapping using captured connection container |
+| `0xBE18` | `CRBadgeRecordSource` | Corrected nil-vs-present keyed userInfo handling; requires live behavior comparison |
+
+Remaining unresolved: exhaustive `0xCBEC` hook registration matrix, original asynchronous foreground-check propagation, native badge cell/view fidelity, dynamic system-private class availability. This is a **targeted** matrix, not a claim to have audited all 40+ hooks.
+
 ## 2. Thứ tự triển khai có dependency
 
 1. **G0 — Evidence & parity audit:** đối chiếu exports và mã mới, cập nhật feature report (F-08/F-14 thay đổi nhiều). Ghi mapping selector → original offset → implementation → test.
