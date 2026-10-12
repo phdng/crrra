@@ -265,6 +265,62 @@ static void CraneAccountsdBundleDidLoad(CFNotificationCenterRef center,
     }
 }
 
+/* The original 0x7CB8/0x8324 creates <container>.sqlite files without
+ * validating component names or the result of SQLite attachment. On a
+ * reconstruction with an incomplete manager/transport that is dangerous:
+ * refuse traversal/symlinks and retain the previous store if opening fails.
+ * This is an intentional defensive deviation from native control flow. */
+static BOOL CraneAccountsdSafeStoreIdentifier(NSString *identifier)
+{
+    if (![identifier isKindOfClass:NSString.class] ||
+        !identifier.length || identifier.length > 128 ||
+        [identifier isEqualToString:@"."] ||
+        [identifier isEqualToString:@".."])
+        return NO;
+    static NSCharacterSet *unsafe;
+    static dispatch_once_t once;
+    dispatch_once(&once, ^{
+        NSCharacterSet *allowed = [NSCharacterSet characterSetWithCharactersInString:
+            @"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789._-"];
+        unsafe = [allowed invertedSet];
+    });
+    return [identifier rangeOfCharacterFromSet:unsafe].location == NSNotFound;
+}
+
+static BOOL CraneAccountsdSafeStoreDirectory(NSString *path)
+{
+    if (!path.length)
+        return NO;
+    NSFileManager *fm = NSFileManager.defaultManager;
+    if ([fm destinationOfSymbolicLinkAtPath:path error:NULL])
+        return NO;
+    BOOL directory = NO;
+    if (![fm fileExistsAtPath:path isDirectory:&directory]) {
+        /* Retain native 0x6BE0 ownership/permissions on first creation. */
+        CRCreateDirectoryIfNotExists(path);
+        if (![fm fileExistsAtPath:path isDirectory:&directory])
+            return NO;
+    }
+    return directory && ![fm destinationOfSymbolicLinkAtPath:path error:NULL];
+}
+
+static BOOL CraneAccountsdSafeStorePath(NSString *path)
+{
+    if (!path.length)
+        return NO;
+    NSFileManager *fm = NSFileManager.defaultManager;
+    for (NSString *suffix in @[@"", @"-wal", @"-shm"]) {
+        NSString *candidate = [path stringByAppendingString:suffix];
+        if ([fm destinationOfSymbolicLinkAtPath:candidate error:NULL])
+            return NO;
+        BOOL isDirectory = NO;
+        if ([fm fileExistsAtPath:candidate isDirectory:&isDirectory] &&
+            isDirectory)
+            return NO;
+    }
+    return YES;
+}
+
 /* ------------------------------------------------------------------------- */
 /* Modern (CF >= 1665.15) coordinator-per-container path                     */
 /* ------------------------------------------------------------------------- */
@@ -286,6 +342,10 @@ static BOOL CraneAccountsdApplyModernRedirection(id self,
     NSString *requested =
         CraneAccountsdNormalizedContainerID(identifier);
 
+    if (!databaseConnection ||
+        !CraneAccountsdSafeStoreIdentifier(requested) ||
+        !CraneAccountsdSafeStoreIdentifier(current))
+        return NO;
     if ([current isEqualToString:requested])
         return NO;
 
@@ -300,6 +360,9 @@ static BOOL CraneAccountsdApplyModernRedirection(id self,
     NSMutableDictionary *cache =
         [self crane_storeCoordinatorsByContainerIdentifiers];
     NSPersistentStoreCoordinator *coordinator = cache[requested];
+    /* Never reuse a failed/empty coordinator from an earlier attempt. */
+    if (coordinator && coordinator.persistentStores.count == 0)
+        return NO;
 
     if (!coordinator) {
         NSManagedObjectModel *model =
@@ -317,22 +380,38 @@ static BOOL CraneAccountsdApplyModernRedirection(id self,
 
         if (!gModernAccountsBaseURL) {
             NSURL *databaseURL = [delegate databaseURL];
-            gModernAccountsBaseURL =
+            if (![databaseURL isKindOfClass:NSURL.class] ||
+                ![databaseURL isFileURL])
+                return NO;
+            NSURL *candidate =
                 [[databaseURL URLByDeletingLastPathComponent]
                     URLByAppendingPathComponent:@"Crane"];
-            CRCreateDirectoryIfNotExists(gModernAccountsBaseURL.path);
+            if (!CraneAccountsdSafeStoreDirectory(candidate.path))
+                return NO;
+            gModernAccountsBaseURL = candidate;
         }
+        if (!CraneAccountsdSafeStoreDirectory(gModernAccountsBaseURL.path))
+            return NO;
 
         NSString *filename =
             [NSString stringWithFormat:@"%@.sqlite", requested];
         NSURL *storeURL =
             [gModernAccountsBaseURL URLByAppendingPathComponent:filename];
+        if (!CraneAccountsdSafeStorePath(storeURL.path))
+            return NO;
 
-        [coordinator addPersistentStoreWithType:NSSQLiteStoreType
-                                  configuration:nil
-                                            URL:storeURL
-                                        options:storeOptions
-                                          error:NULL];
+        NSError *storeError = nil;
+        NSPersistentStore *opened =
+            [coordinator addPersistentStoreWithType:NSSQLiteStoreType
+                                      configuration:nil
+                                                URL:storeURL
+                                            options:storeOptions
+                                              error:&storeError];
+        if (!opened) {
+            NSLog(@"CraneSupport: accountsd refused invalid SQLite store %@: %@",
+                  storeURL.path, storeError);
+            return NO; /* Never install an unattached coordinator. */
+        }
     }
 
     [databaseConnection
@@ -442,19 +521,25 @@ static BOOL CraneAccountsdApplyLegacyRedirection(id self,
     if (!database)
         return NO;
 
-    if (!gLegacyAccountsBasePath) {
-        NSString *databasePath = [database path];
-        gLegacyAccountsBasePath =
-            [[databasePath stringByDeletingLastPathComponent]
-                stringByAppendingPathComponent:@"Crane"];
-    }
-
     NSString *current =
         CraneAccountsdNormalizedContainerID([self crane_activeContainer]);
     NSString *requested =
         CraneAccountsdNormalizedContainerID(identifier);
-
+    if (!CraneAccountsdSafeStoreIdentifier(current) ||
+        !CraneAccountsdSafeStoreIdentifier(requested))
+        return NO;
     if ([current isEqualToString:requested])
+        return NO;
+
+    if (!gLegacyAccountsBasePath) {
+        NSString *databasePath = [database path];
+        if (![databasePath isKindOfClass:NSString.class] || !databasePath.length)
+            return NO;
+        gLegacyAccountsBasePath =
+            [[databasePath stringByDeletingLastPathComponent]
+                stringByAppendingPathComponent:@"Crane"];
+    }
+    if (!CraneAccountsdSafeStoreDirectory(gLegacyAccountsBasePath))
         return NO;
 
     NSMutableDictionary *cache =
@@ -463,11 +548,12 @@ static BOOL CraneAccountsdApplyLegacyRedirection(id self,
 
     id redirectedDatabase = cache[requested];
     if (!redirectedDatabase) {
-        CRCreateDirectoryIfNotExists(gLegacyAccountsBasePath);
         NSString *filename =
             [NSString stringWithFormat:@"%@.sqlite", requested];
         NSString *path =
             [gLegacyAccountsBasePath stringByAppendingPathComponent:filename];
+        if (!CraneAccountsdSafeStorePath(path))
+            return NO;
 
         Class databaseClass = NSClassFromString(@"ACDDatabase");
         redirectedDatabase =

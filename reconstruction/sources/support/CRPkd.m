@@ -115,7 +115,14 @@ static void CRPkdTerminatePlugIns(NSArray *plugIns, BOOL synchronously)
             [server terminatePlugIns:proxies reply:^{
                 dispatch_semaphore_signal(semaphore);
             }];
-            dispatch_semaphore_wait(semaphore, DISPATCH_TIME_FOREVER);
+            /* Original 0xE888 waits forever here. A missing or delayed
+             * reply from the older PKDServer API must not deadlock pkd.
+             * Termination has already been requested; fail open after a
+             * bounded wait rather than blocking extension discovery. */
+            long waitResult = dispatch_semaphore_wait(
+                semaphore, dispatch_time(DISPATCH_TIME_NOW, 5 * NSEC_PER_SEC));
+            if (waitResult != 0)
+                NSLog(@"CraneSupport: timed out waiting for PKDPlugIn termination");
         } else {
             [server terminatePlugIns:proxies reply:^{}];
         }
@@ -160,17 +167,23 @@ static void CRPkdReloadApplication(CFNotificationCenterRef center,
     id application = proxyClass
         ? [(id)proxyClass applicationProxyForIdentifier:applicationIdentifier]
         : nil;
-    NSMutableArray *plugIns = [[application plugInKitPlugins] mutableCopy];
-    if (!plugIns)
+    NSArray *plugIns = [application plugInKitPlugins];
+    if (![plugIns isKindOfClass:NSArray.class])
         return;
 
-    for (id plugIn in [plugIns reverseObjectEnumerator]) {
-        NSString *extensionPoint = [plugIn pluginKitDictionary][@"NSExtensionPointIdentifier"];
-        if ([extensionPoint isEqualToString:@"com.apple.usernotifications.service"])
-            [plugIns removeObject:plugIn];
+    /* Original 0xEC44 removes entries from its mutable copy while fast
+     * enumerating the reverseObjectEnumerator, which raises a mutation
+     * exception on ordinary NSArray enumerators. Select into a separate
+     * array, retaining notification-service extensions as before. */
+    NSMutableArray *toTerminate = [NSMutableArray arrayWithCapacity:plugIns.count];
+    for (id plugIn in plugIns) {
+        NSString *extensionPoint =
+            [plugIn pluginKitDictionary][@"NSExtensionPointIdentifier"];
+        if (![extensionPoint isEqualToString:@"com.apple.usernotifications.service"])
+            [toTerminate addObject:plugIn];
     }
 
-    CRPkdTerminatePlugIns(plugIns, NO);
+    CRPkdTerminatePlugIns(toTerminate, NO);
 }
 
 typedef void (^CRPkdEnableContinuation)(NSDictionary *environment);

@@ -43,6 +43,9 @@ jobs:
       - name: Verify daemon safety contracts
         run: python3 reconstruction/tools/check_daemon_contract.py
 
+      - name: Verify unsupported privileged helper calls fail closed
+        run: python3 reconstruction/tools/check_helper_privileged_contract.py
+
       - name: Verify runningboardd launch hook ABI
         run: python3 reconstruction/tools/check_runningboard_contract.py
 
@@ -63,6 +66,12 @@ jobs:
 
       - name: Verify cfprefsd preference isolation
         run: python3 reconstruction/tools/check_preferences_isolation_contract.py
+
+      - name: Verify accountsd isolated SQLite stores
+        run: python3 reconstruction/tools/check_accountsd_isolation_contract.py
+
+      - name: Verify PlugInKit reload and bounded termination
+        run: python3 reconstruction/tools/check_pkd_lifecycle_contract.py
 
       - name: Verify Preferences Game Center settings
         run: python3 reconstruction/tools/check_prefs_settings_contract.py

@@ -216,11 +216,14 @@ extern pid_t CRXPCConnectionGetPid(xpc_connection_t connection)
          andBundleIdentifier:(NSString *)bundleID
                     withReply:(void (^)(NSString *))reply
 {
-    /* Crane 0x65EC reads CraneSupport's per-container identifier; the source of
-     * truth is /var/db/lsd or the lsd daemon. */
-    reply([[NSUserDefaults standardUserDefaults]
-           stringForKey:[NSString stringWithFormat:@"crane_identifier.%@.%@.%llu",
-                         bundleID, vendorName, type]]);
+    /* F-11/F-19: the recovered CraneSupport 0x65EC identifier is owned by
+     * lsd, NOT by cranehelperd's NSUserDefaults. The original lsd transport
+     * and caller-authorization contract are not recovered. Never return a
+     * fabricated identifier or read an unrelated daemon-local key. */
+    (void)type; (void)vendorName; (void)bundleID;
+    NSLog(@"CraneHelperd: original lsd identifier read unavailable");
+    if (reply)
+        reply(nil);
 }
 
 - (void)setIdentifier:(NSString *)identifier
@@ -228,21 +231,35 @@ extern pid_t CRXPCConnectionGetPid(xpc_connection_t connection)
         forVendorName:(NSString *)vendorName
     andBundleIdentifier:(NSString *)bundleID
 {
-    [[NSUserDefaults standardUserDefaults]
-     setObject:identifier forKey:[NSString stringWithFormat:@"crane_identifier.%@.%@.%llu",
-                                  bundleID, vendorName, type]];
+    /* Until authenticated lsd storage is reconstructed, silently writing
+     * daemon-local preferences would claim success while not changing the
+     * application's actual vendor identifier. Fail closed, with a log. */
+    (void)identifier; (void)type; (void)vendorName; (void)bundleID;
+    NSLog(@"CraneHelperd: original lsd identifier write unavailable");
 }
 
 - (void)dumpKeychainItemsForContainerIdentifier:(NSString *)containerID
                       forApplicationIdentifier:(NSString *)appID
                                          reply:(void (^)(NSDictionary *))reply
 {
-    reply(@{});
+    /* An empty dictionary is a VALID successful empty keychain dump. Do
+     * not return it if the securityd/keychain backend is missing: callers
+     * could mistake a stub result for a backup and overwrite real data. */
+    (void)containerID; (void)appID;
+    NSLog(@"CraneHelperd: keychain dump unavailable; refusing fake empty backup");
+    if (reply)
+        reply(nil);
 }
 
 - (void)restoreKeychainItems:(NSDictionary *)items
  toContainerIdentifier:(NSString *)containerID
-   forApplicationIdentifier:(NSString *)appID {}
+   forApplicationIdentifier:(NSString *)appID
+{
+    /* The original keychain identity/mapping and restore authorization are
+     * unavailable. Never mutate another container's secure items by guess. */
+    (void)items; (void)containerID; (void)appID;
+    NSLog(@"CraneHelperd: keychain restore unavailable");
+}
 
 @end
 
