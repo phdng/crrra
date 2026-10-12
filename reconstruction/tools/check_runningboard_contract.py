@@ -237,10 +237,13 @@ assert 'containerSettingsForContainerWithIdentifier:source' in badge
 assert 'static void CRBadgeRemoveAllRecords(id self, SEL cmd, NSString *appID)' in badge
 assert '@"removeAllNotificationRecordsForBundleIdentifier:"' in badge
 assert 'self, removeSEL, ^BOOL(id record) { (void)record; return YES; }, appID' in badge
-assert 'static void CRBadgeRegisterNotificationAdditionsProtocol(void)' in badge
-assert '"v32@0:8@16@24", YES, YES' in badge
-assert '"v40@0:8@16@24@32", YES, YES' in badge
-assert 'CRBadgeRegisterNotificationAdditionsProtocol();' in badge
+# iOS 15 NSXPCInterface requires Clang-emitted extended protocol method
+# metadata; runtime-created addition methods crash SpringBoard at setProtocol:.
+assert '#import "CRXPCProtocols.h"' in badge
+assert 'Protocol *additions = @protocol(UNUserNotificationProtocolCraneAdditions);' in badge
+assert 'objc_allocateProtocol(\n        "UNUserNotificationProtocolCraneAdditions")' not in badge
+assert 'protocol_addMethodDescription(' not in badge
+assert 'CRBadgeRegisterNotificationAdditionsProtocol();' not in badge
 assert 'static void CRBadgeUnregisterNotifications(id self, SEL cmd,' in badge
 assert '(IMP)CRBadgeUnregisterNotifications, "v@:@@"' in badge
 assert '@"_remoteNotificationService"' in badge

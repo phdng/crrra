@@ -23,6 +23,7 @@
 #import "CRPreferences.h"
 #import "CRPaths.h"
 #import "CRCommon.h"
+#import "CRXPCProtocols.h"
 
 @interface ClientContainerCache : NSObject
 + (instancetype)sharedInstance;
@@ -92,45 +93,22 @@ static NSString *CraneLSDSigningIdentifierForConnection(NSXPCConnection *connect
 
 static void CraneLSDInitProtocol(void)
 {
-    Protocol *additions =
-        objc_getProtocol("_LSDDeviceIdentifierProtocolCraneAdditions");
-    if (!additions) {
-        additions =
-            objc_allocateProtocol("_LSDDeviceIdentifierProtocolCraneAdditions");
-        if (additions) {
-            protocol_addMethodDescription(
-                additions,
-                NSSelectorFromString(
-                    @"crane_getIdentifier:ofType:forVendorName:andBundleIdentifier:"),
-                "v@:@?q@@",
-                YES,
-                YES);
-            protocol_addMethodDescription(
-                additions,
-                NSSelectorFromString(
-                    @"crane_setIdentifier:ofType:forVendorName:andBundleIdentifier:"),
-                "v@:@q@@",
-                YES,
-                YES);
-            objc_registerProtocol(additions);
-        }
-    }
-
-    if (objc_getProtocol("_LSDDeviceIdentifierProtocolPlusCraneAdditions"))
+    /* The original CraneSupport binary has a Clang-compiled protocol
+     * _OBJC_PROTOCOL_$_LSDDeviceIdentifierProtocolCraneAdditions.
+     * NSXPCInterface on iOS 15 cannot decode extended method signatures
+     * from runtime-only protocol method descriptions. */
+    Protocol *additions = @protocol(_LSDDeviceIdentifierProtocolCraneAdditions);
+    Protocol *base = objc_getProtocol("_LSDDeviceIdentifierProtocol");
+    if (!additions || !base ||
+        objc_getProtocol("_LSDDeviceIdentifierProtocolPlusCraneAdditions"))
         return;
 
     Protocol *plus =
         objc_allocateProtocol("_LSDDeviceIdentifierProtocolPlusCraneAdditions");
     if (!plus)
         return;
-
-    additions =
-        objc_getProtocol("_LSDDeviceIdentifierProtocolCraneAdditions");
-    Protocol *base = objc_getProtocol("_LSDDeviceIdentifierProtocol");
-    if (additions)
-        protocol_addProtocol(plus, additions);
-    if (base)
-        protocol_addProtocol(plus, base);
+    protocol_addProtocol(plus, additions);
+    protocol_addProtocol(plus, base);
     objc_registerProtocol(plus);
 }
 
@@ -148,7 +126,21 @@ static void CraneLSDSetProtocol(id self, SEL _cmd, Protocol *protocol)
 
     void (*original)(id, SEL, Protocol *) =
         (void (*)(id, SEL, Protocol *))gOrigSetProtocol;
-    original(self, _cmd, effective);
+    if (!original)
+        return;
+    if (effective != protocol) {
+        @try {
+            original(self, _cmd, effective);
+            return;
+        } @catch (NSException *exception) {
+            /* Preserve lsd process availability on an OS that rejects
+             * the extended private protocol. The device-ID extension
+             * may be unavailable, but the base service stays intact. */
+            NSLog(@"CraneSupport: LSD extended XPC interface rejected: %@; using original protocol",
+                  exception);
+        }
+    }
+    original(self, _cmd, protocol);
 }
 
 /* ------------------------------------------------------------------------- */

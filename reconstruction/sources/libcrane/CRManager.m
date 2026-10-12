@@ -332,6 +332,26 @@ static BOOL CRManagerSafePathComponent(NSString *component)
     return [component rangeOfCharacterFromSet:invalid].location == NSNotFound;
 }
 
+/* CR_CONTAINERS_DIR_COMPONENT includes "Library/". Checking only
+ * root/___Crane_Containers misses the actual root/Library/___Crane_Containers
+ * symlink. Check both real path components before filesystem operations. */
+static BOOL CRManagerAppContainerParentsAreSafe(NSString *home)
+{
+    if (![home isKindOfClass:[NSString class]] || !home.length)
+        return NO;
+    NSFileManager *fm = NSFileManager.defaultManager;
+    for (NSString *relative in @[@"Library", CR_CONTAINERS_DIR_COMPONENT]) {
+        NSString *candidate = [home stringByAppendingPathComponent:relative];
+        if ([fm destinationOfSymbolicLinkAtPath:candidate error:NULL])
+            return NO;
+        BOOL isDirectory = NO;
+        if ([fm fileExistsAtPath:candidate isDirectory:&isDirectory] &&
+            !isDirectory)
+            return NO;
+    }
+    return YES;
+}
+
 /* CRMCM 0xC2BC/0xC3E4 redirects from the OS-assigned application
  * data container, NOT from CR_DATA_DIR. The original libcrane resolver is
  * missing (U-04). Resolve a guarded, existing LSApplicationProxy home,
@@ -375,14 +395,10 @@ static NSString *CRManagerVerifiedApplicationHome(NSString *appID)
             stringByResolvingSymlinksInPath];
         if ([root isEqualToString:craneRoot])
             return nil;
-        /* Refuse symlinked descendants before any subsequent filesystem
-         * operation. One of these may be absent for an unused container. */
-        for (NSString *relative in @[@"Library", CR_CONTAINERS_DIR_COMPONENT]) {
-            NSString *descendant = [root stringByAppendingPathComponent:relative];
-            if ([NSFileManager.defaultManager
-                    destinationOfSymbolicLinkAtPath:descendant error:NULL])
-                return nil;
-        }
+        /* Library and Library/___Crane_Containers may not exist yet;
+         * reject symlinked or non-directory entries at either level. */
+        if (!CRManagerAppContainerParentsAreSafe(root))
+            return nil;
         return root;
     } @catch (NSException *exception) {
         (void)exception;
@@ -776,11 +792,7 @@ usingBiometricsIfNeededWithSuccessHandler:(void (^)(BOOL authenticated))handler
     if (![fm fileExistsAtPath:appHome isDirectory:&isDirectory] ||
         !isDirectory)
         return;
-    NSString *library = [appHome stringByAppendingPathComponent:@"Library"];
-    NSString *containers = [appHome stringByAppendingPathComponent:
-        CR_CONTAINERS_DIR_COMPONENT];
-    if (!CRManagerDirectoryComponentIsSafe(library) ||
-        !CRManagerDirectoryComponentIsSafe(containers) ||
+    if (!CRManagerAppContainerParentsAreSafe(appHome) ||
         !CRManagerDirectoryComponentIsSafe(path))
         return;
 
@@ -895,6 +907,14 @@ usingBiometricsIfNeededWithSuccessHandler:(void (^)(BOOL authenticated))handler
     NSString *staging = registered ? path :
         [[path stringByDeletingLastPathComponent] stringByAppendingPathComponent:
             [NSString stringWithFormat:@".crane-create-%@", [[NSUUID UUID] UUIDString]]];
+    /* The cleanup below must never remove a pre-existing staging path,
+     * even if a collision is extremely unlikely with a fresh UUID. */
+    if (!registered &&
+        ([fm fileExistsAtPath:staging] ||
+         [fm destinationOfSymbolicLinkAtPath:staging error:NULL])) {
+        NSLog(@"CraneManager: refusing staging path collision %@", staging);
+        return;
+    }
     if (!CRManagerCreateEmptyContainer(staging, &error)) {
         if (!registered)
             [fm removeItemAtPath:staging error:NULL];
@@ -982,6 +1002,15 @@ usingBiometricsIfNeededWithSuccessHandler:(void (^)(BOOL authenticated))handler
         [NSString stringWithFormat:@".crane-new-%@", suffix]];
     NSString *backup = [parent stringByAppendingPathComponent:
         [NSString stringWithFormat:@".crane-old-%@", suffix]];
+    /* Neither temporary slot may already belong to another operation.
+     * Never remove/reuse an existing path during failed wipe cleanup. */
+    if ([fm fileExistsAtPath:replacement] ||
+        [fm destinationOfSymbolicLinkAtPath:replacement error:NULL] ||
+        [fm fileExistsAtPath:backup] ||
+        [fm destinationOfSymbolicLinkAtPath:backup error:NULL]) {
+        NSLog(@"CraneManager: refusing wipe staging collision %@", parent);
+        return;
+    }
     if (!CRManagerCreateEmptyContainer(replacement, &error)) {
         [fm removeItemAtPath:replacement error:NULL];
         NSLog(@"CraneManager: wipe preparation failed: %@", error);

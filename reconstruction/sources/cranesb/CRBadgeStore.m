@@ -11,6 +11,7 @@
 #import "CRManager.h"
 #import "CRPaths.h"
 #import "CRCommon.h"
+#import "CRXPCProtocols.h"
 
 void CRBadgeStoreSetContainerCount(NSString *appID, NSString *containerID, NSInteger count);
 
@@ -2005,27 +2006,11 @@ static void CRBadgeUnregisterNotifications(id self, SEL cmd,
     ((void (*)(id, SEL, id))objc_msgSend)(service, invalidateSEL, topic);
 }
 
-/* CraneSB protocol metadata at 0x2BBD0..0x2BC00: required methods
- * and their exact Objective-C type encodings. */
-static void CRBadgeRegisterNotificationAdditionsProtocol(void)
-{
-    if (objc_getProtocol("UNUserNotificationProtocolCraneAdditions"))
-        return;
-    Protocol *protocol = objc_allocateProtocol(
-        "UNUserNotificationProtocolCraneAdditions");
-    if (!protocol)
-        return;
-    protocol_addMethodDescription(protocol,
-        sel_registerName("crane_unregisterFromNotificationsIfNeededForContainerIdentifier:ofApplicationWithIdentifier:"),
-        "v32@0:8@16@24", YES, YES);
-    protocol_addMethodDescription(protocol,
-        sel_registerName("crane_switchBadgesOfContainerWithIdentifier:andContainerWithIdentifier:ofApplicationWithIdentifier:"),
-        "v40@0:8@16@24@32", YES, YES);
-    protocol_addMethodDescription(protocol,
-        sel_registerName("crane_resetBadgeOfContainerWithIdentifier:ofApplicationWithIdentifier:"),
-        "v32@0:8@16@24", YES, YES);
-    objc_registerProtocol(protocol);
-}
+/* The original binary contains a Clang-compiled
+ * _OBJC_PROTOCOL_$_UNUserNotificationProtocolCraneAdditions. It MUST
+ * be declared with @protocol (CRXPCProtocols.h), not synthesized with
+ * objc_allocateProtocol(): NSXPCInterface on iOS 15 requires Clang's
+ * extended method type metadata and otherwise throws at setProtocol:. */
 
 /* CraneSB 0x11AF8/0x1F7B0: widen the notification server XPC
  * protocol only when both original and Crane additions are available.
@@ -2038,7 +2023,7 @@ static void CRBadgeXPCSetProtocol(id self, SEL cmd, Protocol *protocol)
     if (!original)
         return;
     Protocol *base = objc_getProtocol("UNUserNotificationServerProtocol");
-    Protocol *additions = objc_getProtocol("UNUserNotificationProtocolCraneAdditions");
+    Protocol *additions = @protocol(UNUserNotificationProtocolCraneAdditions);
     if (base && additions && protocol && protocol_isEqual(protocol, base)) {
         Protocol *extended = objc_getProtocol(
             "UNUserNotificationServerProtocolPlusCraneAdditions");
@@ -2052,8 +2037,17 @@ static void CRBadgeXPCSetProtocol(id self, SEL cmd, Protocol *protocol)
             }
         }
         if (extended) {
-            original(self, cmd, extended);
-            return;
+            @try {
+                original(self, cmd, extended);
+                return;
+            } @catch (NSException *exception) {
+                /* An incompatible extended interface must not terminate
+                 * SpringBoard. Fall back to the unmodified Apple protocol,
+                 * disabling Crane's notification XPC additions for this
+                 * interface rather than triggering a Safe Mode crash. */
+                NSLog(@"CraneSB: extended notification XPC interface rejected: %@; using original protocol",
+                      exception);
+            }
         }
     }
     original(self, cmd, protocol);
@@ -2214,7 +2208,6 @@ void CRInitBadgeListenerMethods(void)
                             (IMP)CRBadgeExtensionsAsync,
                             &gCRBadgeExtensionAsyncOriginal);
     }
-    CRBadgeRegisterNotificationAdditionsProtocol();
     Class xpcClass = NSClassFromString(@"NSXPCConnection");
     SEL permissionSEL = NSSelectorFromString(
         @"uns_isAllowedToRequestUserNotificationsForBundleIdentifier:");

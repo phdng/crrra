@@ -69,12 +69,32 @@ for fragment in (
     '@"/var/mobile/Containers/Data/Application"',
     'fileExistsAtPath:root',
     'isDirectory:&isDirectory',
-    'destinationOfSymbolicLinkAtPath:descendant error:NULL',
+    'CRManagerAppContainerParentsAreSafe(root)',
     '@catch (NSException *exception)',
 ):
     assert fragment in resolver, fragment
 assert 'return root;' in resolver
 assert 'return nil;' in resolver
+assert 'CR_CONTAINERS_DIR_COMPONENT     @"Library/___Crane_Containers"' in paths
+parents = part('static BOOL CRManagerAppContainerParentsAreSafe(', 'static NSString *CRManagerVerifiedApplicationHome(')
+assert 'for (NSString *relative in @[@"Library", CR_CONTAINERS_DIR_COMPONENT])' in parents
+assert '[home stringByAppendingPathComponent:relative]' in parents
+assert '[fm destinationOfSymbolicLinkAtPath:candidate error:NULL]' in parents
+assert '[fm fileExistsAtPath:candidate isDirectory:&isDirectory]' in parents
+assert '&&\n            !isDirectory)' in parents
+assert 'return NO;' in parents
+assert 'for (NSString *relative in @[@"Library", @"___Crane_Containers"])' not in parents
+# The real parent path for every container is <apphome>/Library/___Crane_Containers.
+# A symlink or file at either level must fail closed before creating anything.
+def safe_parents(library_kind, crane_kind):
+    return library_kind in (None, "dir") and crane_kind in (None, "dir")
+
+assert safe_parents(None, None)
+assert safe_parents("dir", "dir")
+assert not safe_parents("symlink", "dir")
+assert not safe_parents("dir", "symlink")
+assert not safe_parents("file", "dir")
+assert not safe_parents("dir", "file")
 assert 'self.containerPaths' not in manager
 
 # Fail closed on missing or unexpected LaunchServices URLs: never infer a
@@ -120,8 +140,7 @@ for fragment in (
     'initWithUUIDString:homeUUID',
     '@"/private/var/mobile/Containers/Data/Application"',
     'fileExistsAtPath:appHome isDirectory:&isDirectory',
-    'CRManagerDirectoryComponentIsSafe(library)',
-    'CRManagerDirectoryComponentIsSafe(containers)',
+    'CRManagerAppContainerParentsAreSafe(appHome)',
     'CRManagerDirectoryComponentIsSafe(path)',
     'CRManagerCreateEmptyContainer(path, &error)',
 ):
@@ -160,6 +179,9 @@ assert 'if (!registered && existed)' in create
 assert 'if (!existed)\n            [fm removeItemAtPath:path error:NULL];' not in create
 assert 'NSString *staging = registered ? path :' in create
 assert 'if (!CRManagerCreateEmptyContainer(staging, &error))' in create
+assert '[fm fileExistsAtPath:staging]' in create
+assert '[fm destinationOfSymbolicLinkAtPath:staging error:NULL]' in create
+assert create.index('[fm fileExistsAtPath:staging]') < create.index('if (!CRManagerCreateEmptyContainer(staging, &error))')
 assert 'if (!registered && ![fm moveItemAtPath:staging toPath:path error:&error])' in create
 assert 'if (!registered)\n            [fm removeItemAtPath:staging error:NULL];' in create
 assert '[fm removeItemAtPath:staging error:NULL];' in create
@@ -184,6 +206,11 @@ assert '[self setContainerSettings:' not in wipe
 assert '[self setApplicationSettings:' not in wipe
 assert 'if (!repopulate)' in wipe
 assert 'CRManagerCreateEmptyContainer(replacement, &error)' in wipe
+assert '[fm fileExistsAtPath:replacement]' in wipe
+assert '[fm destinationOfSymbolicLinkAtPath:replacement error:NULL]' in wipe
+assert '[fm fileExistsAtPath:backup]' in wipe
+assert '[fm destinationOfSymbolicLinkAtPath:backup error:NULL]' in wipe
+assert wipe.index('[fm fileExistsAtPath:replacement]') < wipe.index('CRManagerCreateEmptyContainer(replacement, &error)')
 assert wipe.index('CRManagerCreateEmptyContainer(replacement, &error)') < wipe.index('moveItemAtPath:path toPath:backup')
 assert 'moveItemAtPath:replacement toPath:path' in wipe
 assert 'moveItemAtPath:backup toPath:path' in wipe

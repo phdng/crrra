@@ -37,6 +37,9 @@ jobs:
       - name: Verify XPC ping source contract
         run: python3 reconstruction/tools/check_xpc_ping_contract.py
 
+      - name: Verify Clang-emitted XPC protocol metadata
+        run: python3 reconstruction/tools/check_xpc_protocol_metadata_contract.py
+
       - name: Verify daemon safety contracts
         run: python3 reconstruction/tools/check_daemon_contract.py
 
