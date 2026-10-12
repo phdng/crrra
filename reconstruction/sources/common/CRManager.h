@@ -101,10 +101,10 @@
 - (void)setActiveContainerIdentifier:(NSString *)containerID
              forApplicationWithIdentifier:(NSString *)appID
                      reloadApplication:(BOOL)reload
-       usingBiometricsIfNeededWithSuccessHandler:(dispatch_block_t)handler; /* [API] */
+       usingBiometricsIfNeededWithSuccessHandler:(void (^)(BOOL authenticated))handler; /* [API] */
 - (void)setActiveContainerIdentifier:(NSString *)containerID
              forApplicationWithIdentifier:(NSString *)appID
-usingBiometricsIfNeededWithSuccessHandler:(dispatch_block_t)handler;      /* [API] */
+usingBiometricsIfNeededWithSuccessHandler:(void (^)(BOOL authenticated))handler; /* [API] */
 - (NSString *)createNewContainerWithName:(NSString *)name
             forApplicationWithIdentifier:(NSString *)appID;              /* [API] */
 - (void)createNewContainerWithName:(NSString *)name

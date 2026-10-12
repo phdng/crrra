@@ -20,8 +20,8 @@
  *   _actionFromApplicationShortcutItem:      0x1555C
  *   force-touch action handlers              0x18A3C..0x19068
  *
- * F-14 notification-badge decoration remains separate; the legacy menu path
- * below intentionally omits its per-container badge subtitle.
+ * F-14 recovers modern CRBadgeAction plus native badge-view presentation
+ * when SpringBoard private APIs are present, and legacy RTL badge subtitles.
  */
 
 #import <UIKit/UIKit.h>
@@ -208,6 +208,21 @@ static void CRLaunchApplicationIfEnabled(NSString *appID)
     }
 }
 
+/* Native CraneSB 0x143CC: after a biometric-protected switch, older
+ * CF/UIKit needs 1 second before launch. A normal switch launches now. */
+static void CRLaunchAfterContainerSwitch(dispatch_block_t launch,
+                                         BOOL authenticated)
+{
+    if (!launch)
+        return;
+    if (authenticated && kCFCoreFoundationVersionNumber < 1740.0) {
+        dispatch_after(dispatch_time(DISPATCH_TIME_NOW, NSEC_PER_SEC),
+                       dispatch_get_main_queue(), launch);
+    } else {
+        launch();
+    }
+}
+
 static void CROpenCraneSettings(NSString *appID)
 {
     NSString *path = appID.length
@@ -324,11 +339,7 @@ static UIMenu *CRBuildReplacementMenu(void)
             : nil;
 
         NSString *capturedActive = active;
-        UIAction *action =
-            [UIAction actionWithTitle:title ?: containerID
-                                image:image
-                           identifier:(UIActionIdentifier)containerID
-                              handler:^(UIAction *selectedAction) {
+        UIActionHandler handler = ^(UIAction *selectedAction) {
             NSString *target = (NSString *)selectedAction.identifier;
             void (^launch)(void) = ^{
                 CRLaunchApplicationIfEnabled(appID);
@@ -342,22 +353,33 @@ static UIMenu *CRBuildReplacementMenu(void)
             [CraneManager.sharedManager
                 setActiveContainerIdentifier:target
                  forApplicationWithIdentifier:appID
-                usingBiometricsIfNeededWithSuccessHandler:launch];
-        }];
+                usingBiometricsIfNeededWithSuccessHandler:^(BOOL authenticated) {
+                    CRLaunchAfterContainerSwitch(launch, authenticated);
+                }];
+        };
+        UIAction *action = nil;
         if (showBadges) {
             NSInteger count = CRStoredContainerBadgeCount(appID, containerID,
                                                          manager);
             Class badgeClass = NSClassFromString(@"CRBadgeAction");
-            if (count > 0 && badgeClass) {
-                object_setClass(action, badgeClass);
-                CRDynamicObjectSetter(action,
-                    NSSelectorFromString(@"setBadgeText:"),
-                    [NSString stringWithFormat:@"%ld", (long)count]);
-                CRDynamicObjectSetter(action,
-                    NSSelectorFromString(@"setAssociatedApplicationID:"), appID);
+            SEL factorySEL = NSSelectorFromString(
+                @"actionWithTitle:badgeText:image:identifier:associatedApplicationIdentifier:handler:");
+            if (count > 0 && [badgeClass respondsToSelector:factorySEL]) {
+                /* Native 0x137FC creates a CRBadgeAction directly and
+                 * formats its 32-bit badge count using %d. */
+                NSString *badgeText = [NSString stringWithFormat:@"%d", (int)count];
+                action = ((id (*)(id, SEL, id, id, id, id, id, id))objc_msgSend)(
+                    badgeClass, factorySEL, title ?: containerID, badgeText,
+                    image, (UIActionIdentifier)containerID, appID, handler);
             }
         }
-        [children addObject:action];
+        if (!action)
+            action = [UIAction actionWithTitle:title ?: containerID
+                                        image:image
+                                   identifier:(UIActionIdentifier)containerID
+                                      handler:handler];
+        if (action)
+            [children addObject:action];
     }
 
     if (CRPrefBool(CRPref_NewContainerShortcut)) {
@@ -700,7 +722,8 @@ static void CRLegacyHandleContainerSelection(id shortcutController,
     [CraneManager.sharedManager
         setActiveContainerIdentifier:containerID
          forApplicationWithIdentifier:appID
-        usingBiometricsIfNeededWithSuccessHandler:^{
+        usingBiometricsIfNeededWithSuccessHandler:^(BOOL authenticated) {
+            (void)authenticated;
             if (CRPrefBool(CRPref_LaunchAppOnContainerSelection))
                 CRLegacyActivateShortcutItem(shortcutController, shortcutItem);
             else
@@ -954,8 +977,8 @@ static NSArray *CRLegacyContainerShortcutItems(id self)
                                                          manager);
             if (count > 0) {
                 subtitle = rightToLeft
-                    ? [NSString stringWithFormat:@"⬤ %ld", (long)count]
-                    : [NSString stringWithFormat:@"%ld ⬤", (long)count];
+                    ? [NSString stringWithFormat:@"⬤ %d", (int)count]
+                    : [NSString stringWithFormat:@"%d ⬤", (int)count];
             }
         }
         id item = CRLegacyNewShortcutItem(
@@ -1362,13 +1385,192 @@ static id CRMenuInitWithOverrideChildren(id self,
     return result;
 }
 
-/* F-14: badge presentation on the existing private action view. Unlike
- * object_setClass on UIKit's private view, this keeps the view's runtime
- * layout intact across iOS versions; live badge data still requires F-08. */
+/* Native 0x7F58/0x8530/0x8ED4 uses SBIconBadgeView driven by a
+ * CRFakeIcon (SBApplicationIcon subclass). Construct it only when the same
+ * private classes/selectors exist; otherwise retain the UILabel fallback.
+ * Never change a UIKit private action view's class at runtime. */
 static char kCRMenuBadgeLabelKey;
-static void CRApplyBadgeToCell(id cell, id element)
+static char kCRMenuNativeBadgeViewKey;
+static char kCRMenuNativeBadgeTextKey;
+static char kCRMenuNativeBadgeAppKey;
+static char kCRMenuAdjustedConstraintKey;
+static char kCRMenuOriginalConstraintConstantKey;
+static char kCRFakeIconTextKey;
+
+/* Native 0x8778 reserves intrinsic badge width + 5pt by shifting the
+ * action view's existing label/trailing constraint. Unlike the original
+ * one-time private-class constraint hook, record each baseline per view
+ * so UIKit cell reuse and changing badge widths can restore it safely. */
+static void CRMenuRestoreBadgeSpacing(UIView *view)
 {
-    id actionView = CRDynamicObjectGetter(cell, NSSelectorFromString(@"actionView"));
+    NSLayoutConstraint *adjusted = objc_getAssociatedObject(
+        view, &kCRMenuAdjustedConstraintKey);
+    NSNumber *baseline = objc_getAssociatedObject(
+        view, &kCRMenuOriginalConstraintConstantKey);
+    if (adjusted && baseline && [view.constraints containsObject:adjusted])
+        adjusted.constant = [baseline doubleValue];
+    objc_setAssociatedObject(view, &kCRMenuAdjustedConstraintKey,
+                             nil, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
+    objc_setAssociatedObject(view, &kCRMenuOriginalConstraintConstantKey,
+                             nil, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
+}
+
+static void CRMenuReserveBadgeSpacing(UIView *view, CGFloat width)
+{
+    CRMenuRestoreBadgeSpacing(view);
+    if (!(width > 0.0 && width < 300.0))
+        return;
+    /* Native 0x8778 prefers trailingView.centerX; older layouts instead
+     * use labelStackView.trailing. Never modify an unknown constraint. */
+    id trailing = CRDynamicObjectGetter(
+        view, NSSelectorFromString(@"trailingView"));
+    if (![trailing isKindOfClass:[UIView class]])
+        trailing = CRDynamicObjectGetter(
+            view, NSSelectorFromString(@"imageView"));
+    if (![trailing isKindOfClass:[UIView class]])
+        trailing = CRDynamicObjectGetter(
+            view, NSSelectorFromString(@"iconImageView"));
+    NSLayoutXAxisAnchor *firstAnchor = nil;
+    if ([trailing isKindOfClass:[UIView class]])
+        firstAnchor = [(UIView *)trailing centerXAnchor];
+    else {
+        id stack = CRDynamicObjectGetter(
+            view, NSSelectorFromString(@"labelStackView"));
+        if ([stack isKindOfClass:[UIView class]])
+            firstAnchor = [(UIView *)stack trailingAnchor];
+    }
+    if (!firstAnchor)
+        return;
+    NSLayoutXAxisAnchor *lastAnchor = view.trailingAnchor;
+    for (NSLayoutConstraint *constraint in view.constraints) {
+        if (![constraint.firstAnchor isEqual:firstAnchor] ||
+            ![constraint.secondAnchor isEqual:lastAnchor])
+            continue;
+        CGFloat baseline = constraint.constant;
+        constraint.constant = baseline - (width + 5.0);
+        objc_setAssociatedObject(view, &kCRMenuAdjustedConstraintKey,
+            constraint, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
+        objc_setAssociatedObject(view, &kCRMenuOriginalConstraintConstantKey,
+            @(baseline), OBJC_ASSOCIATION_RETAIN_NONATOMIC);
+        break;
+    }
+}
+
+static IMP gCRMenuFakeIconUndefinedKeyOriginal;
+
+static id CRMenuFakeIconText(id self, SEL cmd)
+{
+    (void)cmd;
+    return objc_getAssociatedObject(self, &kCRFakeIconTextKey);
+}
+
+static void CRMenuFakeIconSetText(id self, SEL cmd, id text)
+{
+    (void)cmd;
+    objc_setAssociatedObject(self, &kCRFakeIconTextKey,
+                             [text copy], OBJC_ASSOCIATION_COPY_NONATOMIC);
+}
+
+static id CRMenuFakeIconAccessoryText(id self, SEL cmd, id location)
+{
+    (void)cmd; (void)location;
+    return CRMenuFakeIconText(self, @selector(text));
+}
+
+static id CRMenuFakeIconApplicationBundleID(id self, SEL cmd)
+{
+    (void)cmd;
+    /* Native 0x8444 uses KVC _application, with 0x84A0 mapping an
+     * undefined private key back to the normal application getter. */
+    id application = CRDynamicValueForKey(self, @"_application");
+    return CRDynamicObjectGetter(application, NSSelectorFromString(@"bundleIdentifier"));
+}
+
+/* Native 0x84A0 maps KVC _application to SBApplicationIcon.application.
+ * Preserve the inherited undefined-key behavior for all other keys. */
+static id CRMenuFakeIconUndefinedKey(id self, SEL cmd, id key)
+{
+    if ([key isEqualToString:@"_application"])
+        return CRDynamicObjectGetter(self, NSSelectorFromString(@"application"));
+    id (*original)(id, SEL, id) =
+        (id (*)(id, SEL, id))gCRMenuFakeIconUndefinedKeyOriginal;
+    return original ? original(self, cmd, key) : nil;
+}
+
+static Class CRMenuFakeIconClass(void)
+{
+    static Class fakeClass;
+    static dispatch_once_t onceToken;
+    dispatch_once(&onceToken, ^{
+        Class baseClass = NSClassFromString(@"SBApplicationIcon");
+        if (!baseClass)
+            return;
+        fakeClass = NSClassFromString(@"CRFakeIcon");
+        if (fakeClass)
+            return;
+        Class created = objc_allocateClassPair(baseClass, "CRFakeIcon", 0);
+        if (!created)
+            return;
+        class_addMethod(created, @selector(text),
+                        (IMP)CRMenuFakeIconText, "@@:");
+        class_addMethod(created, @selector(setText:),
+                        (IMP)CRMenuFakeIconSetText, "v@:@");
+        class_addMethod(created, @selector(accessoryTextForLocation:),
+                        (IMP)CRMenuFakeIconAccessoryText, "@@:@");
+        class_addMethod(created, @selector(applicationBundleID),
+                        (IMP)CRMenuFakeIconApplicationBundleID, "@@:");
+        SEL undefinedSEL = @selector(valueForUndefinedKey:);
+        Method inherited = class_getInstanceMethod(baseClass, undefinedSEL);
+        if (inherited) {
+            gCRMenuFakeIconUndefinedKeyOriginal = method_getImplementation(inherited);
+            class_addMethod(created, undefinedSEL,
+                            (IMP)CRMenuFakeIconUndefinedKey, "@@:@");
+        }
+        objc_registerClassPair(created);
+        fakeClass = created;
+    });
+    return fakeClass;
+}
+
+static UIView *CRMenuCreateNativeBadgeView(NSString *appID, NSString *badgeText)
+{
+    Class badgeClass = NSClassFromString(@"SBIconBadgeView");
+    Class fakeClass = CRMenuFakeIconClass();
+    Class controllerClass = NSClassFromString(@"SBApplicationController");
+    SEL sharedSEL = NSSelectorFromString(@"sharedInstance");
+    SEL applicationSEL = NSSelectorFromString(@"applicationWithBundleIdentifier:");
+    SEL initSEL = NSSelectorFromString(@"initWithApplication:");
+    SEL configureSEL = NSSelectorFromString(@"configureForIcon:infoProvider:");
+    if (!badgeClass || !fakeClass || !appID.length || !badgeText.length ||
+        ![controllerClass respondsToSelector:sharedSEL] ||
+        ![fakeClass instancesRespondToSelector:initSEL] ||
+        ![badgeClass instancesRespondToSelector:configureSEL])
+        return nil;
+    @try {
+        id controller = CRDynamicObjectGetter(controllerClass, sharedSEL);
+        id application = [controller respondsToSelector:applicationSEL]
+            ? ((id (*)(id, SEL, id))objc_msgSend)(
+                controller, applicationSEL, appID) : nil;
+        if (!application)
+            return nil;
+        id fakeIcon = ((id (*)(id, SEL, id))objc_msgSend)(
+            [fakeClass alloc], initSEL, application);
+        if (!fakeIcon)
+            return nil;
+        CRMenuFakeIconSetText(fakeIcon, @selector(setText:), badgeText);
+        id badge = [[badgeClass alloc] init];
+        if (![badge isKindOfClass:[UIView class]])
+            return nil;
+        ((void (*)(id, SEL, id, id))objc_msgSend)(
+            badge, configureSEL, fakeIcon, nil);
+        return (UIView *)badge;
+    } @catch (NSException *exception) {
+        (void)exception;
+        return nil;
+    }
+}
+static void CRApplyBadgeToActionView(id actionView, id element)
+{
     if (![actionView isKindOfClass:[UIView class]])
         return;
     UIView *view = (UIView *)actionView;
@@ -1378,10 +1580,68 @@ static void CRApplyBadgeToCell(id cell, id element)
     NSString *badgeText = isBadge
         ? CRDynamicObjectGetter(element, NSSelectorFromString(@"badgeText"))
         : nil;
+    UIView *native = objc_getAssociatedObject(view, &kCRMenuNativeBadgeViewKey);
     if (![badgeText isKindOfClass:[NSString class]] || !badgeText.length) {
+        /* UIKit reuses action views. Remove stale native badges when a
+         * normal UIAction takes over the same cell (native 0x13508). */
+        [native removeFromSuperview];
+        CRMenuRestoreBadgeSpacing(view);
+        objc_setAssociatedObject(view, &kCRMenuNativeBadgeViewKey,
+                                 nil, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
+        objc_setAssociatedObject(view, &kCRMenuNativeBadgeTextKey,
+                                 nil, OBJC_ASSOCIATION_COPY_NONATOMIC);
+        objc_setAssociatedObject(view, &kCRMenuNativeBadgeAppKey,
+                                 nil, OBJC_ASSOCIATION_COPY_NONATOMIC);
         label.hidden = YES;
         return;
     }
+    NSString *appID = CRDynamicObjectGetter(
+        element, NSSelectorFromString(@"associatedApplicationID"));
+    NSString *previousText = objc_getAssociatedObject(
+        view, &kCRMenuNativeBadgeTextKey);
+    NSString *previousApp = objc_getAssociatedObject(
+        view, &kCRMenuNativeBadgeAppKey);
+    if (native && native.superview == view &&
+        [previousText isEqualToString:badgeText] &&
+        [previousApp isEqualToString:appID]) {
+        label.hidden = YES;
+        return;
+    }
+    [native removeFromSuperview];
+    CRMenuRestoreBadgeSpacing(view);
+    objc_setAssociatedObject(view, &kCRMenuNativeBadgeViewKey,
+                             nil, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
+    UIView *replacement = CRMenuCreateNativeBadgeView(appID, badgeText);
+    CGFloat badgeWidth = replacement ? replacement.intrinsicContentSize.width : 0.0;
+    /* 0x8778 constrains the native badge to intrinsic width. Invalid
+     * measurements must fall back rather than leave an ambiguous view. */
+    if (!(badgeWidth > 0.0 && badgeWidth < 300.0))
+        replacement = nil;
+    if (replacement) {
+        replacement.translatesAutoresizingMaskIntoConstraints = NO;
+        [view addSubview:replacement];
+        [NSLayoutConstraint activateConstraints:@[
+            [replacement.centerYAnchor constraintEqualToAnchor:view.centerYAnchor],
+            [replacement.trailingAnchor constraintEqualToAnchor:view.trailingAnchor
+                                                        constant:-16.0],
+            [replacement.widthAnchor constraintEqualToConstant:badgeWidth]
+        ]];
+        CRMenuReserveBadgeSpacing(view, badgeWidth);
+        objc_setAssociatedObject(view, &kCRMenuNativeBadgeViewKey,
+                                 replacement, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
+        objc_setAssociatedObject(view, &kCRMenuNativeBadgeTextKey,
+                                 badgeText, OBJC_ASSOCIATION_COPY_NONATOMIC);
+        objc_setAssociatedObject(view, &kCRMenuNativeBadgeAppKey,
+                                 appID, OBJC_ASSOCIATION_COPY_NONATOMIC);
+        label.hidden = YES;
+        return;
+    }
+    /* Private SpringBoard badges are unavailable on some OS versions.
+     * Keep the existing lightweight view instead of forcing an object ISA. */
+    objc_setAssociatedObject(view, &kCRMenuNativeBadgeTextKey,
+                             nil, OBJC_ASSOCIATION_COPY_NONATOMIC);
+    objc_setAssociatedObject(view, &kCRMenuNativeBadgeAppKey,
+                             nil, OBJC_ASSOCIATION_COPY_NONATOMIC);
     if (!label) {
         label = [[UILabel alloc] initWithFrame:CGRectZero];
         label.translatesAutoresizingMaskIntoConstraints = NO;
@@ -1405,6 +1665,14 @@ static void CRApplyBadgeToCell(id cell, id element)
     label.text = badgeText;
     label.hidden = NO;
     [label sizeToFit];
+    CRMenuReserveBadgeSpacing(view,
+        MAX(20.0, label.intrinsicContentSize.width + 10.0));
+}
+
+static void CRApplyBadgeToCell(id cell, id element)
+{
+    id actionView = CRDynamicObjectGetter(cell, NSSelectorFromString(@"actionView"));
+    CRApplyBadgeToActionView(actionView, element);
 }
 
 static void CRApplySubtitleToCell(id cell, id element)
@@ -1514,10 +1782,37 @@ static id CRInterfaceActionGroup(id self, SEL _cmd, NSArray *elements)
                                           NSSelectorFromString(@"image"));
         }
 
-        /* The badge-specific view needs F-08's notification store and
-         * CRBadgeContextMenuActionView. Until then preserve normal views. */
-        if (isBadge)
+        /* Native 0x190D4 builds a badge-aware custom view in group
+         * layouts. When UIKit did not expose its action view yet, create a
+         * guarded normal action view and attach our badge without changing
+         * the class/ivar layout of UIKit's private subclass. */
+        if (isBadge) {
+            if (![customView isKindOfClass:[UIView class]]) {
+                Class viewClass = NSClassFromString(@"_UIContextMenuActionView");
+                SEL initSEL = NSSelectorFromString(@"initWithTitle:subtitle:image:");
+                if (viewClass && [viewClass instancesRespondToSelector:initSEL]) {
+                    @try {
+                        id actionTitle = title ?: CRDynamicObjectGetter(
+                            element, NSSelectorFromString(@"title"));
+                        id actionImage = image ?: CRDynamicObjectGetter(
+                            element, NSSelectorFromString(@"image"));
+                        id configured = ((id (*)(id, SEL, id, id, id))objc_msgSend)(
+                            [viewClass alloc], initSEL, actionTitle, nil,
+                            actionImage);
+                        if ([configured isKindOfClass:[UIView class]]) {
+                            [interfaceAction setValue:configured
+                                              forKey:@"_customContentView"];
+                            customView = CRDynamicObjectGetter(interfaceAction,
+                                NSSelectorFromString(@"customContentView"));
+                        }
+                    } @catch (NSException *exception) {
+                        (void)exception;
+                    }
+                }
+            }
+            CRApplyBadgeToActionView(customView, element);
             return;
+        }
 
         Class viewClass =
             NSClassFromString(@"_UIContextMenuActionView");

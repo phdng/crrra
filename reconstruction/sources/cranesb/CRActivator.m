@@ -242,7 +242,9 @@ static id CRActivatorWorkspace(void)
         [event setUserInfo:@{ @"previousContainerID": previousContainerIdentifier }];
         [manager setActiveContainerIdentifier:containerIdentifier
                  forApplicationWithIdentifier:applicationIdentifier
- usingBiometricsIfNeededWithSuccessHandler:^{}];
+ usingBiometricsIfNeededWithSuccessHandler:^(BOOL authenticated) {
+            (void)authenticated;
+        }];
     }
 }
 

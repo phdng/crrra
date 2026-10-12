@@ -43,6 +43,12 @@ jobs:
       - name: Verify runningboardd launch hook ABI
         run: python3 reconstruction/tools/check_runningboard_contract.py
 
+      - name: Verify native menu badge contracts
+        run: python3 reconstruction/tools/check_menu_badge_contract.py
+
+      - name: Verify container switch callbacks
+        run: python3 reconstruction/tools/check_container_switch_contract.py
+
       - name: Set up Theos
         uses: waruhachi/theos-action@v2.6.3
         with:

@@ -588,14 +588,14 @@ static void CRManagerVerifyRuntimeComponent(NSString *component,
 - (void)setActiveContainerIdentifier:(NSString *)containerID
              forApplicationWithIdentifier:(NSString *)appID
                      reloadApplication:(BOOL)reload
-       usingBiometricsIfNeededWithSuccessHandler:(dispatch_block_t)handler
+       usingBiometricsIfNeededWithSuccessHandler:(void (^)(BOOL authenticated))handler
 {
-    void (^apply)(void) = ^{
+    void (^apply)(BOOL) = ^(BOOL authenticated) {
         [self setActiveContainerIdentifier:containerID forApplicationWithIdentifier:appID];
         if (reload)
             [self reloadApplicationWithIdentifier:appID];
         if (handler)
-            handler();
+            handler(authenticated);
     };
     /* Only protected containers require authentication. The exported
      * CranePrefs 0x74D8 checks requireBiometricAuthentication before
@@ -603,14 +603,14 @@ static void CRManagerVerifyRuntimeComponent(NSString *component,
     NSDictionary *targetSettings = [self containerSettingsForContainerWithIdentifier:containerID
         ofApplicationWithIdentifier:appID];
     if ([targetSettings[@"requireBiometricAuthentication"] boolValue])
-        CRRequestAuthentication(CRLocalize(@"CONFIRM_PASSWORD"), apply);
+        CRRequestAuthentication(CRLocalize(@"CONFIRM_PASSWORD"), ^{ apply(YES); });
     else
-        apply();
+        apply(NO);
 }
 
 - (void)setActiveContainerIdentifier:(NSString *)containerID
              forApplicationWithIdentifier:(NSString *)appID
-usingBiometricsIfNeededWithSuccessHandler:(dispatch_block_t)handler
+usingBiometricsIfNeededWithSuccessHandler:(void (^)(BOOL authenticated))handler
 {
     [self setActiveContainerIdentifier:containerID forApplicationWithIdentifier:appID
                        reloadApplication:NO

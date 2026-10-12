@@ -1,6 +1,7 @@
 /*
  * CRBadgeAction — reconstructed UIAction subclass from CraneSB 0x1C064.
- * The original badge-count producer is part of F-08 and is not yet ported.
+ * F-14 reads the per-container badge store through CRMenuHooks; UIKit
+ * action cloning preserves this class's associated badge metadata.
  */
 #import <UIKit/UIKit.h>
 #import <objc/runtime.h>

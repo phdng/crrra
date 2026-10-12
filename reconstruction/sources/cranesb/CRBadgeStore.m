@@ -1646,7 +1646,8 @@ static void CRBadgeBulletinAction(id self, SEL cmd, id response, id completion)
         setActiveContainerIdentifier:container
          forApplicationWithIdentifier:appID
                  reloadApplication:YES
-   usingBiometricsIfNeededWithSuccessHandler:^{
+   usingBiometricsIfNeededWithSuccessHandler:^(BOOL authenticated) {
+        (void)authenticated;
         original(self, cmd, response, completion);
     }];
 }
