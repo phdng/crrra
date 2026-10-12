@@ -79,19 +79,19 @@ assert 'static id CRBadgeBulletinForNotification(id self, SEL cmd, id notificati
 assert '@"_queue_bulletinForNotification:"' in badge
 assert '(IMP)CRBadgeBulletinForNotification' in badge
 assert 'tagged[@"crane_sourceContainerID"] = source;' in badge
-assert 'id source = @"DEFAULT";' in badge
-assert 'if (info && appID)' in badge
-assert 'if (!source && CRBadgeRedirectionEnabled(appID))' in badge
+assert 'id source = CRBadgeContainerForNotificationInfo(info, appID);' in badge
+assert 'source, @selector(objectForKeyedSubscript:)' not in badge
 assert 'static BOOL CRBadgeSystemForeground(id self, SEL cmd, NSString *appID)' in badge
 assert 'gCRBadgeForegroundContainer = [container copy];' in badge
-assert 'if (userInfo && appID)' in badge
-assert 'if (!container && CRBadgeRedirectionEnabled(appID))' in badge
-assert 'NSString *container = @"DEFAULT";' in badge
+assert 'if (!info || !appID)' in badge
+assert 'NSString *container = CRBadgeContainerForNotificationInfo(userInfo, appID);' in badge
+assert 'return CRBadgeRedirectionEnabled(appID) ? @"DEFAULT" : nil;' in badge
 assert 'dispatch_async(queue, ^{ gCRBadgeForegroundContainer = nil; });' in badge
 assert '@"isApplicationForeground:"' in badge
 assert '@"processesForBundleIdentifier:"' in badge
 assert 'static void CRBadgeBulletinAction(id self, SEL cmd, id response, id completion)' in badge
 assert 'actionType == 8 || actionType == 5' in badge
+assert 'id container = CRBadgeContainerForNotificationInfo(context, appID);' in badge
 assert '@"handleBulletinActionResponse:withCompletion:"' in badge
 assert 'usingBiometricsIfNeededWithSuccessHandler:^' in badge
 assert 'original(self, cmd, response, completion);' in badge
@@ -172,6 +172,11 @@ assert 'verifiedInfo[@"crane_sourceContainerID"]' in badge
 assert 'if (![verifiedInfo isKindOfClass:[NSDictionary class]] ||' in badge
 assert '![record respondsToSelector:@selector(setUserInfo:)])' in badge
 assert 'record, @selector(setUserInfo:), [stripped copy]);\n    } @catch (NSException *exception)' in badge
+assert 'static id CRBadgeContainerForNotificationInfo(id info, NSString *appID)' in badge
+assert 'if (!info || !appID)\n        return @"DEFAULT";' in badge
+assert 'return CRBadgeRedirectionEnabled(appID) ? @"DEFAULT" : nil;' in badge
+assert 'NSString *container = CRBadgeContainerForNotificationInfo(userInfo, appID);' in badge
+assert 'return CRBadgeContainerForNotificationInfo(info, appID);' in badge
 assert 'static id CRBadgeRecordSource(id record)' in badge
 # CraneSB 0xBE18: nil userInfo differs from present keyed userInfo with
 # missing tag (DEFAULT); never narrow the original to NSDictionary.

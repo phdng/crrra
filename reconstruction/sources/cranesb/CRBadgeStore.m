@@ -503,6 +503,21 @@ static BOOL CRBadgeSystemForeground(id self, SEL cmd, NSString *appID)
     return [gCRBadgeForegroundContainer isEqualToString:active];
 }
 
+/* CraneSB 0xBA6C: nil userInfo/appID selects DEFAULT; a present
+ * keyed source marker is authoritative even for disabled applications. */
+static id CRBadgeContainerForNotificationInfo(id info, NSString *appID)
+{
+    if (!info || !appID)
+        return @"DEFAULT";
+    SEL keyedSEL = @selector(objectForKeyedSubscript:);
+    id source = [info respondsToSelector:keyedSEL]
+        ? ((id (*)(id, SEL, id))objc_msgSend)(info, keyedSEL,
+                                             @"crane_sourceContainerID") : nil;
+    if (source)
+        return source;
+    return CRBadgeRedirectionEnabled(appID) ? @"DEFAULT" : nil;
+}
+
 /* CraneSB 0xF254/0xBA6C: outer save uses notification userInfo to
  * establish the global foreground context before invoking the original. */
 static void CRBadgeOuterSave(id self, SEL cmd, id record, BOOL repost,
@@ -514,15 +529,7 @@ static void CRBadgeOuterSave(id self, SEL cmd, id record, BOOL repost,
         return;
     id userInfo = [record respondsToSelector:@selector(userInfo)]
         ? ((id (*)(id, SEL))objc_msgSend)(record, @selector(userInfo)) : nil;
-    /* 0xBA6C: nil userInfo or nil appID yields DEFAULT; otherwise only
-     * a source tag or an enabled application's fallback is accepted. */
-    NSString *container = @"DEFAULT";
-    if (userInfo && appID) {
-        container = [userInfo isKindOfClass:[NSDictionary class]]
-            ? userInfo[@"crane_sourceContainerID"] : nil;
-        if (!container && CRBadgeRedirectionEnabled(appID))
-            container = @"DEFAULT";
-    }
+    NSString *container = CRBadgeContainerForNotificationInfo(userInfo, appID);
     gCRBadgeForegroundContainer = [container copy];
     NSMutableDictionary *threadInfo = [NSThread currentThread].threadDictionary;
     NSString *key = @"saveNotification_containerID";
@@ -553,12 +560,7 @@ static NSString *CRBadgeSourceForRecord(id record, NSString *appID)
     id info = [record respondsToSelector:@selector(userInfo)]
         ? ((id (*)(id, SEL))objc_msgSend)(record, @selector(userInfo))
         : nil;
-    if (![info isKindOfClass:[NSDictionary class]] || !appID.length)
-        return nil;
-    id source = info[@"crane_sourceContainerID"];
-    if ([source isKindOfClass:[NSString class]] && [source length])
-        return source;
-    return CRBadgeRedirectionEnabled(appID) ? @"DEFAULT" : nil;
+    return CRBadgeContainerForNotificationInfo(info, appID);
 }
 
 static void CRBadgeSaveRevision(id self, SEL cmd, id record, id revision,
@@ -1464,16 +1466,8 @@ static id CRBadgeBulletinForNotification(id self, SEL cmd, id notification)
         ? ((id (*)(id, SEL))objc_msgSend)(self, @selector(sectionIdentifier)) : nil;
     id info = [notification respondsToSelector:@selector(userInfo)]
         ? ((id (*)(id, SEL))objc_msgSend)(notification, @selector(userInfo)) : nil;
-    /* CraneSB 0xBA6C: nil userInfo maps to DEFAULT unconditionally.
-     * With userInfo and section ID, use its source tag or DEFAULT only
-     * for redirection-enabled apps; without section ID keep DEFAULT. */
-    id source = @"DEFAULT";
-    if (info && appID) {
-        source = [info isKindOfClass:[NSDictionary class]]
-            ? info[@"crane_sourceContainerID"] : nil;
-        if (!source && CRBadgeRedirectionEnabled(appID))
-            source = @"DEFAULT";
-    }
+    /* 0x1119C calls the same native 0xBA6C source resolver as 0xF254. */
+    id source = CRBadgeContainerForNotificationInfo(info, appID);
     if (!source || !bulletin)
         return bulletin;
     if ([bulletin respondsToSelector:@selector(setHeader:)]) {
@@ -1520,13 +1514,8 @@ static void CRBadgeBulletinAction(id self, SEL cmd, id response, id completion)
         ? ((id (*)(id, SEL))objc_msgSend)(self, @selector(sectionIdentifier)) : nil;
     id context = [response respondsToSelector:@selector(bulletinContext)]
         ? ((id (*)(id, SEL))objc_msgSend)(response, @selector(bulletinContext)) : nil;
-    NSString *container = @"DEFAULT";
-    if (context && appID) {
-        container = [context isKindOfClass:[NSDictionary class]]
-            ? context[@"crane_sourceContainerID"] : nil;
-        if (!container && CRBadgeRedirectionEnabled(appID))
-            container = @"DEFAULT";
-    }
+    /* Original 0x11420 uses 0xBA6C for bulletin context as well. */
+    id container = CRBadgeContainerForNotificationInfo(context, appID);
     if (!container) {
         original(self, cmd, response, completion);
         return;
@@ -1552,8 +1541,13 @@ static id CRBadgeMutateContent(id self, SEL cmd, id request, id error)
         ? ((id (*)(id, SEL))objc_msgSend)(content, @selector(userInfo)) : nil;
     /* CraneSB 0xBE18: absent userInfo means no source; absent key in
      * present userInfo means DEFAULT. */
-    id source = [info isKindOfClass:[NSDictionary class]]
-        ? (info[@"crane_sourceContainerID"] ?: @"DEFAULT") : nil;
+    id source = nil;
+    if (info && [info respondsToSelector:@selector(objectForKeyedSubscript:)]) {
+        source = ((id (*)(id, SEL, id))objc_msgSend)(
+            info, @selector(objectForKeyedSubscript:), @"crane_sourceContainerID");
+        if (!source)
+            source = @"DEFAULT";
+    }
     id mutated = original ? original(self, cmd, request, error) : nil;
     if (source && ![source isEqual:@"DEFAULT"] &&
         [mutated respondsToSelector:@selector(userInfo)]) {
