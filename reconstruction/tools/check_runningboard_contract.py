@@ -79,4 +79,77 @@ assert 'static id CRBadgeBulletinForNotification(id self, SEL cmd, id notificati
 assert '@"_queue_bulletinForNotification:"' in badge
 assert '(IMP)CRBadgeBulletinForNotification' in badge
 assert 'tagged[@"crane_sourceContainerID"] = source;' in badge
+assert 'id source = @"DEFAULT";' in badge
+assert 'if (info && appID)' in badge
+assert 'if (!source && CRBadgeRedirectionEnabled(appID))' in badge
+assert 'static BOOL CRBadgeSystemForeground(id self, SEL cmd, NSString *appID)' in badge
+assert 'gCRBadgeForegroundContainer = [container copy];' in badge
+assert 'if (userInfo && appID)' in badge
+assert 'if (!container && CRBadgeRedirectionEnabled(appID))' in badge
+assert 'NSString *container = @"DEFAULT";' in badge
+assert 'dispatch_async(queue, ^{ gCRBadgeForegroundContainer = nil; });' in badge
+assert '@"isApplicationForeground:"' in badge
+assert '@"processesForBundleIdentifier:"' in badge
+assert 'static void CRBadgeBulletinAction(id self, SEL cmd, id response, id completion)' in badge
+assert 'actionType == 8 || actionType == 5' in badge
+assert '@"handleBulletinActionResponse:withCompletion:"' in badge
+assert 'usingBiometricsIfNeededWithSuccessHandler:^' in badge
+assert 'original(self, cmd, response, completion);' in badge
+assert 'static id CRBadgeMutateContent(id self, SEL cmd, id request, id error)' in badge
+assert '@"mutateContentForNotificationRequest:error:"' in badge
+assert 'extension = NSClassFromString(@"UNCNotificationServiceExtension");' in badge
+assert 'gCRBadgeMutateContentOriginal' in badge
+assert 'tagged[@"crane_sourceContainerID"] = source;' in badge
+assert '[mutated setValue:[tagged copy] forKey:@"_userInfo"]' in badge
+assert 'static id CRBadgeRecordCopyWithoutContainer(id self, SEL cmd)' in badge
+assert 'static id CRBadgeRequestCopyWithoutContainer(id self, SEL cmd)' in badge
+assert 'class_addMethod(recordClass, copySEL' in badge
+assert 'class_addMethod(requestClass, copySEL' in badge
+assert '[stripped removeObjectForKey:@"crane_sourceContainerID"]' in badge
+assert 'return self;' in badge
+assert 'static BOOL CRBadgeRecordIsSimilar(id self, SEL cmd, id other)' in badge
+assert '@"isSimilar:"' in badge
+assert 'gCRBadgeRecordSimilarOriginal' in badge
+assert 'return [lhsContainer isEqualToString:rhsContainer];' in badge
+assert 'static id CRBadgeRecordLookup(id self, SEL cmd, id identifier, NSString *appID)' in badge
+assert 'static id CRBadgeRecordsLookup(id self, SEL cmd, NSString *appID)' in badge
+assert '@"notificationRecordForForIdentifier:bundleIdentifier:"' in badge
+assert '@"notificationRecordsForBundleIdentifier:"' in badge
+assert 'CRBadgeRecordSource(record)' in badge
+assert 'static void CRBadgeRecordsLookupWithReply(id self, SEL cmd,' in badge
+assert '@"notificationRecordsForBundleIdentifier:withCompletionHandler:"' in badge
+assert 'gCRBadgeRecordsLookupWithReplyOriginal' in badge
+assert 'reply([filtered copy]);' in badge
+assert 'static void CRBadgeRemoveRecordsPassingTest(id self, SEL cmd, id predicate,' in badge
+assert '@"removeNotificationRecordsPassingTest:forBundleIdentifier:"' in badge
+assert 'if (!test(record))' in badge
+assert 'return [CRBadgeRecordSource(record) isEqualToString:container];' in badge
+assert 'static void CRBadgeRemoveAllRecords(id self, SEL cmd, NSString *appID)' in badge
+assert '@"removeAllNotificationRecordsForBundleIdentifier:"' in badge
+assert 'self, removeSEL, ^BOOL(id record) { (void)record; return YES; }, appID' in badge
+assert 'static void CRBadgeRegisterNotificationAdditionsProtocol(void)' in badge
+assert '"v32@0:8@16@24", YES, YES' in badge
+assert '"v40@0:8@16@24@32", YES, YES' in badge
+assert 'CRBadgeRegisterNotificationAdditionsProtocol();' in badge
+assert 'static void CRBadgeUnregisterNotifications(id self, SEL cmd,' in badge
+assert '(IMP)CRBadgeUnregisterNotifications, "v@:@@"' in badge
+assert '@"_remoteNotificationService"' in badge
+assert '@"invalidateTokenForRemoteNotificationsForBundleIdentifier:"' in badge
+assert 'static void CRBadgeXPCSetProtocol(id self, SEL cmd, Protocol *protocol)' in badge
+assert 'protocol_addProtocol(extended, additions);' in badge
+assert 'protocol_addProtocol(extended, base);' in badge
+assert 'objc_registerProtocol(extended);' in badge
+assert 'if (base && additions && protocol && protocol_isEqual(protocol, base))' in badge
+assert 'static void CRBadgeCleanupUninstalledSources(id server, id sources)' in badge
+assert 'dispatch_queue_set_specific(queue, &gCRBadgeUninstallQueueSpecificKey,' in badge
+assert '(__bridge void *)queue, NULL);' in badge
+assert 'if (dispatch_get_specific(&gCRBadgeUninstallQueueSpecificKey) ==' in badge
+assert '(__bridge void *)queue)' in badge
+assert 'dispatch_sync(queue, cleanup);' in badge
+assert 'if (![appID isKindOfClass:[NSString class]] ||' in badge
+assert 'if (![container isKindOfClass:[NSString class]])' in badge
+assert '@"notificationSourcesDidUninstall:"' in badge
+assert '@"applicationsDidUninstall:"' in badge
+assert '@"_queue_invalidateTokenForBundleIdentifier:"' in badge
+assert '@"_queue_calculateTopics"' in badge
 print('CraneSB runningboardd + notification ABI contracts: PASS (runtime unverified)')

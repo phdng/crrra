@@ -438,9 +438,35 @@ static IMP gCRBadgeOuterSaveOriginal;
 static IMP gCRBadgeSaveRevisionOriginal;
 static IMP gCRBadgeSaveOptionsOriginal;
 
-/* CraneSB 0xF254: outer save path. This establishes the source context
- * while the original synchronous call executes; the separate foreground
- * queue propagation is not yet reconstructed. */
+/* CraneSB 0xF254/0x10218/0x11FB0: global foreground context is
+ * set before the outer save, then cleared asynchronously on _queue. */
+static NSString *gCRBadgeForegroundContainer;
+static IMP gCRBadgeSystemForegroundOriginal;
+static BOOL CRBadgeSystemForeground(id self, SEL cmd, NSString *appID)
+{
+    BOOL (*original)(id, SEL, id) =
+        (BOOL (*)(id, SEL, id))gCRBadgeSystemForegroundOriginal;
+    BOOL foreground = original ? original(self, cmd, appID) : NO;
+    if (!foreground || !gCRBadgeForegroundContainer)
+        return foreground;
+    Class processClass = NSClassFromString(@"FBProcessManager");
+    SEL sharedSEL = NSSelectorFromString(@"sharedInstance");
+    if (![processClass respondsToSelector:sharedSEL])
+        return NO;
+    id manager = ((id (*)(id, SEL))objc_msgSend)(processClass, sharedSEL);
+    SEL processesSEL = NSSelectorFromString(@"processesForBundleIdentifier:");
+    id processes = [manager respondsToSelector:processesSEL]
+        ? ((id (*)(id, SEL, id))objc_msgSend)(manager, processesSEL, appID) : nil;
+    id process = [processes respondsToSelector:@selector(firstObject)]
+        ? [processes firstObject] : nil;
+    SEL containerSEL = NSSelectorFromString(@"crane_containerIdentifier");
+    id active = [process respondsToSelector:containerSEL]
+        ? ((id (*)(id, SEL))objc_msgSend)(process, containerSEL) : nil;
+    return [gCRBadgeForegroundContainer isEqualToString:active];
+}
+
+/* CraneSB 0xF254/0xBA6C: outer save uses notification userInfo to
+ * establish the global foreground context before invoking the original. */
 static void CRBadgeOuterSave(id self, SEL cmd, id record, BOOL repost,
                              NSString *appID, id completion)
 {
@@ -448,7 +474,18 @@ static void CRBadgeOuterSave(id self, SEL cmd, id record, BOOL repost,
         (void (*)(id, SEL, id, BOOL, id, id))gCRBadgeOuterSaveOriginal;
     if (!original)
         return;
-    NSString *container = CRBadgeSourceForRecord(record, appID);
+    id userInfo = [record respondsToSelector:@selector(userInfo)]
+        ? ((id (*)(id, SEL))objc_msgSend)(record, @selector(userInfo)) : nil;
+    /* 0xBA6C: nil userInfo or nil appID yields DEFAULT; otherwise only
+     * a source tag or an enabled application's fallback is accepted. */
+    NSString *container = @"DEFAULT";
+    if (userInfo && appID) {
+        container = [userInfo isKindOfClass:[NSDictionary class]]
+            ? userInfo[@"crane_sourceContainerID"] : nil;
+        if (!container && CRBadgeRedirectionEnabled(appID))
+            container = @"DEFAULT";
+    }
+    gCRBadgeForegroundContainer = [container copy];
     NSMutableDictionary *threadInfo = [NSThread currentThread].threadDictionary;
     NSString *key = @"saveNotification_containerID";
     id previous = threadInfo[key];
@@ -463,6 +500,13 @@ static void CRBadgeOuterSave(id self, SEL cmd, id record, BOOL repost,
             else
                 [threadInfo removeObjectForKey:key];
         }
+    }
+    if (gCRBadgeForegroundContainer) {
+        dispatch_queue_t queue = nil;
+        @try { queue = [self valueForKey:@"_queue"]; }
+        @catch (NSException *exception) { (void)exception; }
+        if (queue)
+            dispatch_async(queue, ^{ gCRBadgeForegroundContainer = nil; });
     }
 }
 
@@ -1371,11 +1415,16 @@ static id CRBadgeBulletinForNotification(id self, SEL cmd, id notification)
         ? ((id (*)(id, SEL))objc_msgSend)(self, @selector(sectionIdentifier)) : nil;
     id info = [notification respondsToSelector:@selector(userInfo)]
         ? ((id (*)(id, SEL))objc_msgSend)(notification, @selector(userInfo)) : nil;
-    id source = [info isKindOfClass:[NSDictionary class]]
-        ? info[@"crane_sourceContainerID"] : nil;
-    if (!source && [info isKindOfClass:[NSDictionary class]] &&
-        CRBadgeRedirectionEnabled(appID))
-        source = @"DEFAULT";
+    /* CraneSB 0xBA6C: nil userInfo maps to DEFAULT unconditionally.
+     * With userInfo and section ID, use its source tag or DEFAULT only
+     * for redirection-enabled apps; without section ID keep DEFAULT. */
+    id source = @"DEFAULT";
+    if (info && appID) {
+        source = [info isKindOfClass:[NSDictionary class]]
+            ? info[@"crane_sourceContainerID"] : nil;
+        if (!source && CRBadgeRedirectionEnabled(appID))
+            source = @"DEFAULT";
+    }
     if (!source || !bulletin)
         return bulletin;
     if ([bulletin respondsToSelector:@selector(setHeader:)]) {
@@ -1403,9 +1452,483 @@ static id CRBadgeBulletinForNotification(id self, SEL cmd, id notification)
     return bulletin;
 }
 
+/* CraneSB 0x11420/0x126D0: bulletin actions switch the associated
+ * container before forwarding the response to the original provider. */
+static IMP gCRBadgeBulletinActionOriginal;
+static void CRBadgeBulletinAction(id self, SEL cmd, id response, id completion)
+{
+    void (*original)(id, SEL, id, id) =
+        (void (*)(id, SEL, id, id))gCRBadgeBulletinActionOriginal;
+    if (!original)
+        return;
+    NSInteger actionType = [response respondsToSelector:@selector(actionType)]
+        ? ((NSInteger (*)(id, SEL))objc_msgSend)(response, @selector(actionType)) : 0;
+    if (actionType == 8 || actionType == 5) {
+        original(self, cmd, response, completion);
+        return;
+    }
+    id appID = [self respondsToSelector:@selector(sectionIdentifier)]
+        ? ((id (*)(id, SEL))objc_msgSend)(self, @selector(sectionIdentifier)) : nil;
+    id context = [response respondsToSelector:@selector(bulletinContext)]
+        ? ((id (*)(id, SEL))objc_msgSend)(response, @selector(bulletinContext)) : nil;
+    NSString *container = @"DEFAULT";
+    if (context && appID) {
+        container = [context isKindOfClass:[NSDictionary class]]
+            ? context[@"crane_sourceContainerID"] : nil;
+        if (!container && CRBadgeRedirectionEnabled(appID))
+            container = @"DEFAULT";
+    }
+    if (!container) {
+        original(self, cmd, response, completion);
+        return;
+    }
+    [[CraneManager sharedManager]
+        setActiveContainerIdentifier:container
+         forApplicationWithIdentifier:appID
+                 reloadApplication:YES
+   usingBiometricsIfNeededWithSuccessHandler:^{
+        original(self, cmd, response, completion);
+    }];
+}
+
+/* CraneSB 0x115F4: carry request source metadata into mutated content. */
+static IMP gCRBadgeMutateContentOriginal;
+static id CRBadgeMutateContent(id self, SEL cmd, id request, id error)
+{
+    id (*original)(id, SEL, id, id) =
+        (id (*)(id, SEL, id, id))gCRBadgeMutateContentOriginal;
+    id content = [request respondsToSelector:@selector(content)]
+        ? ((id (*)(id, SEL))objc_msgSend)(request, @selector(content)) : nil;
+    id info = [content respondsToSelector:@selector(userInfo)]
+        ? ((id (*)(id, SEL))objc_msgSend)(content, @selector(userInfo)) : nil;
+    /* CraneSB 0xBE18: absent userInfo means no source; absent key in
+     * present userInfo means DEFAULT. */
+    id source = [info isKindOfClass:[NSDictionary class]]
+        ? (info[@"crane_sourceContainerID"] ?: @"DEFAULT") : nil;
+    id mutated = original ? original(self, cmd, request, error) : nil;
+    if (source && ![source isEqual:@"DEFAULT"] &&
+        [mutated respondsToSelector:@selector(userInfo)]) {
+        id mutatedInfo = ((id (*)(id, SEL))objc_msgSend)(mutated, @selector(userInfo));
+        if ([mutatedInfo isKindOfClass:[NSDictionary class]]) {
+            NSMutableDictionary *tagged = [mutatedInfo mutableCopy];
+            tagged[@"crane_sourceContainerID"] = source;
+            @try { [mutated setValue:[tagged copy] forKey:@"_userInfo"]; }
+            @catch (NSException *exception) { (void)exception; }
+        }
+    }
+    return mutated;
+}
+
+/* CraneSB 0x1172C/0x11984/0x126E8: remove only the source marker.
+ * Preserve object identity when there is no marker to strip. */
+static id CRBadgeRecordCopyWithoutContainer(id self, SEL cmd)
+{
+    id info = [self respondsToSelector:@selector(userInfo)]
+        ? ((id (*)(id, SEL))objc_msgSend)(self, @selector(userInfo)) : nil;
+    if (![info isKindOfClass:[NSDictionary class]] ||
+        !info[@"crane_sourceContainerID"])
+        return self;
+    NSMutableDictionary *stripped = [info mutableCopy];
+    [stripped removeObjectForKey:@"crane_sourceContainerID"];
+    id representation = [self respondsToSelector:@selector(dictionaryRepresentation)]
+        ? ((id (*)(id, SEL))objc_msgSend)(self, @selector(dictionaryRepresentation)) : nil;
+    Class recordClass = NSClassFromString(@"UNSNotificationRecord");
+    id record = [[recordClass alloc] initWithDictionaryRepresentation:representation];
+    if ([record respondsToSelector:@selector(setUserInfo:)])
+        ((void (*)(id, SEL, id))objc_msgSend)(record, @selector(setUserInfo:), [stripped copy]);
+    return record;
+}
+
+static id CRBadgeRequestCopyWithoutContainer(id self, SEL cmd)
+{
+    id content = [self respondsToSelector:@selector(content)]
+        ? ((id (*)(id, SEL))objc_msgSend)(self, @selector(content)) : nil;
+    id info = [content respondsToSelector:@selector(userInfo)]
+        ? ((id (*)(id, SEL))objc_msgSend)(content, @selector(userInfo)) : nil;
+    if (![info isKindOfClass:[NSDictionary class]] ||
+        !info[@"crane_sourceContainerID"])
+        return self;
+    NSMutableDictionary *stripped = [info mutableCopy];
+    [stripped removeObjectForKey:@"crane_sourceContainerID"];
+    id request = [self copy];
+    id copiedContent = [request respondsToSelector:@selector(content)]
+        ? ((id (*)(id, SEL))objc_msgSend)(request, @selector(content)) : nil;
+    [copiedContent setValue:[stripped copy] forKey:@"_userInfo"];
+    return request;
+}
+
+/* CraneSB 0x11884/0xBE18: matching records from different source
+ * containers must not be considered similar. */
+static IMP gCRBadgeRecordSimilarOriginal;
+static BOOL CRBadgeRecordIsSimilar(id self, SEL cmd, id other)
+{
+    BOOL (*original)(id, SEL, id) =
+        (BOOL (*)(id, SEL, id))gCRBadgeRecordSimilarOriginal;
+    BOOL similar = original ? original(self, cmd, other) : NO;
+    if (!similar)
+        return NO;
+    id lhs = [self respondsToSelector:@selector(userInfo)]
+        ? ((id (*)(id, SEL))objc_msgSend)(self, @selector(userInfo)) : nil;
+    id rhs = [other respondsToSelector:@selector(userInfo)]
+        ? ((id (*)(id, SEL))objc_msgSend)(other, @selector(userInfo)) : nil;
+    id lhsContainer = [lhs isKindOfClass:[NSDictionary class]]
+        ? (lhs[@"crane_sourceContainerID"] ?: @"DEFAULT") : nil;
+    id rhsContainer = [rhs isKindOfClass:[NSDictionary class]]
+        ? (rhs[@"crane_sourceContainerID"] ?: @"DEFAULT") : nil;
+    return [lhsContainer isEqualToString:rhsContainer];
+}
+
+/* CraneSB 0xF59C/0xF750: repository reads expose only records from
+ * the caller's container and strip the private source tag. */
+static NSString *CRBadgeRecordSource(id record)
+{
+    id info = [record respondsToSelector:@selector(userInfo)]
+        ? ((id (*)(id, SEL))objc_msgSend)(record, @selector(userInfo)) : nil;
+    if (![info isKindOfClass:[NSDictionary class]])
+        return nil;
+    id value = info[@"crane_sourceContainerID"];
+    return value ?: @"DEFAULT";
+}
+
+static IMP gCRBadgeRecordLookupOriginal;
+static id CRBadgeRecordLookup(id self, SEL cmd, id identifier, NSString *appID)
+{
+    id (*original)(id, SEL, id, id) =
+        (id (*)(id, SEL, id, id))gCRBadgeRecordLookupOriginal;
+    if (!original)
+        return nil;
+    if (!CRBadgeRedirectionEnabled(appID) || ![NSXPCConnection currentConnection])
+        return original(self, cmd, identifier, appID);
+    NSString *container = CRBadgeContainerForConnection(
+        [NSXPCConnection currentConnection]) ?: @"DEFAULT";
+    id record = original(self, cmd, identifier, appID);
+    if (![CRBadgeRecordSource(record) isEqualToString:container])
+        return nil;
+    SEL copySEL = NSSelectorFromString(@"crane_copyWithoutContainerID");
+    return [record respondsToSelector:copySEL]
+        ? ((id (*)(id, SEL))objc_msgSend)(record, copySEL) : record;
+}
+
+static IMP gCRBadgeRecordsLookupOriginal;
+static id CRBadgeRecordsLookup(id self, SEL cmd, NSString *appID)
+{
+    id (*original)(id, SEL, id) =
+        (id (*)(id, SEL, id))gCRBadgeRecordsLookupOriginal;
+    if (!original)
+        return nil;
+    if (!CRBadgeRedirectionEnabled(appID) || ![NSXPCConnection currentConnection])
+        return original(self, cmd, appID);
+    NSString *container = CRBadgeContainerForConnection(
+        [NSXPCConnection currentConnection]) ?: @"DEFAULT";
+    NSArray *records = original(self, cmd, appID);
+    NSMutableArray *filtered = [NSMutableArray array];
+    for (id record in records) {
+        if (![CRBadgeRecordSource(record) isEqualToString:container])
+            continue;
+        SEL copySEL = NSSelectorFromString(@"crane_copyWithoutContainerID");
+        id clean = [record respondsToSelector:copySEL]
+            ? ((id (*)(id, SEL))objc_msgSend)(record, copySEL) : record;
+        if (clean)
+            [filtered addObject:clean];
+    }
+    return [filtered copy];
+}
+
+/* CraneSB 0xFA20/0x120B0: asynchronously filter repository records
+ * with the caller's XPC container captured before the original call. */
+static IMP gCRBadgeRecordsLookupWithReplyOriginal;
+static void CRBadgeRecordsLookupWithReply(id self, SEL cmd,
+                                           NSString *appID, id completion)
+{
+    void (*original)(id, SEL, id, id) =
+        (void (*)(id, SEL, id, id))gCRBadgeRecordsLookupWithReplyOriginal;
+    if (!original)
+        return;
+    NSXPCConnection *connection = [NSXPCConnection currentConnection];
+    if (!CRBadgeRedirectionEnabled(appID) || !connection || !completion) {
+        original(self, cmd, appID, completion);
+        return;
+    }
+    NSString *container = CRBadgeContainerForConnection(connection) ?: @"DEFAULT";
+    void (^reply)(NSArray *) = completion;
+    original(self, cmd, appID, ^(NSArray *records) {
+        NSMutableArray *filtered = [NSMutableArray array];
+        for (id record in records) {
+            if (![CRBadgeRecordSource(record) isEqualToString:container])
+                continue;
+            SEL copySEL = NSSelectorFromString(@"crane_copyWithoutContainerID");
+            id clean = [record respondsToSelector:copySEL]
+                ? ((id (*)(id, SEL))objc_msgSend)(record, copySEL) : record;
+            if (clean)
+                [filtered addObject:clean];
+        }
+        reply([filtered copy]);
+    });
+}
+
+/* CraneSB 0xF398/0x11FC0: apply the caller's predicate first,
+ * then require the notification record to belong to its container. */
+static IMP gCRBadgeRemoveRecordsPassingTestOriginal;
+static void CRBadgeRemoveRecordsPassingTest(id self, SEL cmd, id predicate,
+                                             NSString *appID)
+{
+    void (*original)(id, SEL, id, id) =
+        (void (*)(id, SEL, id, id))gCRBadgeRemoveRecordsPassingTestOriginal;
+    if (!original)
+        return;
+    NSXPCConnection *connection = [NSXPCConnection currentConnection];
+    if (!CRBadgeRedirectionEnabled(appID) || !connection || !predicate) {
+        original(self, cmd, predicate, appID);
+        return;
+    }
+    NSString *container = CRBadgeContainerForConnection(connection) ?: @"DEFAULT";
+    BOOL (^test)(id) = predicate;
+    original(self, cmd, ^BOOL(id record) {
+        if (!test(record))
+            return NO;
+        return [CRBadgeRecordSource(record) isEqualToString:container];
+    }, appID);
+}
+
+/* CraneSB 0xF524: when notification redirection is enabled, route
+ * remove-all through the predicate remover (0xF398) instead of the original
+ * unscoped remove-all implementation. The native predicate is always YES. */
+static IMP gCRBadgeRemoveAllRecordsOriginal;
+static void CRBadgeRemoveAllRecords(id self, SEL cmd, NSString *appID)
+{
+    void (*original)(id, SEL, id) =
+        (void (*)(id, SEL, id))gCRBadgeRemoveAllRecordsOriginal;
+    if (!CRBadgeRedirectionEnabled(appID)) {
+        if (original) original(self, cmd, appID);
+        return;
+    }
+    SEL removeSEL = NSSelectorFromString(
+        @"removeNotificationRecordsPassingTest:forBundleIdentifier:");
+    if ([self respondsToSelector:removeSEL])
+        ((void (*)(id, SEL, id, id))objc_msgSend)(
+            self, removeSEL, ^BOOL(id record) { (void)record; return YES; }, appID);
+}
+
+/* CraneSB 0x10AD8: invalidate the remote-notification registration for
+ * a specific container; DEFAULT uses the unmodified bundle identifier. */
+static void CRBadgeUnregisterNotifications(id self, SEL cmd,
+                                            NSString *containerID, NSString *appID)
+{
+    (void)self; (void)cmd;
+    Class serverClass = NSClassFromString(@"UNSUserNotificationServer");
+    SEL sharedSEL = NSSelectorFromString(@"sharedInstance");
+    if (![serverClass respondsToSelector:sharedSEL])
+        return;
+    id server = ((id (*)(id, SEL))objc_msgSend)(serverClass, sharedSEL);
+    id service = nil;
+    @try { service = [server valueForKey:@"_remoteNotificationService"]; }
+    @catch (NSException *exception) { (void)exception; }
+    SEL invalidateSEL = NSSelectorFromString(
+        @"invalidateTokenForRemoteNotificationsForBundleIdentifier:");
+    if (![service respondsToSelector:invalidateSEL])
+        return;
+    NSString *topic = (containerID && ![containerID isEqualToString:@"DEFAULT"])
+        ? [NSString stringWithFormat:@"%@.c_r_a_n_e.%@", appID, containerID]
+        : appID;
+    ((void (*)(id, SEL, id))objc_msgSend)(service, invalidateSEL, topic);
+}
+
+/* CraneSB protocol metadata at 0x2BBD0..0x2BC00: required methods
+ * and their exact Objective-C type encodings. */
+static void CRBadgeRegisterNotificationAdditionsProtocol(void)
+{
+    if (objc_getProtocol("UNUserNotificationProtocolCraneAdditions"))
+        return;
+    Protocol *protocol = objc_allocateProtocol(
+        "UNUserNotificationProtocolCraneAdditions");
+    if (!protocol)
+        return;
+    protocol_addMethodDescription(protocol,
+        sel_registerName("crane_unregisterFromNotificationsIfNeededForContainerIdentifier:ofApplicationWithIdentifier:"),
+        "v32@0:8@16@24", YES, YES);
+    protocol_addMethodDescription(protocol,
+        sel_registerName("crane_switchBadgesOfContainerWithIdentifier:andContainerWithIdentifier:ofApplicationWithIdentifier:"),
+        "v40@0:8@16@24@32", YES, YES);
+    protocol_addMethodDescription(protocol,
+        sel_registerName("crane_resetBadgeOfContainerWithIdentifier:ofApplicationWithIdentifier:"),
+        "v32@0:8@16@24", YES, YES);
+    objc_registerProtocol(protocol);
+}
+
+/* CraneSB 0x11AF8/0x1F7B0: widen the notification server XPC
+ * protocol only when both original and Crane additions are available.
+ * Do not substitute a missing protocol (which would invalidate XPC). */
+static IMP gCRBadgeXPCSetProtocolOriginal;
+static void CRBadgeXPCSetProtocol(id self, SEL cmd, Protocol *protocol)
+{
+    void (*original)(id, SEL, Protocol *) =
+        (void (*)(id, SEL, Protocol *))gCRBadgeXPCSetProtocolOriginal;
+    if (!original)
+        return;
+    Protocol *base = objc_getProtocol("UNUserNotificationServerProtocol");
+    Protocol *additions = objc_getProtocol("UNUserNotificationProtocolCraneAdditions");
+    if (base && additions && protocol && protocol_isEqual(protocol, base)) {
+        Protocol *extended = objc_getProtocol(
+            "UNUserNotificationServerProtocolPlusCraneAdditions");
+        if (!extended) {
+            extended = objc_allocateProtocol(
+                "UNUserNotificationServerProtocolPlusCraneAdditions");
+            if (extended) {
+                protocol_addProtocol(extended, additions);
+                protocol_addProtocol(extended, base);
+                objc_registerProtocol(extended);
+            }
+        }
+        if (extended) {
+            original(self, cmd, extended);
+            return;
+        }
+    }
+    original(self, cmd, protocol);
+}
+
+/* CraneSB 0xF19C/0xF1F8 -> 0xC7D4/0xC8B4: after the system
+ * unregisters an app, clean up all container-specific APNS topics. */
+static char gCRBadgeUninstallQueueSpecificKey;
+static void CRBadgeCleanupUninstalledSources(id server, id sources)
+{
+    if (![sources conformsToProtocol:@protocol(NSFastEnumeration)])
+        return;
+    dispatch_queue_t queue = nil;
+    @try { queue = [server valueForKey:@"_queue"]; }
+    @catch (NSException *exception) { (void)exception; }
+    if (!queue)
+        return;
+    /* The original 0xC7D4 dispatches synchronously. Avoid deadlock if
+     * an uninstall callback itself arrives on this serial queue. */
+    dispatch_queue_set_specific(queue, &gCRBadgeUninstallQueueSpecificKey,
+                                (__bridge void *)queue, NULL);
+    dispatch_block_t cleanup = ^{
+        SEL invalidate = NSSelectorFromString(@"_queue_invalidateTokenForBundleIdentifier:");
+        SEL removeRegistration = NSSelectorFromString(@"_queue_removeRegistrationForBundleIdentifier:");
+        SEL removeClient = NSSelectorFromString(@"_queue_removeClientForBundleIdentifier:");
+        for (id source in sources) {
+            NSString *appID = [source respondsToSelector:@selector(bundleIdentifier)]
+                ? ((id (*)(id, SEL))objc_msgSend)(source, @selector(bundleIdentifier)) : nil;
+            if (![appID isKindOfClass:[NSString class]] ||
+                !CRBadgeRedirectionEnabled(appID))
+                continue;
+            NSArray *containers = [[CraneManager sharedManager]
+                containerIdentifiersOfApplicationWithIdentifier:appID];
+            for (NSString *container in containers) {
+                /* 0x1FEF0 builds no topic when either argument is nil.
+                 * Avoid generating a synthetic "(null)" APNS identifier. */
+                if (![container isKindOfClass:[NSString class]])
+                    continue;
+                NSString *topic = [NSString stringWithFormat:
+                    @"%@.c_r_a_n_e.%@", appID, container];
+                if ([server respondsToSelector:invalidate])
+                    ((void (*)(id, SEL, id))objc_msgSend)(server, invalidate, topic);
+                if ([server respondsToSelector:removeRegistration])
+                    ((void (*)(id, SEL, id))objc_msgSend)(server, removeRegistration, topic);
+                else if ([server respondsToSelector:removeClient])
+                    ((void (*)(id, SEL, id))objc_msgSend)(server, removeClient, topic);
+            }
+        }
+        SEL recalculate = NSSelectorFromString(@"_queue_calculateTopics");
+        if ([server respondsToSelector:recalculate])
+            ((void (*)(id, SEL))objc_msgSend)(server, recalculate);
+    };
+    /* A non-null value from another repository's queue must not cause
+     * this repository's cleanup to run on the wrong queue. */
+    if (dispatch_get_specific(&gCRBadgeUninstallQueueSpecificKey) ==
+        (__bridge void *)queue)
+        cleanup();
+    else
+        dispatch_sync(queue, cleanup);
+}
+
+static IMP gCRBadgeSourcesUninstallOriginal;
+static IMP gCRBadgeAppsUninstallOriginal;
+static void CRBadgeSourcesUninstalled(id self, SEL cmd, id sources)
+{
+    void (*original)(id, SEL, id) =
+        (void (*)(id, SEL, id))gCRBadgeSourcesUninstallOriginal;
+    if (original) original(self, cmd, sources);
+    CRBadgeCleanupUninstalledSources(self, sources);
+}
+static void CRBadgeApplicationsUninstalled(id self, SEL cmd, id apps)
+{
+    void (*original)(id, SEL, id) =
+        (void (*)(id, SEL, id))gCRBadgeAppsUninstallOriginal;
+    if (original) original(self, cmd, apps);
+    CRBadgeCleanupUninstalledSources(self, apps);
+}
+
 void CRInitBadgeListenerMethods(void)
 {
+    CRBadgeRegisterNotificationAdditionsProtocol();
+    Class xpcInterface = NSClassFromString(@"NSXPCInterface");
+    SEL setProtocolSEL = NSSelectorFromString(@"setProtocol:");
+    if (xpcInterface && [xpcInterface instancesRespondToSelector:setProtocolSEL])
+        MSHookMessageEx(xpcInterface, setProtocolSEL,
+                        (IMP)CRBadgeXPCSetProtocol, &gCRBadgeXPCSetProtocolOriginal);
+    Class repositoryClass = NSClassFromString(@"UNSNotificationRepository");
+    if (!repositoryClass)
+        repositoryClass = NSClassFromString(@"UNCLocalNotificationRepository");
+    SEL removeAllRecordsSEL = NSSelectorFromString(
+        @"removeAllNotificationRecordsForBundleIdentifier:");
+    if (repositoryClass && [repositoryClass instancesRespondToSelector:removeAllRecordsSEL])
+        MSHookMessageEx(repositoryClass, removeAllRecordsSEL,
+                        (IMP)CRBadgeRemoveAllRecords,
+                        &gCRBadgeRemoveAllRecordsOriginal);
+    SEL removeTestSEL = NSSelectorFromString(
+        @"removeNotificationRecordsPassingTest:forBundleIdentifier:");
+    if (repositoryClass && [repositoryClass instancesRespondToSelector:removeTestSEL])
+        MSHookMessageEx(repositoryClass, removeTestSEL,
+                        (IMP)CRBadgeRemoveRecordsPassingTest,
+                        &gCRBadgeRemoveRecordsPassingTestOriginal);
+    SEL recordSEL = NSSelectorFromString(@"notificationRecordForForIdentifier:bundleIdentifier:");
+    if (repositoryClass && [repositoryClass instancesRespondToSelector:recordSEL])
+        MSHookMessageEx(repositoryClass, recordSEL, (IMP)CRBadgeRecordLookup,
+                        &gCRBadgeRecordLookupOriginal);
+    SEL recordsReplySEL = NSSelectorFromString(
+        @"notificationRecordsForBundleIdentifier:withCompletionHandler:");
+    if (repositoryClass && [repositoryClass instancesRespondToSelector:recordsReplySEL])
+        MSHookMessageEx(repositoryClass, recordsReplySEL,
+                        (IMP)CRBadgeRecordsLookupWithReply,
+                        &gCRBadgeRecordsLookupWithReplyOriginal);
+    SEL recordsSEL = NSSelectorFromString(@"notificationRecordsForBundleIdentifier:");
+    if (repositoryClass && [repositoryClass instancesRespondToSelector:recordsSEL])
+        MSHookMessageEx(repositoryClass, recordsSEL, (IMP)CRBadgeRecordsLookup,
+                        &gCRBadgeRecordsLookupOriginal);
+    SEL copySEL = NSSelectorFromString(@"crane_copyWithoutContainerID");
+    Class recordClass = NSClassFromString(@"UNSNotificationRecord");
+    if (recordClass) {
+        class_addMethod(recordClass, copySEL,
+                        (IMP)CRBadgeRecordCopyWithoutContainer, "@@:");
+        SEL similarSEL = NSSelectorFromString(@"isSimilar:");
+        if ([recordClass instancesRespondToSelector:similarSEL])
+            MSHookMessageEx(recordClass, similarSEL,
+                            (IMP)CRBadgeRecordIsSimilar,
+                            &gCRBadgeRecordSimilarOriginal);
+    }
+    Class requestClass = NSClassFromString(@"UNNotificationRequest");
+    if (requestClass)
+        class_addMethod(requestClass, copySEL,
+                        (IMP)CRBadgeRequestCopyWithoutContainer, "@@:");
+    Class extension = NSClassFromString(@"UNSNotificationServiceExtension");
+    if (!extension)
+        extension = NSClassFromString(@"UNCNotificationServiceExtension");
+    SEL mutateSEL = NSSelectorFromString(@"mutateContentForNotificationRequest:error:");
+    if (extension && [extension instancesRespondToSelector:mutateSEL])
+        MSHookMessageEx(extension, mutateSEL, (IMP)CRBadgeMutateContent,
+                        &gCRBadgeMutateContentOriginal);
+    Class notificationServer = NSClassFromString(@"UNSUserNotificationServer");
+    SEL systemForegroundSEL = NSSelectorFromString(@"isApplicationForeground:");
+    if (notificationServer && [notificationServer instancesRespondToSelector:systemForegroundSEL])
+        MSHookMessageEx(notificationServer, systemForegroundSEL,
+                        (IMP)CRBadgeSystemForeground, &gCRBadgeSystemForegroundOriginal);
     Class dataProvider = NSClassFromString(@"UNSDefaultDataProvider");
+    SEL actionSEL = NSSelectorFromString(@"handleBulletinActionResponse:withCompletion:");
+    if (dataProvider && [dataProvider instancesRespondToSelector:actionSEL])
+        MSHookMessageEx(dataProvider, actionSEL, (IMP)CRBadgeBulletinAction,
+                        &gCRBadgeBulletinActionOriginal);
     SEL bulletinSEL = NSSelectorFromString(@"_queue_bulletinForNotification:");
     if (dataProvider && [dataProvider instancesRespondToSelector:bulletinSEL])
         MSHookMessageEx(dataProvider, bulletinSEL,
@@ -1492,6 +2015,16 @@ void CRInitBadgeListenerMethods(void)
         MSHookMessageEx(remoteClass, foregroundSEL,
                         (IMP)CRBadgeApplicationForeground,
                         &gCRBadgeApplicationForegroundOriginal);
+    SEL sourcesUninstallSEL = NSSelectorFromString(@"notificationSourcesDidUninstall:");
+    if (remoteClass && [remoteClass instancesRespondToSelector:sourcesUninstallSEL])
+        MSHookMessageEx(remoteClass, sourcesUninstallSEL,
+                        (IMP)CRBadgeSourcesUninstalled,
+                        &gCRBadgeSourcesUninstallOriginal);
+    SEL appsUninstallSEL = NSSelectorFromString(@"applicationsDidUninstall:");
+    if (remoteClass && [remoteClass instancesRespondToSelector:appsUninstallSEL])
+        MSHookMessageEx(remoteClass, appsUninstallSEL,
+                        (IMP)CRBadgeApplicationsUninstalled,
+                        &gCRBadgeAppsUninstallOriginal);
     SEL allTopicsSEL = NSSelectorFromString(
         @"_queue_allTopicsForApplication:");
     if (remoteClass && [remoteClass instancesRespondToSelector:allTopicsSEL])
@@ -1580,6 +2113,9 @@ void CRInitBadgeListenerMethods(void)
         MSHookMessageEx(listener, removeAllSEL,
                         (IMP)CRBadgeRemoveAllPending,
                         &gCRBadgeRemoveAllPendingOriginal);
+    class_addMethod(listener,
+        NSSelectorFromString(@"crane_unregisterFromNotificationsIfNeededForContainerIdentifier:ofApplicationWithIdentifier:"),
+        (IMP)CRBadgeUnregisterNotifications, "v@:@@");
     class_addMethod(listener,
         NSSelectorFromString(@"crane_switchBadgesOfContainerWithIdentifier:andContainerWithIdentifier:ofApplicationWithIdentifier:"),
         (IMP)CRSwitchContainerBadges, "v@:@@@");
