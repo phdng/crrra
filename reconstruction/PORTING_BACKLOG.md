@@ -49,6 +49,34 @@ so this install hook is explicitly reconstruction packaging work. Earlier
 automatic-review refusal was resolved by the user's explicit approval.
 The existing read-only diagnostic remains available for verification.
 
+## Device incident — Chrome launched into DEFAULT after Helper XPC recovery
+
+The iOS 15.8.8 Roothide device now reaches the Chrome container Settings
+page and opens its Filza container path, but SpringBoard alerts that the
+application started into DEFAULT because ` Crane.dylib` was not loaded. Filza
+only confirms LaunchServices/File Manager access to the container directory,
+not app-side injection. The runningboardd path may fail to provide the
+nondefault ID if `CraneRB` sandbox profile/selector/launch-context is missing;
+or the main app-side constructor may be disabled by a tweak manager, fail to
+run, or have its independent `runtime_report` arrive later than the immediate
+helperd `lookup_pid` check.
+
+A new **bounded post-launch proof retry** in `CRSpringBoard.m` retries only
+the `connectionWorks=YES` + no live app proof branch two times (750ms apart),
+rechecks running state and the exact launched PID and retains both missing
+proof and transport error behavior. No helper protocol selectors, privileges
+or injection failure classification are bypassed. Added runningboardd
+selector/profile/environment logs and helperd accepted/rejected runtime
+report and PID-proof status logs (no path changes or auth weakening).
+`check_postlaunch_injection_contract.py` now runs with rootful/roothide CI.
+`XPC_PING_DEVICE_TEST.md` describes the mobile-shell capture matrix and the
+necessary distinction between a missing launch environment, a blocked tweak
+injector/Choicy configuration and a delayed/rejected helper report. All
+changes are source-tested only; a genuine missing injection or runningboardd
+hook requires an evidence-backed fix after on-device logging. **Do not call
+Chrome isolation fixed until a launched Chrome process emits app-init proof
+and helperd confirms its nondefault container.**
+
 ## Quy ước
 
 - **ABSENT**: chưa có triển khai chức năng tương ứng trong source.

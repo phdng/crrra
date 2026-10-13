@@ -37,10 +37,16 @@ assert 'CRPresentDaemonError(brokenDaemons,\n                         insuranceE
 # container ID plus a connection/status bit. nil+true is a missing main dylib;
 # nil+false is a runningboardd/helper communication error.
 assert 'reply:^(NSString *actualContainer, BOOL connectionWorks)' in source
-assert '(void)[actualContainer isEqualToString:expectedContainer];' in source
+assert 'if (actualContainer.length)' in source
+assert 'expectedContainer, actualContainer);' in source
+assert 'CRVerifyProcessInjectionAfterLaunch(launched, pid, expectedContainer, 0);' in source
+assert 'if (connectionWorks == YES && attempt < 2)' in source
+assert 'CRVerifyProcessInjectionAfterLaunch(again, pid,' in source
+assert 'CRPresentMainDylibNotLoadedError(processName);' in source
 assert 'if (connectionWorks == YES)' in source
 assert 'CRPresentMainDylibNotLoadedError(processName);' in source
-assert 'CRPresentDaemonError(@[@"runningboardd"],\n                        [CraneManager.sharedManager getLastError], NO);' in source
+assert 'CRPresentDaemonError(@[@"runningboardd"], lookupError, NO);' in source
+assert 'NSError *lookupError = [CraneManager.sharedManager getLastError];' in source
 # Reconstruction adapter now retains the underlying transport error; the
 # recovered nil/false -> communication-error branch and two-argument ABI stay.
 assert 'reply lacks the original second status' not in source

@@ -257,51 +257,100 @@ static NSMutableDictionary *CRApplyEnvironmentChanges(NSMutableDictionary *envir
  * failure is CRANE_DYLIB_NOT_LOADED_ERROR.
  *
  * Type encoding "v@:@@" is recovered verbatim from Crane 0x17A14. */
-static void CRRegisterInjectionCheckForProcess(id self, SEL _cmd, id process,
-                                              NSString *containerID)
+/* The app-side constructor reports its PID/container through an independent
+ * asynchronous XPC connection. On fast app launches the initial 0x19608
+ * lookup can win that race. Retry ONLY a live, same-PID app when the helper
+ * answered but has not yet received the app-side proof. Two 750ms retries
+ * are a bounded reconstruction adaptation; never turn no proof into success. */
+static void CRVerifyProcessInjectionAfterLaunch(id process, pid_t pid,
+                                                NSString *expectedContainer,
+                                                NSUInteger attempt)
 {
-    (void)self; (void)_cmd;
-    if (!process || !containerID.length) return;
-
-    /* CraneSB 0x18238 schedules verification only after the process has
-     * launched. 0x194EC then checks isRunning/pid and queries cranehelperd;
-     * 0x19608 only presents an error when no container ID is returned. */
+    if (!process || pid <= 0 || !expectedContainer.length)
+        return;
     __weak id weakProcess = process;
-    NSString *expectedContainer = [containerID copy];
-    void (^checkAfterLaunch)(void) = ^{
-        id launched = weakProcess;
-        if (!launched || ![launched respondsToSelector:@selector(isRunning)] ||
-            !((BOOL (*)(id, SEL))objc_msgSend)(launched, @selector(isRunning)) ||
-            ![launched respondsToSelector:@selector(pid)]) return;
-        pid_t pid = (pid_t)((int (*)(id, SEL))objc_msgSend)(launched, @selector(pid));
-        if (pid <= 0) return;
-        id<CRHelperServiceProtocol> proxy = (id<CRHelperServiceProtocol>)
-            [CraneManager.sharedManager cranehelperdGlobalSyncRemoteObjectProxy];
-        [proxy fetchActiveContainerIDForProcessWithPid:pid
-            reply:^(NSString *actualContainer, BOOL connectionWorks) {
-                /* CraneSB 0x19608 compares a nonnil response but has no
-                 * mismatch alert; preserve that exact branch shape. */
-                if (actualContainer) {
-                    (void)[actualContainer isEqualToString:expectedContainer];
+    id<CRHelperServiceProtocol> proxy = (id<CRHelperServiceProtocol>)
+        [CraneManager.sharedManager cranehelperdGlobalSyncRemoteObjectProxy];
+    if (!proxy || ![proxy respondsToSelector:
+                       @selector(fetchActiveContainerIDForProcessWithPid:reply:)]) {
+        NSLog(@"CraneSB: post-launch lookup unavailable pid=%d", pid);
+        CRPresentDaemonError(@[@"cranehelperd"], [NSError errorWithDomain:
+            @"com.opa334.crane.helper.transport" code:1001 userInfo:@{
+                NSLocalizedDescriptionKey: @"Post-launch lookup unavailable"
+            }], NO);
+        return;
+    }
+    [proxy fetchActiveContainerIDForProcessWithPid:pid
+        reply:^(NSString *actualContainer, BOOL connectionWorks) {
+            /* Snapshot the error while the helper reply-scoped diagnosis is
+             * available. Main-thread delivery must not lose it. */
+            NSError *lookupError = [CraneManager.sharedManager getLastError];
+            dispatch_async(dispatch_get_main_queue(), ^{
+                id launched = weakProcess;
+                if (!launched ||
+                    ![launched respondsToSelector:@selector(isRunning)] ||
+                    !((BOOL (*)(id, SEL))objc_msgSend)(launched, @selector(isRunning)) ||
+                    ![launched respondsToSelector:@selector(pid)] ||
+                    (pid_t)((int (*)(id, SEL))objc_msgSend)(launched, @selector(pid)) != pid)
+                    return;
+                if (actualContainer.length) {
+                    /* Native 0x19608 only checks for a nonnil response.
+                     * Report a mismatch for diagnosis, not success/failure
+                     * based on an unverified inferred expectation. */
+                    NSLog(@"CraneSB: post-launch proof pid=%d expected=%@ actual=%@",
+                          pid, expectedContainer, actualContainer);
                     return;
                 }
-
+                NSLog(@"CraneSB: post-launch proof missing pid=%d attempt=%lu helper=%d error=%@",
+                      pid, (unsigned long)(attempt + 1), connectionWorks, lookupError);
+                if (connectionWorks == YES && attempt < 2) {
+                    dispatch_after(dispatch_time(DISPATCH_TIME_NOW,
+                                                 (int64_t)(750 * NSEC_PER_MSEC)),
+                                   dispatch_get_main_queue(), ^{
+                        id again = weakProcess;
+                        if (again)
+                            CRVerifyProcessInjectionAfterLaunch(again, pid,
+                                expectedContainer, attempt + 1);
+                    });
+                    return;
+                }
                 NSString *processName = nil;
                 SEL queueNameSelector = NSSelectorFromString(@"_queue_name");
                 if ([launched respondsToSelector:queueNameSelector]) {
                     @try { processName = [launched valueForKey:@"_name"]; }
                     @catch (__unused NSException *exception) { processName = nil; }
                 } else if ([launched respondsToSelector:@selector(name)]) {
-                    processName = ((id (*)(id, SEL))objc_msgSend)(launched, @selector(name));
+                    processName =
+                        ((id (*)(id, SEL))objc_msgSend)(launched, @selector(name));
                 }
-
                 if (connectionWorks == YES) {
                     CRPresentMainDylibNotLoadedError(processName);
                 } else {
-                    CRPresentDaemonError(@[@"runningboardd"],
-                        [CraneManager.sharedManager getLastError], NO);
+                    CRPresentDaemonError(@[@"runningboardd"], lookupError, NO);
                 }
-            }];
+            });
+        }];
+}
+
+static void CRRegisterInjectionCheckForProcess(id self, SEL _cmd, id process,
+                                               NSString *containerID)
+{
+    (void)self; (void)_cmd;
+    if (!process || !containerID.length)
+        return;
+
+    /* CraneSB 0x18238 registers after-launch verification, not a fixed
+     * timer from the initial launch request. */
+    __weak id weakProcess = process;
+    NSString *expectedContainer = [containerID copy];
+    void (^checkAfterLaunch)(void) = ^{
+        id launched = weakProcess;
+        if (!launched || ![launched respondsToSelector:@selector(isRunning)] ||
+            !((BOOL (*)(id, SEL))objc_msgSend)(launched, @selector(isRunning)) ||
+            ![launched respondsToSelector:@selector(pid)])
+            return;
+        pid_t pid = (pid_t)((int (*)(id, SEL))objc_msgSend)(launched, @selector(pid));
+        CRVerifyProcessInjectionAfterLaunch(launched, pid, expectedContainer, 0);
     };
     SEL callbackSelector = NSSelectorFromString(@"_executeBlockAfterLaunchCompletes:");
     if (![process respondsToSelector:callbackSelector])
@@ -652,7 +701,11 @@ static BOOL CRRunningBoardProfileReady(void)
         if (applied) return YES;
         NSString *path = CRJailbreakRootPath(CR_LIB_SANDY);
         void *handle = path ? dlopen(path.fileSystemRepresentation, RTLD_NOW) : NULL;
-        if (!handle) return NO;
+        if (!handle) {
+            NSLog(@"CraneSB: runningboardd CraneRB profile cannot load libSandy path=%@ error=%s",
+                  path, dlerror() ?: "unknown");
+            return NO;
+        }
         int (*applyProfile)(const char *) = (int (*)(const char *))
             dlsym(handle, "libSandy_applyProfile");
         int result = applyProfile ? applyProfile("CraneRB") : -1;
@@ -670,20 +723,36 @@ static void CRModifyRunningBoardLaunchRequest(id request)
     if (!CRRunningBoardProfileReady()) return;
     id context = [request respondsToSelector:@selector(context)]
         ? ((id (*)(id, SEL))objc_msgSend)(request, @selector(context)) : nil;
-    if (!context) return;
+    if (!context) {
+        NSLog(@"CraneSB: runningboardd launch request has no context");
+        return;
+    }
     NSString *appID = nil;
     if ([context respondsToSelector:@selector(bundleIdentifier)])
         appID = ((id (*)(id, SEL))objc_msgSend)(context, @selector(bundleIdentifier));
     else
         appID = CRLaunchApplicationIdentifier(context);
-    if (!appID.length || ![context respondsToSelector:NSSelectorFromString(@"_additionalEnvironment")] ||
-        ![context respondsToSelector:NSSelectorFromString(@"_setAdditionalEnvironment:")]) return;
+    if (!appID.length) {
+        NSLog(@"CraneSB: runningboardd launch context has no application ID");
+        return;
+    }
+    if (![context respondsToSelector:NSSelectorFromString(@"_additionalEnvironment")] ||
+        ![context respondsToSelector:NSSelectorFromString(@"_setAdditionalEnvironment:")]) {
+        if (CRContainerToRedirectTo(appID).length)
+            NSLog(@"CraneSB: runningboardd missing additionalEnvironment selector app=%@", appID);
+        return;
+    }
     SEL readEnvironment = NSSelectorFromString(@"_additionalEnvironment");
     NSDictionary *original = ((id (*)(id, SEL))objc_msgSend)(context, readEnvironment);
     NSMutableDictionary *updated = CRApplyEnvironmentChanges((NSMutableDictionary *)original, appID);
-    if (updated != original)
+    if (updated != original) {
+        NSLog(@"CraneSB: runningboardd launch environment app=%@ containerIDSet=%d",
+              appID, [updated[CR_ENV_CONTAINER_IDENTIFIER] isKindOfClass:NSString.class]);
         ((void (*)(id, SEL, id))objc_msgSend)(context,
             NSSelectorFromString(@"_setAdditionalEnvironment:"), updated);
+    } else if (CRContainerToRedirectTo(appID).length) {
+        NSLog(@"CraneSB: runningboardd launch unchanged app=%@ (insurance/profile check)", appID);
+    }
 }
 
 static id (*gOriginalRBExecuteLaunchRequest)(id, SEL, id, id);
@@ -711,6 +780,9 @@ static void CRInitRunningBoardd(void)
     if (processManager) {
         SEL execute = NSSelectorFromString(@"executeLaunchRequest:withError:");
         SEL privateExecute = NSSelectorFromString(@"_executeLaunchRequest:withError:");
+        NSLog(@"CraneSB: runningboardd hook selectors execute=%d private=%d",
+              [processManager instancesRespondToSelector:execute],
+              [processManager instancesRespondToSelector:privateExecute]);
         if ([processManager instancesRespondToSelector:execute])
             MSHookMessageEx(processManager, execute, (IMP)CRRBExecuteLaunchRequest,
                             (IMP *)&gOriginalRBExecuteLaunchRequest);

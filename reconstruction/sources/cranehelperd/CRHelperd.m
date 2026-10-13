@@ -624,8 +624,13 @@ static NSString *CRHandleHealthRequest(xpc_connection_t peer,
             CRRuntimeComponentAllowed(component, peerProcess, peerSigningID)) {
             CRRegisterRuntime(peerPid, peerProcess, component, containerID,
                               peerToken);
+            NSLog(@"Crane helper: runtime_report accepted pid=%d process=%@ component=%@ containerProof=%d",
+                  peerPid, peerProcess, component,
+                  [component isEqualToString:@"Crane"] && containerID.length > 0);
             return component;
         }
+        NSLog(@"Crane helper: runtime_report rejected pid=%d process=%@ component=%@ compatible=%d signingID=%@",
+              peerPid, peerProcess, component, compatible, peerSigningID);
         return nil;
     }
 
@@ -686,6 +691,9 @@ static NSString *CRHandleHealthRequest(xpc_connection_t peer,
         NSString *targetProcess = authorized ? CRProcessNameForPid(targetPid) : nil;
         NSString *containerID = targetProcess
             ? CRRuntimeContainerForPid(targetPid, targetProcess) : nil;
+        NSLog(@"Crane helper: lookup_pid caller=%@ target=%d targetProcess=%@ authorized=%d hasProof=%d",
+              peerProcess, targetPid, targetProcess, authorized,
+              containerID.length > 0);
         xpc_dictionary_set_bool(reply, "authorized", authorized);
         xpc_dictionary_set_bool(reply, "injection_verified", containerID.length > 0);
         if (containerID.length)

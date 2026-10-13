@@ -60,6 +60,9 @@ jobs:
       - name: Verify runningboardd launch hook ABI
         run: python3 reconstruction/tools/check_runningboard_contract.py
 
+      - name: Verify bounded post-launch injection proof and diagnostics
+        run: python3 reconstruction/tools/check_postlaunch_injection_contract.py
+
       - name: Verify APNs topic/hash isolation decoding
         run: python3 reconstruction/tools/check_apsd_topic_contract.py
 

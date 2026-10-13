@@ -30,6 +30,64 @@ passed only after observing it on-device. The wrong-protocol and delayed-reply
 cases require a controlled diagnostic client/peer; no such harness is currently
 included in the reconstruction.
 
+## Chrome launch reports default container (main dylib not confirmed)
+
+Device report (roothide iOS 15.8.8): Preferences showed the active Chrome
+container as `007FADC7-01AC-4740-AD98-0099E98A32FC`, and the Filza URL was
+successfully opened by LaunchServices. A later SpringBoard alert said Chrome
+started into `DEFAULT` because Crane's app dylib was not loaded. The Filza
+success only demonstrates access to a container directory; it does **not**
+prove that Chrome received the redirected launch environment or loaded Crane.
+The alert is emitted when helperd can reply to `lookup_pid` but has no active
+`Crane` runtime attestation for the launched PID. That can mean (1) the
+runningboardd hook/profile never supplied `CRANE_CONTAINER_IDENTIFIER`, (2)
+tweak injection was disabled or failed, or (3) the independent app-side
+runtime report was rejected/delayed. Do not treat the alert as proof of the
+precise cause without runtime logs.
+
+The reconstructed CraneSB 0x194EC/0x19608 path now retries *only* the
+reachable-helper/no-proof branch two times, 750 ms apart. The old PID must
+still be alive and unchanged before each result is accepted; a transport error
+never masquerades as proof. Helper and runningboardd log missing/accepted
+attestations and launch-environment decisions. This is a bounded reliability
+adaptation, not an implementation of the original app-side injection transport
+and not a reason to disable the missing-dylib alert.
+
+Collect a **new** mobile-accessible log beginning before the next Chrome
+launch (filter for all of the following; availability varies by logging tool):
+
+```sh
+oslog | grep -E 'CraneSB: runningboardd|CraneSB: post-launch|Crane: app init|Crane: app environment ready|Crane helper: (runtime_report|lookup_pid)|CraneManager: helper lookup_pid|Crane Error'
+```
+
+Interpret in order:
+
+- `runningboardd hook selectors execute=0 private=0`: no supported selector
+  hooked; a new iOS-specific selector must be established from device
+  evidence before modifying launch arguments.
+- `CraneRB profile cannot load` or `sandbox profile unavailable`: the
+  runningboardd launch gate is blocked, independently of the Filza success.
+- `runningboardd launch environment ... containerIDSet=1`: Crane attempted to
+  insert the container ID into the process launch request, but this alone
+  does not prove the tweak injector loaded ` Crane.dylib`.
+- `Crane: app init bundle=com.google.chrome.ios` and `app environment ready`:
+  app-side constructor consumed a non-default ID. If absent, check the
+  installed ` Crane.dylib` (leading space), its recovered Foundation bundle
+  filter and injection controls such as Choicy/TweakRestrict on this app.
+- `Crane helper: runtime_report accepted ... component=Crane ... containerProof=1`:
+  helper registered the app-side proof for that kernel PID. `rejected` or a
+  missing report requires examining sandbox/Mach-service access and peer logs.
+- `Crane helper: lookup_pid ... hasProof=0` followed by
+  `CraneSB: post-launch proof missing ... attempt=3`: all bounded checks
+  failed; the original alert still appears. A proof on attempt 2/3 indicates
+  an XPC report race rather than a persistent injection failure.
+
+No application data should be deleted or moved during this investigation.
+Avoid guessing that the helper XPC fix automatically repairs the separate
+app-side injection path. The CI source-contract test is
+`check_postlaunch_injection_contract.py`; actual iOS/roothide launch and helper
+logs are required.
+
 ## Communication alert diagnostics
 
 An empty suffix after COMMUNICATION_ERROR_MESSAGE was possible because the
