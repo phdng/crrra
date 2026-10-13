@@ -122,6 +122,8 @@ for needle in (
 ):
     assert needle in unsandbox, needle
 constructor_support = support[support.index("static void CRInitFunc(void)"):]
+assert 'CraneSupport: constructor process=%@ platform=%@' in constructor_support
+assert constructor_support.index('CraneSupport: constructor process=%@ platform=%@') < constructor_support.index('[manager _setXPCUnsandboxHandler:^BOOL{')
 assert '[manager _setXPCUnsandboxHandler:^BOOL{' in constructor_support
 assert 'BOOL unsandboxed = CRPrepareSupportXPCUnsandbox();' in constructor_support
 assert constructor_support.index('BOOL unsandboxed = CRPrepareSupportXPCUnsandbox();') < constructor_support.index('CRReportRuntimeInjection(@"CraneSupport", nil);')

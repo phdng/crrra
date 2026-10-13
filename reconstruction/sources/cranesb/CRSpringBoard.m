@@ -309,20 +309,26 @@ static void CRVerifyProcessInjectionAfterLaunch(id process, pid_t pid,
                     NSLog(@"CraneSB: post-launch proof pid=%d expected=%@ actual=%@",
                           pid, expectedContainer, actualContainer);
 
-                    /* Reconstruction-only observability for F-07. CraneSupport
-                     * reports its live daemon process to helperd from its
-                     * constructor, so this check distinguishes a missing
-                     * securityd injection from a merely missed startup log. */
+                    /* Reconstruction-only observability for F-07 and daemon
+                     * injection. CraneSupport's recovered filter targets exactly
+                     * these seven executables. Query all of them so a
+                     * securityd-only failure is distinguishable from a global
+                     * CraneSupport injection/report failure. */
                     if ([proxy respondsToSelector:
                             @selector(verifySupportLoadedIntoProcessNamed:reply:)]) {
-                        [proxy verifySupportLoadedIntoProcessNamed:@"securityd"
-                            reply:^(BOOL loaded) {
-                                NSLog(@"CraneSB: support health process=securityd loaded=%d appPid=%d",
-                                      loaded, pid);
-                            }];
+                        NSArray<NSString *> *supportProcesses = @[
+                            @"cfprefsd", @"containermanagerd", @"securityd",
+                            @"pkd", @"lsd", @"accountsd", @"apsd"
+                        ];
+                        for (NSString *supportProcess in supportProcesses) {
+                            [proxy verifySupportLoadedIntoProcessNamed:supportProcess
+                                reply:^(BOOL loaded) {
+                                    NSLog(@"CraneSB: support health process=%@ loaded=%d appPid=%d",
+                                          supportProcess, loaded, pid);
+                                }];
+                        }
                     } else {
-                        NSLog(@"CraneSB: support health process=securityd unavailable appPid=%d",
-                              pid);
+                        NSLog(@"CraneSB: support health unavailable appPid=%d", pid);
                     }
                     return;
                 }

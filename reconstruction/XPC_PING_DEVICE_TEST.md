@@ -248,22 +248,55 @@ For F-07, device evidence on 2026-10-13 first showed `CraneSB: support health
 process=securityd loaded=0` while the app PID/container proof was healthy. The
 recovered CraneSupport constructor 0x6C5C installs `_setXPCUnsandboxHandler:`;
 its block target 0x6E44 applies `libSandy_applyProfile("CraneSupport")` and caches
-only success. The reconstruction had preserved the setter but never invoked the
-handler, while its new runtime-report transport bypassed the original libcrane
-XPC machinery entirely. The reconstruction now applies the exact named profile
-before its support runtime report and makes later libcrane raw-XPC connections
-honor the same handler for retry semantics.
+only success. The reconstruction now applies that exact named profile before
+its support runtime report and makes later libcrane raw-XPC connections honor
+the same retryable handler.
 
-On the rebuilt package, `CraneSupport: init process=securityd xpcUnsandbox=1`
-and `CraneSupport: XPC unsandbox profile process=securityd status=0` establish
-that the dylib loaded and the recovered profile gate succeeded. The post-launch
-diagnostic then asks the authenticated helper registry directly and should emit
-`CraneSB: support health process=securityd loaded=1 appPid=<pid>`. When a real SecItem operation for the app reaches the installed
-hooks, securityd emits a transition-only line `CraneSupport: securityd client
-pid=<pid> signingID=<id> container=<container>`. For a non-default Chrome
-container, this line should eventually carry the same container ID as the app
-proof. `container=<none>` means the hook ran but a non-default PID proof was not
-available at that moment; it is deliberately not labeled DEFAULT.
+A later rebuilt package (Chrome PID 8799) proves the application side is now
+healthy end-to-end: Chrome reports container
+`28009C2B-3A8C-4807-BFC6-219EAA490DFB`, SpringBoard's helper lookup returns
+`authorized=1 injected=1` with the same ID, and post-launch expected==actual.
+The direct-icon Always Ask Before Launch path is also device-confirmed working.
+However the same run still reports `CraneSB: support health process=securityd
+loaded=0`.
+
+The Substrate filter is not the discrepancy: decoded reconstruction and
+original `CraneSupport.plist` both have `Flags=1` and the same executable set,
+including `securityd`. The package configure hook currently restarts only
+`com.opa334.cranehelperd`; it does not reload securityd. Therefore an upgrade
+can leave an already-running securityd on the previous injected image (or with
+no CraneSupport image) even though SpringBoard/helper were replaced. Do **not**
+port `patchfindSecurityd` based on `loaded=0`: that status occurs before the
+five private-symbol lookup path can be evaluated.
+
+After a userspace/securityd reload, start logging before the first Chrome launch
+and require these stages in order:
+
+```sh
+oslog | grep -E 'CraneSupport: (constructor process=|init process=|XPC unsandbox profile.*process=|securityd (keychain isolation|client))|CraneSB: support health process=|Crane helper: component_loaded|CraneManager: helper lookup_pid|Crane: app (init|environment ready)'
+```
+
+The next diagnostic build emits `CraneSupport: constructor process=<daemon>
+platform=<...>` before any libSandy/profile/XPC work, then asks helperd for
+CraneSupport health across the exact seven executables in the recovered filter:
+`cfprefsd`, `containermanagerd`, `securityd`, `pkd`, `lsd`, `accountsd`, and
+`apsd`. If all seven health rows are `loaded=0`, investigate global CraneSupport
+daemon injection or report transport. If other daemons are `loaded=1` while
+securityd alone is `0`, investigate securityd-specific injection/loadability.
+If `constructor process=securityd` appears but health remains `0`, the dylib did
+load and the fault is narrowed to its libSandy/report path.
+
+`CraneSupport: init process=securityd xpcUnsandbox=1` plus `XPC unsandbox
+profile process=securityd status=0` proves the recovered profile gate succeeded.
+Then `support health process=securityd loaded=1` proves its runtime report reached
+the authenticated helper registry. Only after those facts should `securityd
+keychain isolation hooks=5 status=0` (or a `missing_private_symbols` line)
+decide whether the normal symbol path works or the original 0x11C08 patchfinder
+is actually required. A real SecItem request
+then emits the transition-only `securityd client pid=<pid> signingID=<id>
+container=<container>` line; for non-default Chrome its container should match
+the app proof. `container=<none>` means the hook ran but no non-default proof
+was available at that moment and is deliberately not labeled DEFAULT.
 
 Do not use or reset the user's existing Chrome containers merely to generate
 this test; use a throwaway account or non-destructive state difference when

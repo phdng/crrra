@@ -197,6 +197,7 @@ assert '[self _setActiveContainer:normalized toCacheForPid:pid];' not in active_
 # Read-only component health checks are caller-authenticated and power the
 # recovered CraneSupport 0x9B68 verifyCraneSBLoadedAndReply: path.
 assert 'CRRuntimeHasComponentInProcess(component, process)' in peer_code
+assert 'Crane helper: component_loaded caller=%@ process=%@ component=%@ authorized=%d loaded=%d' in peer_code
 assert 'xpc_dictionary_set_bool(reply, "loaded", loaded)' in peer_code
 assert 'CRManagerVerifyRuntimeComponent(@"CraneSB", @"SpringBoard", reply)' in manager
 assert 'CRManagerVerifyRuntimeComponent(@"CraneSupport", name, reply)' in manager

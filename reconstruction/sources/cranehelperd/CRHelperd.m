@@ -700,6 +700,8 @@ static NSString *CRHandleHealthRequest(xpc_connection_t peer,
             [component isEqualToString:@"CraneSupport"];
         BOOL loaded = authorized && queryAllowed &&
             CRRuntimeHasComponentInProcess(component, process);
+        NSLog(@"Crane helper: component_loaded caller=%@ process=%@ component=%@ authorized=%d loaded=%d",
+              peerProcess, process, component, authorized, loaded);
         xpc_dictionary_set_bool(reply, "authorized", authorized);
         xpc_dictionary_set_bool(reply, "loaded", loaded);
     } else if (strcmp(operation, "lookup_pid") == 0) {
