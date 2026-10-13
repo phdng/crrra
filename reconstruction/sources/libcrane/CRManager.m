@@ -137,6 +137,8 @@ static void CRManagerLookupActiveContainerForPid(pid_t pid,
                 ? xpc_dictionary_get_string(response, "container_id") : NULL;
             NSString *containerID = container
                 ? [NSString stringWithUTF8String:container] : nil;
+            NSLog(@"CraneManager: helper lookup_pid target=%d authorized=%d injected=%d container=%@",
+                  pid, authorized, injected, containerID);
 
             /* CraneSB 0x19608: second reply argument is 1 when helperd
              * answered but the app dylib/container proof is missing; 0 means

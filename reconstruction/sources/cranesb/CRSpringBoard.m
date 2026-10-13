@@ -299,6 +299,22 @@ static void CRVerifyProcessInjectionAfterLaunch(id process, pid_t pid,
                      * based on an unverified inferred expectation. */
                     NSLog(@"CraneSB: post-launch proof pid=%d expected=%@ actual=%@",
                           pid, expectedContainer, actualContainer);
+
+                    /* Reconstruction-only observability for F-07. CraneSupport
+                     * reports its live daemon process to helperd from its
+                     * constructor, so this check distinguishes a missing
+                     * securityd injection from a merely missed startup log. */
+                    if ([proxy respondsToSelector:
+                            @selector(verifySupportLoadedIntoProcessNamed:reply:)]) {
+                        [proxy verifySupportLoadedIntoProcessNamed:@"securityd"
+                            reply:^(BOOL loaded) {
+                                NSLog(@"CraneSB: support health process=securityd loaded=%d appPid=%d",
+                                      loaded, pid);
+                            }];
+                    } else {
+                        NSLog(@"CraneSB: support health process=securityd unavailable appPid=%d",
+                              pid);
+                    }
                     return;
                 }
                 NSLog(@"CraneSB: post-launch proof missing pid=%d attempt=%lu helper=%d error=%@",

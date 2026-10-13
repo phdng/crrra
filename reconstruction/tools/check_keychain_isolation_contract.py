@@ -66,6 +66,14 @@ assert host_pid_key == "hostPid"
 assert f'CRSecurityHostPidKey = @"{host_pid_key}"' in source
 assert 'dlsym(RTLD_DEFAULT, "xpc_connection_get_pid")' in source
 assert "activeContainerIdentifierForPid:pid" in source
+# Device diagnostics are transition-only and must observe the resolved state
+# after ClientContainerCache lookup, never alter query/access-group behavior.
+assert "static void CRSecurityLogClientResolution" in source
+assert 'lastStateByPid[@(pid)] = state;' in source
+assert 'CraneSupport: securityd client pid=%d signingID=%@ container=%@' in source
+fetch = source[source.index("static void CRSecurityFetchClientInfo"):
+               source.index("/* CraneSupport 0x10D90")]
+assert fetch.index("activeContainerIdentifierForPid:pid") < fetch.index("CRSecurityLogClientResolution(pid, signingID, *containerOut);")
 handler = source[source.index("static void CRSecurityDXPCHandlerHook"):
                  source.index("void CRInstallSecuritydHooks")]
 assert "threadDictionary[CRSecurityHostPidKey] = @(pid);" in handler

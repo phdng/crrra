@@ -100,6 +100,11 @@ assert '"operation", "lookup_pid"' in lookup_body
 assert 'xpc_dictionary_set_int64(request, "pid", pid)' in lookup_body
 assert 'xpc_dictionary_get_bool(response, "authorized")' in lookup_body
 assert 'xpc_dictionary_get_bool(response, "injection_verified")' in lookup_body
+assert 'CraneManager: helper lookup_pid target=%d authorized=%d injected=%d container=%@' in lookup_body
+container_pos = lookup_body.index('NSString *containerID = container')
+lookup_log_pos = lookup_body.index('CraneManager: helper lookup_pid target=%d', container_pos)
+lookup_finish_pos = lookup_body.index('finish(containerID, authorized, error)', lookup_log_pos)
+assert container_pos < lookup_log_pos < lookup_finish_pos
 assert 'finish(containerID, authorized, error)' in lookup_body
 assert 'CRHelperValidateHealthReply(response, @"lookup_pid", &error)' in lookup_body
 assert 'CRHelperReplyTimedOut' in lookup_body

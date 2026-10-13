@@ -207,6 +207,35 @@ static CRSecurityXPCConnectionGetPidFn CRSecurityXPCGetPidFunction(void)
     return function;
 }
 
+/* Reconstruction-only device diagnostic. Log only when a live client's
+ * PID/signing/container resolution changes, so normal SecItem traffic does not
+ * flood the log. `container=<none>` means the hook ran but no non-default
+ * container proof was available at that moment; it is not labeled DEFAULT. */
+static void CRSecurityLogClientResolution(pid_t pid,
+                                          NSString *signingID,
+                                          NSString *containerID)
+{
+    if (pid <= 0)
+        return;
+
+    static NSMutableDictionary<NSNumber *, NSString *> *lastStateByPid;
+    static dispatch_once_t once;
+    dispatch_once(&once, ^{
+        lastStateByPid = [NSMutableDictionary new];
+    });
+
+    NSString *state = [NSString stringWithFormat:@"%@|%@",
+        signingID ?: @"<unknown>", containerID ?: @"<none>"];
+    @synchronized(lastStateByPid) {
+        if ([lastStateByPid[@(pid)] isEqualToString:state])
+            return;
+        lastStateByPid[@(pid)] = state;
+    }
+
+    NSLog(@"CraneSupport: securityd client pid=%d signingID=%@ container=%@",
+          pid, signingID ?: @"<unknown>", containerID ?: @"<none>");
+}
+
 /* CraneSupport 0x10C1C. */
 static void CRSecurityFetchClientInfo(CRSecurityClientInfo *clientInfo,
                                       NSString **signingIdentifierOut,
@@ -242,6 +271,7 @@ static void CRSecurityFetchClientInfo(CRSecurityClientInfo *clientInfo,
         (!signingID || ![ignoredSigningIDs containsObject:signingID])) {
         *containerOut = [[ClientContainerCache sharedInstance]
             activeContainerIdentifierForPid:pid];
+        CRSecurityLogClientResolution(pid, signingID, *containerOut);
     }
 }
 

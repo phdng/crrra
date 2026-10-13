@@ -46,6 +46,13 @@ for piece in (
     assert piece in verification, piece
 
 assert verification.index('if (actualContainer.length)') < verification.index('if (connectionWorks == YES && attempt < 2)')
+# After a real app proof, query the already-existing authenticated component
+# registry for securityd CraneSupport. This is diagnostic only and must stay on
+# the success path; it never substitutes for the app proof itself.
+assert '@selector(verifySupportLoadedIntoProcessNamed:reply:)' in verification
+assert '[proxy verifySupportLoadedIntoProcessNamed:@"securityd"' in verification
+assert 'CraneSB: support health process=securityd loaded=%d appPid=%d' in verification
+assert verification.index('if (actualContainer.length)') < verification.index('[proxy verifySupportLoadedIntoProcessNamed:@"securityd"') < verification.index('if (connectionWorks == YES && attempt < 2)')
 assert verification.index('(pid_t)((int (*)(id, SEL))objc_msgSend)(launched, @selector(pid)) != pid') < verification.index('if (actualContainer.length)')
 assert verification.index('if (connectionWorks == YES && attempt < 2)') < verification.index('CRPresentMainDylibNotLoadedError(processName);')
 assert verification.index('NSError *lookupError = [CraneManager.sharedManager getLastError];') < verification.index('dispatch_async(dispatch_get_main_queue(), ^{')

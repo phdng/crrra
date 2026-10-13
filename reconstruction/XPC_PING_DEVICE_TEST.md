@@ -230,17 +230,31 @@ For the next package, start the log before launching Chrome and look for the
 same PID in this order:
 
 ```sh
-oslog | grep -E 'Crane: app (init|environment ready|runtime_report)|Crane helper: (runtime_report accepted|PID proof missing|lookup_pid|runtime peer disconnected)|CraneSupport: securityd keychain isolation|CraneSB: post-launch'
+oslog | grep -E 'Crane: app (init|environment ready|runtime_report)|CraneManager: helper lookup_pid|Crane helper: (runtime_report accepted|PID proof missing|lookup_pid|runtime peer disconnected)|CraneSupport: securityd (keychain isolation|client)|CraneSB: (post-launch|support health)'
 ```
 
 For a non-default container, a transient early `lookup_pid ... hasProof=0` is
 acceptable only if `runtime_report accepted ... component=Crane
 containerProof=1` follows and later lookups for that live PID report
-`hasProof=1`. If lookups remain `hasProof=0` after the accepted report, the
-cache-coherence adapter is not working. For F-07 also require
-`CraneSupport: securityd keychain isolation hooks=5 status=0`. Do not use or
-reset the user's existing Chrome containers merely to generate this test; use a
-throwaway account or non-destructive state difference when checking isolation.
+`hasProof=1`. `CraneManager: helper lookup_pid ... injected=1 container=<id>` is
+the caller-side equivalent and remains visible even when helperd's own NSLog is
+not surfaced by the device log tool. If lookups remain unproven after the app
+proof, the cache-coherence adapter is not working.
+
+For F-07, the startup line `CraneSupport: securityd keychain isolation hooks=5
+status=0` may have occurred before live log capture. The post-launch diagnostic
+now asks the authenticated helper registry directly and emits `CraneSB: support
+health process=securityd loaded=1 appPid=<pid>` when CraneSupport is live in
+securityd. When a real SecItem operation for the app reaches the installed
+hooks, securityd emits a transition-only line `CraneSupport: securityd client
+pid=<pid> signingID=<id> container=<container>`. For a non-default Chrome
+container, this line should eventually carry the same container ID as the app
+proof. `container=<none>` means the hook ran but a non-default PID proof was not
+available at that moment; it is deliberately not labeled DEFAULT.
+
+Do not use or reset the user's existing Chrome containers merely to generate
+this test; use a throwaway account or non-destructive state difference when
+checking isolation.
 
 ## Chrome launch reports default container (main dylib not confirmed)
 
