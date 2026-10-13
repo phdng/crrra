@@ -38,6 +38,7 @@
 #import "CRXPCDiagnostics.h"
 
 #include <notify.h>
+#include <stdlib.h>
 #include <xpc/xpc.h>
 
 /* Modern iOS SDKs declare xpc_connection_create_mach_service() as unavailable
@@ -137,7 +138,7 @@ extern pid_t CRXPCConnectionGetPid(xpc_connection_t connection)
 #pragma mark - Global service
 
 @protocol CRHGlobalServiceProtocol <NSObject>
-- (void)verifyCraneInsuranceAndReply:(void (^)(BOOL works, NSString *brokenDaemons, NSError *error, BOOL connectionWorks))reply;
+- (void)verifyCraneInsuranceAndReply:(void (^)(BOOL works, NSArray<NSString *> *brokenDaemons, NSError *error))reply;
 - (void)verifySupportLoadedIntoProcessNamed:(NSString *)name reply:(void (^)(BOOL loaded))reply;
 - (void)fetchActiveContainerIDForProcessWithPid:(pid_t)pid
                                            reply:(void (^)(NSString *containerID, BOOL connectionWorks))reply;
@@ -164,7 +165,7 @@ extern pid_t CRXPCConnectionGetPid(xpc_connection_t connection)
 
 @implementation CRHGlobalServiceDelegate
 
-- (void)verifyCraneInsuranceAndReply:(void (^)(BOOL, NSString *, NSError *, BOOL))reply
+- (void)verifyCraneInsuranceAndReply:(void (^)(BOOL, NSArray<NSString *> *, NSError *))reply
 {
     /* This Objective-C delegate has no peer credential context. Never let a
      * future NSXPC wiring accidentally turn static installation checks into an
@@ -183,7 +184,7 @@ extern pid_t CRXPCConnectionGetPid(xpc_connection_t connection)
     NSError *error = [NSError errorWithDomain:@"com.opa334.crane" code:2 userInfo:
         @{NSLocalizedDescriptionKey: description}];
     if (reply)
-        reply(NO, description, error, NO);
+        reply(NO, [broken copy], error);
 }
 
 - (void)verifySupportLoadedIntoProcessNamed:(NSString *)name reply:(void (^)(BOOL))reply
@@ -282,7 +283,7 @@ extern pid_t CRXPCConnectionGetPid(xpc_connection_t connection)
     return [NSXPCInterface interfaceWithProtocol:protocol];
 }
 
-- (void)verifyCraneInsuranceAndReply:(void (^)(BOOL, NSString *, NSError *, BOOL))reply
+- (void)verifyCraneInsuranceAndReply:(void (^)(BOOL, NSArray<NSString *> *, NSError *))reply
 {
     [self.delegate verifyCraneInsuranceAndReply:reply];
 }
@@ -392,21 +393,88 @@ static NSMutableDictionary<NSNumber *, NSMutableDictionary *> *CRRuntimeRegistry
     return registry;
 }
 
-static NSString *CRProcessNameForPid(pid_t pid)
+typedef int (*CRProcNameFn)(int, void *, uint32_t);
+typedef int (*CRProcListPidsFn)(uint32_t, uint32_t, void *, int);
+
+static CRProcNameFn CRHelperProcNameFunction(void)
 {
-    typedef int (*CRProcNameFn)(int, void *, uint32_t);
     static CRProcNameFn procName;
     static dispatch_once_t once;
     dispatch_once(&once, ^{
         void *handle = dlopen("/usr/lib/libproc.dylib", RTLD_LAZY);
         procName = (CRProcNameFn)dlsym(handle ?: RTLD_DEFAULT, "proc_name");
     });
+    return procName;
+}
+
+static NSString *CRProcessNameForPid(pid_t pid)
+{
+    CRProcNameFn procName = CRHelperProcNameFunction();
     if (pid <= 0 || !procName)
         return nil;
     char buffer[1024] = {0};
     if (procName(pid, buffer, sizeof(buffer)) <= 0)
         return nil;
     return [NSString stringWithUTF8String:buffer];
+}
+
+static NSArray<NSString *> *CRCraneSupportProcessNames(void)
+{
+    static NSArray<NSString *> *processes;
+    static dispatch_once_t once;
+    dispatch_once(&once, ^{
+        processes = @[@"cfprefsd", @"containermanagerd", @"securityd",
+                      @"pkd", @"lsd", @"accountsd", @"apsd"];
+    });
+    return processes;
+}
+
+static NSArray<NSString *> *CRRunningCraneSupportProcesses(void)
+{
+    /* Original 0x1B45C receives broken daemons from cranehelperd, while the
+     * helper implementation itself is U-01. For reconstruction insurance,
+     * inspect only currently-running filter targets so an absent on-demand
+     * daemon does not become a false injection failure. This is read-only. */
+    static CRProcListPidsFn procListPids;
+    static dispatch_once_t once;
+    dispatch_once(&once, ^{
+        void *handle = dlopen("/usr/lib/libproc.dylib", RTLD_LAZY);
+        procListPids = (CRProcListPidsFn)dlsym(
+            handle ?: RTLD_DEFAULT, "proc_listpids");
+    });
+    if (!procListPids || !CRHelperProcNameFunction())
+        return nil;
+
+    /* PROC_ALL_PIDS == 1. Leave spare capacity for processes created between
+     * the sizing and fill calls. */
+    int required = procListPids(1, 0, NULL, 0);
+    if (required <= 0)
+        return nil;
+    int capacity = required + (int)(256 * sizeof(pid_t));
+    pid_t *pids = calloc(1, (size_t)capacity);
+    if (!pids)
+        return nil;
+    int bytes = procListPids(1, 0, pids, capacity);
+    if (bytes <= 0) {
+        free(pids);
+        return nil;
+    }
+
+    NSMutableSet<NSString *> *running = [NSMutableSet new];
+    NSUInteger count = (NSUInteger)bytes / sizeof(pid_t);
+    for (NSUInteger i = 0; i < count; ++i) {
+        NSString *name = CRProcessNameForPid(pids[i]);
+        if (name.length && [CRCraneSupportProcessNames() containsObject:name])
+            [running addObject:name];
+    }
+    free(pids);
+
+    NSMutableArray<NSString *> *ordered = [NSMutableArray new];
+    for (NSString *name in CRCraneSupportProcessNames()) {
+        if ([running containsObject:name])
+            [ordered addObject:name];
+    }
+    return ordered;
 }
 
 typedef struct {
@@ -473,13 +541,7 @@ static BOOL CRIsAuthenticatedCraneSBPeer(NSString *process, NSString *signingID)
 
 static BOOL CRIsCraneSupportProcess(NSString *process)
 {
-    static NSSet<NSString *> *processes;
-    static dispatch_once_t once;
-    dispatch_once(&once, ^{
-        processes = [NSSet setWithObjects:@"cfprefsd", @"containermanagerd",
-            @"securityd", @"pkd", @"lsd", @"accountsd", @"apsd", nil];
-    });
-    return [processes containsObject:process];
+    return [CRCraneSupportProcessNames() containsObject:process];
 }
 
 static BOOL CRIsAuthenticatedCraneSupportPeer(NSString *process, NSString *signingID)
@@ -677,9 +739,39 @@ static NSString *CRHandleHealthRequest(xpc_connection_t peer,
         BOOL injectionVerified = compatible &&
             CRIsAuthenticatedCraneSBPeer(peerProcess, peerSigningID);
         BOOL preflight = compatible && installed && sandy;
+
+        NSArray<NSString *> *runningSupport =
+            CRRunningCraneSupportProcesses();
+        BOOL supportInspectionAvailable = runningSupport != nil;
+        NSMutableArray<NSString *> *brokenSupport = [NSMutableArray new];
+        for (NSString *process in runningSupport ?: @[]) {
+            if (!CRRuntimeHasComponentInProcess(@"CraneSupport", process))
+                [brokenSupport addObject:process];
+        }
+        /* An empty running-target set is not accepted as proof. At least one
+         * recovered CraneSupport target is expected on a live iOS system. */
+        BOOL supportComplete = supportInspectionAvailable &&
+            runningSupport.count > 0 && brokenSupport.count == 0;
+        NSString *brokenSupportString =
+            [brokenSupport componentsJoinedByString:@", "];
+
+        NSLog(@"Crane helper: insurance caller=%@ authorized=%d preflight=%d supportInspect=%d running=%lu supportComplete=%d broken=%@",
+              peerProcess, injectionVerified, preflight,
+              supportInspectionAvailable, (unsigned long)runningSupport.count,
+              supportComplete, brokenSupportString);
+
         xpc_dictionary_set_bool(reply, "preflight_ok", preflight);
         xpc_dictionary_set_bool(reply, "injection_verified", injectionVerified);
-        xpc_dictionary_set_bool(reply, "works", preflight && injectionVerified);
+        xpc_dictionary_set_bool(reply, "support_inspection_available",
+                                supportInspectionAvailable);
+        xpc_dictionary_set_bool(reply, "support_complete", supportComplete);
+        xpc_dictionary_set_int64(reply, "support_running_count",
+                                 (int64_t)runningSupport.count);
+        if (brokenSupportString.length)
+            xpc_dictionary_set_string(reply, "broken_daemons",
+                                      brokenSupportString.UTF8String);
+        xpc_dictionary_set_bool(reply, "works",
+            preflight && injectionVerified && supportComplete);
         xpc_dictionary_set_bool(reply, "main_dylib_installed", installed);
         xpc_dictionary_set_bool(reply, "libsandy_loaded", sandy);
         if (peerProcess.length)

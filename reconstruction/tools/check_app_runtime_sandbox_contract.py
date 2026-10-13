@@ -159,6 +159,8 @@ assert '"mach_name": "com.opa334.cranehelperd.xpc",' in verifier
 assert '"FAIL app runtime sandbox: invalid or overbroad permissions"' in verifier
 assert 'include $(THEOS_MAKE_PATH)/aggregate.mk' in master
 assert 'check_app_runtime_sandbox_contract.py' in workflow
+assert "'pkg/Library/MobileSubstrate/DynamicLibraries/CraneSupport.dylib'" in workflow
+assert 'otool -L "$binary" | tee -a linkage.txt' in workflow
 assert 'sh -n reconstruction/tools/diagnose_crane_app_mach.sh' in workflow
 shell = (root / 'tools/diagnose_crane_app_mach.sh').read_text(encoding='utf-8')
 assert shell.startswith('#!/bin/sh')

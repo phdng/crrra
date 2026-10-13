@@ -25,7 +25,10 @@ assert 'if (updated == original)' in source
 assert 'if (insuranceOK)' in source
 assert 'if (insuranceOK && !lastError)' not in source
 # 0x1B45C derives the daemon alert's connection flag from getLastError,
-# while the original 0x1BAA4 callback has just three parameters.
+# while the original 0x1BAA4 callback has exactly three parameters.
+assert '^(BOOL works, NSArray<NSString *> *daemons,' in source
+assert 'NSError *error) {' in source
+assert 'BOOL connWorks' not in source
 assert 'Crane helper XPC insurance service is unavailable' in source
 assert 'if (!proxy || ![proxy respondsToSelector:@selector(verifyCraneInsuranceAndReply:)])' in source
 assert 'replyClosed = YES;' in source

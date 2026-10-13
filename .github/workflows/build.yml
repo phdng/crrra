@@ -278,6 +278,7 @@ jobs:
           for binary in \
             'pkg/Library/PreferenceBundles/CranePrefs.bundle/CranePrefs' \
             'pkg/Library/MobileSubstrate/DynamicLibraries/CraneSB.dylib' \
+            'pkg/Library/MobileSubstrate/DynamicLibraries/CraneSupport.dylib' \
             'pkg/usr/lib/libcrane.dylib'; do
             echo "--- $binary" | tee -a linkage.txt
             otool -L "$binary" | tee -a linkage.txt

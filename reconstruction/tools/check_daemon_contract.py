@@ -86,7 +86,7 @@ delegate_end = helper.index(
     '- (void)verifySupportLoadedIntoProcessNamed:', delegate_start
 )
 delegate_insurance = helper[delegate_start:delegate_end]
-assert 'reply(NO, description, error, NO)' in delegate_insurance
+assert 'reply(NO, [broken copy], error)' in delegate_insurance
 assert 'reply(works' not in delegate_insurance
 assert 'CraneSB runtime attestation' in delegate_insurance
 
@@ -131,15 +131,41 @@ assert 'dlsym(RTLD_DEFAULT, "SecTaskCopySigningIdentifier")' in helper
 for operation in ('"ping"', '"insurance"', '"runtime_report"', '"lookup_pid"', '"component_loaded"'):
     assert operation in peer_code, f"missing raw-XPC operation {operation}"
 
-# Insurance must require a live caller process and can only succeed when both
-# preflight and runtime identity checks pass.
+# Insurance must require a live caller plus CraneSupport proof for every
+# recovered target daemon that is actually running. This mirrors the recovered
+# 0x1B45C fail-open-on-insurance-failure behavior without inventing a requirement
+# that an on-demand daemon must exist. Process enumeration is read-only.
 assert 'CRIsAuthenticatedCraneSBPeer(peerProcess, peerSigningID)' in peer_code
-assert 'xpc_dictionary_set_bool(reply, "works", preflight && injectionVerified)' in peer_code
+assert 'CRRunningCraneSupportProcesses()' in peer_code
+assert 'proc_listpids' in helper
+assert 'CRCraneSupportProcessNames()' in helper
+for process in ('cfprefsd', 'containermanagerd', 'securityd', 'pkd', 'lsd', 'accountsd', 'apsd'):
+    assert f'@"{process}"' in helper, process
+assert 'CRRuntimeHasComponentInProcess(@"CraneSupport", process)' in peer_code
+assert 'BOOL supportComplete = supportInspectionAvailable &&' in peer_code
+assert 'runningSupport.count > 0 && brokenSupport.count == 0;' in peer_code
+assert 'xpc_dictionary_set_bool(reply, "support_inspection_available"' in peer_code
+assert 'xpc_dictionary_set_bool(reply, "support_complete", supportComplete)' in peer_code
+assert 'xpc_dictionary_set_string(reply, "broken_daemons"' in peer_code
+assert 'preflight && injectionVerified && supportComplete' in peer_code
+assert 'Crane helper: insurance caller=%@ authorized=%d preflight=%d supportInspect=%d running=%lu supportComplete=%d broken=%@' in peer_code
 assert 'xpc_dictionary_set_bool(reply, "injection_verified", injectionVerified)' in peer_code
 assert 'xpc_dictionary_set_bool(reply, "preflight_ok", preflight)' in peer_code
 assert 'xpc_dictionary_set_bool(reply, "main_dylib_installed", installed)' in peer_code
 assert 'xpc_dictionary_set_bool(reply, "libsandy_loaded", sandy)' in peer_code
 assert 'xpc_dictionary_get_bool(response, "injection_verified")' in manager
+# Original CraneSB 0x1BAA4 callback takes exactly success, brokenDaemons,
+# error. Connection state is derived separately from getLastError.
+assert 'verifyCraneInsuranceAndReply:(void (^)(BOOL works, NSArray<NSString *> *brokenDaemons, NSError *error))reply;' in manager_header
+assert 'verifyCraneInsuranceAndReply:(void (^)(BOOL, NSArray<NSString *> *, NSError *))reply' in manager
+assert 'reply(works, brokenDaemons, error);' in manager
+assert 'reply(works, brokenDaemons, error, connectionWorks)' not in manager
+assert 'NSArray<NSString *> *brokenDaemons = nil;' in springboard
+assert '^(BOOL works, NSArray<NSString *> *daemons,' in springboard
+assert 'BOOL connWorks' not in springboard
+assert 'xpc_dictionary_get_bool(response, "support_complete")' in manager
+assert 'xpc_dictionary_get_string(response, "broken_daemons")' in manager
+assert 'injectionVerified && supportComplete;' in manager
 
 # PID inspection is caller-aware and target results require a live main-dylib
 # report for the exact target PID/process.

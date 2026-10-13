@@ -273,18 +273,28 @@ After a userspace/securityd reload, start logging before the first Chrome launch
 and require these stages in order:
 
 ```sh
-oslog | grep -E 'CraneSupport: (constructor process=|init process=|XPC unsandbox profile.*process=|securityd (keychain isolation|client))|CraneSB: support health process=|Crane helper: component_loaded|CraneManager: helper lookup_pid|Crane: app (init|environment ready)'
+oslog | grep -E 'CraneSupport: (constructor process=|init process=|XPC unsandbox profile.*process=|securityd (keychain isolation|client))|CraneSB: support health process=|Crane helper: (component_loaded|insurance)|CraneManager: helper (lookup_pid|insurance)|Crane: app (init|environment ready)'
 ```
 
-The next diagnostic build emits `CraneSupport: constructor process=<daemon>
+The diagnostic build emits `CraneSupport: constructor process=<daemon>
 platform=<...>` before any libSandy/profile/XPC work, then asks helperd for
 CraneSupport health across the exact seven executables in the recovered filter:
 `cfprefsd`, `containermanagerd`, `securityd`, `pkd`, `lsd`, `accountsd`, and
-`apsd`. If all seven health rows are `loaded=0`, investigate global CraneSupport
-daemon injection or report transport. If other daemons are `loaded=1` while
-securityd alone is `0`, investigate securityd-specific injection/loadability.
-If `constructor process=securityd` appears but health remains `0`, the dylib did
-load and the fault is narrowed to its libSandy/report path.
+`apsd`. Device run with Chrome PID 939 produced **loaded=0 for all seven** while
+the app proof remained `authorized=1 injected=1` with the selected container.
+This classifies the current failure as global CraneSupport daemon
+injection/load/report failure, not securityd-specific keychain symbol failure.
+Do not port `patchfindSecurityd` from this result.
+
+The recovered CraneSB 0x1B45C + callback 0x1BAA4 also establish that insurance
+failure returns the original launch environment: the callback is exactly
+`(success, brokenDaemons, error)`, then `getLastError` separately classifies the
+connection. The reconstruction now mirrors that callback shape and checks the
+live runtime registry for each CraneSupport filter target that is actually
+running. An on-demand target that is not running does not fail insurance, but a
+running target without CraneSupport is reported as broken and a non-default
+container environment is not supplied. This prevents an apparently successful
+launch with preferences/keychain/APNs/account daemon isolation absent.
 
 `CraneSupport: init process=securityd xpcUnsandbox=1` plus `XPC unsandbox
 profile process=securityd status=0` proves the recovered profile gate succeeded.

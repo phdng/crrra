@@ -36,7 +36,7 @@
 /* The XPC interface of this reconstruction's own cranehelperd.
  * NOT the original's - see the provenance note above. */
 @protocol CRHelperServiceProtocol <NSObject>
-- (void)verifyCraneInsuranceAndReply:(void (^)(BOOL works, NSString *brokenDaemons, NSError *error, BOOL connectionWorks))reply;
+- (void)verifyCraneInsuranceAndReply:(void (^)(BOOL works, NSArray<NSString *> *brokenDaemons, NSError *error))reply;
 - (void)verifySupportLoadedIntoProcessNamed:(NSString *)name reply:(void (^)(BOOL loaded))reply;
 - (void)verifyCraneSBLoadedAndReply:(void (^)(BOOL loaded))reply;
 /* CraneSB 0x1782C/0x179C4. The original helper performs a privileged

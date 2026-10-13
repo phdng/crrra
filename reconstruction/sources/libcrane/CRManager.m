@@ -239,7 +239,7 @@ static void CRManagerVerifyRuntimeComponent(NSString *component,
 
 /* Read-only insurance adapter. No privileged XPC selectors are exposed. */
 @interface CRInsuranceHealthProxy : NSObject
-- (void)verifyCraneInsuranceAndReply:(void (^)(BOOL, NSString *, NSError *, BOOL))reply;
+- (void)verifyCraneInsuranceAndReply:(void (^)(BOOL, NSArray<NSString *> *, NSError *))reply;
 - (void)verifySupportLoadedIntoProcessNamed:(NSString *)name
                                       reply:(void (^)(BOOL))reply;
 - (void)verifyCraneSBLoadedAndReply:(void (^)(BOOL))reply;
@@ -250,7 +250,7 @@ static void CRManagerVerifyRuntimeComponent(NSString *component,
                                            reply:(void (^)(NSString *, BOOL))reply;
 @end
 @implementation CRInsuranceHealthProxy
-- (void)verifyCraneInsuranceAndReply:(void (^)(BOOL, NSString *, NSError *, BOOL))reply
+- (void)verifyCraneInsuranceAndReply:(void (^)(BOOL, NSArray<NSString *> *, NSError *))reply
 {
     if (!reply)
         return;
@@ -259,37 +259,41 @@ static void CRManagerVerifyRuntimeComponent(NSString *component,
     if (!connection) {
         NSError *error = CRHelperTransportError(CRHelperConnectionCreationFailed,
             @"insurance", @"Unable to create XPC connection");
-        CRManagerDeliverHelperReply(error, ^{ reply(NO, @"cranehelperd", error, NO); });
+        CRManagerDeliverHelperReply(error, ^{ reply(NO, @[@"cranehelperd"], error); });
         return;
     }
 
     NSObject *replyLock = [NSObject new];
     __block BOOL finished = NO;
-    void (^finish)(BOOL, NSString *, NSError *, BOOL) =
-        ^(BOOL works, NSString *brokenDaemons, NSError *error, BOOL connectionWorks) {
+    void (^finish)(BOOL, NSArray<NSString *> *, NSError *) =
+        ^(BOOL works, NSArray<NSString *> *brokenDaemons, NSError *error) {
             @synchronized(replyLock) {
                 if (finished)
                     return;
                 finished = YES;
             }
+            BOOL connectionWorks = error == nil;
             NSLog(@"CraneManager: helper insurance works=%d connection=%d broken=%@ error=%@",
                   works, connectionWorks, brokenDaemons, error);
+            /* Original CraneSB 0x1BAA4 reply ABI is exactly
+             * (BOOL success, brokenDaemons, NSError *error). Transport state is
+             * consumed separately through CraneManager getLastError. */
             CRManagerDeliverHelperReply(error, ^{
-                reply(works, brokenDaemons, error, connectionWorks);
+                reply(works, brokenDaemons, error);
             });
             xpc_connection_cancel(connection);
         };
 
     xpc_connection_set_event_handler(connection, ^(xpc_object_t event) {
         if (xpc_get_type(event) == XPC_TYPE_ERROR)
-            finish(NO, @"cranehelperd", CRHelperXPCEventError(event, @"insurance"), NO);
+            finish(NO, @[@"cranehelperd"], CRHelperXPCEventError(event, @"insurance"));
     });
     xpc_connection_resume(connection);
 
     xpc_object_t request = xpc_dictionary_create(NULL, NULL, 0);
     if (!request) {
-        finish(NO, @"cranehelperd", CRHelperTransportError(CRHelperRequestAllocationFailed,
-            @"insurance", @"Unable to allocate XPC request"), NO);
+        finish(NO, @[@"cranehelperd"], CRHelperTransportError(CRHelperRequestAllocationFailed,
+            @"insurance", @"Unable to allocate XPC request"));
         return;
     }
     xpc_dictionary_set_string(request, "operation", "insurance");
@@ -301,8 +305,12 @@ static void CRManagerVerifyRuntimeComponent(NSString *component,
 
             BOOL injectionVerified = valid &&
                 xpc_dictionary_get_bool(response, "injection_verified");
+            BOOL supportInspectionAvailable = valid &&
+                xpc_dictionary_get_bool(response, "support_inspection_available");
+            BOOL supportComplete = valid &&
+                xpc_dictionary_get_bool(response, "support_complete");
             BOOL works = valid && xpc_dictionary_get_bool(response, "works") &&
-                injectionVerified;
+                injectionVerified && supportComplete;
             NSMutableArray *broken = [NSMutableArray new];
             if (valid && !xpc_dictionary_get_bool(response, "main_dylib_installed"))
                 [broken addObject:@"Crane.dylib"];
@@ -310,14 +318,27 @@ static void CRManagerVerifyRuntimeComponent(NSString *component,
                 [broken addObject:@"libsandy"];
             if (valid && !injectionVerified)
                 [broken addObject:@"CraneSB"];
+            if (valid && !supportComplete) {
+                const char *brokenCString =
+                    xpc_dictionary_get_string(response, "broken_daemons");
+                NSString *brokenSupport = brokenCString
+                    ? [NSString stringWithUTF8String:brokenCString] : nil;
+                if (brokenSupport.length)
+                    [broken addObjectsFromArray:
+                        [brokenSupport componentsSeparatedByString:@", "]];
+                else if (!supportInspectionAvailable)
+                    [broken addObject:@"CraneSupport verification"];
+                else
+                    [broken addObject:@"CraneSupport"];
+            }
             if (!valid)
                 [broken addObject:@"cranehelperd"];
-            finish(works, [broken componentsJoinedByString:@", "], error, valid);
+            finish(works, [broken copy], error);
         });
     dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(2 * NSEC_PER_SEC)),
         dispatch_get_global_queue(QOS_CLASS_UTILITY, 0), ^{
-            finish(NO, @"cranehelperd", CRHelperTransportError(CRHelperReplyTimedOut,
-                @"insurance", @"No helper reply within 2 seconds"), NO);
+            finish(NO, @[@"cranehelperd"], CRHelperTransportError(CRHelperReplyTimedOut,
+                @"insurance", @"No helper reply within 2 seconds"));
         });
 }
 

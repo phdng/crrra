@@ -191,7 +191,7 @@ static NSMutableDictionary *CRApplyEnvironmentChanges(NSMutableDictionary *envir
     /* Verify that everything Crane needs is actually in place before handing
      * the app a container it cannot honour. */
     __block BOOL insuranceOK = NO;
-    __block NSString *brokenDaemons = nil;
+    __block NSArray<NSString *> *brokenDaemons = nil;
     __block NSError *insuranceError = nil;
     __block NSError *replyLastError = nil;
     __block BOOL helperReplied = NO;
@@ -211,8 +211,8 @@ static NSMutableDictionary *CRApplyEnvironmentChanges(NSMutableDictionary *envir
         NSLog(@"CraneSB: unable to verify container launch for %@: %@",
               appID, insuranceError.localizedDescription);
     } else {
-        [proxy verifyCraneInsuranceAndReply:^(BOOL works, NSString *daemons,
-                                              NSError *error, BOOL connWorks) {
+        [proxy verifyCraneInsuranceAndReply:^(BOOL works, NSArray<NSString *> *daemons,
+                                              NSError *error) {
             @synchronized(replyLock) {
                 if (replyClosed) return;
                 insuranceOK = works;
@@ -223,7 +223,6 @@ static NSMutableDictionary *CRApplyEnvironmentChanges(NSMutableDictionary *envir
                 replyClosed = YES;
                 dispatch_semaphore_signal(sem);
             }
-            (void)connWorks; /* Reconstruction-only XPC reply field. */
         }];
         long waitResult = dispatch_semaphore_wait(sem,
                                 dispatch_time(DISPATCH_TIME_NOW, 5 * NSEC_PER_SEC));
