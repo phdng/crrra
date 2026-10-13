@@ -7,8 +7,10 @@ was able to query the same helper, showing process-specific access.
 
 libSandy already provides profile-based sandbox extensions to other Crane
 system components; this reconstruct-only app runtime profile grants ONLY
-the helper's Mach lookup to sandboxed apps. The report is still processed
-by the helper's kernel-PID-scoped, authenticated registry.
+the helper's exact Mach lookup to sandboxed apps, using the same two
+service-specific extension classes recovered in CraneSupport/CraneRB. The
+report is still processed by the helper's kernel-PID-scoped, authenticated
+registry.
 
 Source/package checks and model only; must build/install and validate on
 the device. This does not establish runtime grant success.
@@ -22,16 +24,26 @@ profile = plistlib.loads(profile_path.read_bytes())
 
 assert set(profile) == {"AllowedProcesses", "Extensions"}, profile
 # A container switching library runs in any supported third-party bundle.
-# The wildcard grants the ability to REQUEST one specific Mach extension,
-# not to modify the helper's authorization policy.
+# The wildcard grants the ability to REQUEST two service-specific Mach
+# extension classes for the same exact helper name, not to modify the helper's
+# authorization policy.
 assert profile["AllowedProcesses"] == ["*"]
 assert profile["Extensions"] == [{
     "type": "mach",
     "extension_class": "com.apple.app-sandbox.mach",
     "mach_name": "com.opa334.cranehelperd.xpc",
+}, {
+    "type": "mach",
+    "extension_class": "com.apple.security.exception.mach-lookup.global-name",
+    "mach_name": "com.opa334.cranehelperd.xpc",
 }]
-assert "path" not in profile["Extensions"][0]
-assert "com.apple.security.exception.mach-lookup.global-name" not in str(profile)
+for extension in profile["Extensions"]:
+    assert "path" not in extension
+    assert extension["mach_name"] == "com.opa334.cranehelperd.xpc"
+assert {x["extension_class"] for x in profile["Extensions"]} == {
+    "com.apple.app-sandbox.mach",
+    "com.apple.security.exception.mach-lookup.global-name",
+}
 
 main = (root / "sources/maindylib/CRMainDylib.m").read_text(encoding="utf-8")
 common = (root / "sources/common/CRCommon.m").read_text(encoding="utf-8")
@@ -72,12 +84,21 @@ assert constructor.index('if (_crActiveContainerIdentifier.length) {\n        CR
 assert 'removeItemAtPath:' not in constructor
 assert 'setenv(CR_ENV_HOME.UTF8String, container.UTF8String, 1);' in constructor
 
-# The same helper Mach service was already exposed in the recovered
-# library's daemon/Shortcuts profiles; only app sandbox access was absent.
-for name in ("CraneRB.plist", "CraneSupport.plist", "CraneShortcuts.plist"):
+# The recovered CraneRB/CraneSupport profiles establish that privileged
+# helper lookup uses both service-specific Mach extension classes. Keep the
+# app runtime profile aligned with that original evidence rather than inventing
+# a broader exception.
+for name in ("CraneRB.plist", "CraneSupport.plist"):
     other = plistlib.loads((root / "layout/Library/libSandy" / name).read_bytes())
-    assert any(x.get("mach_name") == "com.opa334.cranehelperd.xpc"
-               for x in other["Extensions"]), name
+    helper_extensions = [x for x in other["Extensions"]
+                         if x.get("mach_name") == "com.opa334.cranehelperd.xpc"]
+    assert {x.get("extension_class") for x in helper_extensions} >= {
+        "com.apple.app-sandbox.mach",
+        "com.apple.security.exception.mach-lookup.global-name",
+    }, name
+shortcuts = plistlib.loads((root / "layout/Library/libSandy/CraneShortcuts.plist").read_bytes())
+assert any(x.get("mach_name") == "com.opa334.cranehelperd.xpc"
+           for x in shortcuts["Extensions"])
 
 assert 'CR_HELPERD_MACH_SERVICE.UTF8String, NULL, XPC_CONNECTION_MACH_SERVICE_PRIVILEGED' in common
 assert 'xpc_connection_send_message(created, replay);' in common

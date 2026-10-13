@@ -3,9 +3,9 @@
 <plist version="1.0">
 <dict>
     <!-- Main ' Crane.dylib' can run in arbitrary third-party bundles.
-         Allow only a single Mach lookup needed by its runtime attestation.
-         Unlike the system CraneSupport/CraneRB profiles, this app-specific
-         extension MUST NOT grant filesystem access or any other service. -->
+         Mirror the two service-specific Mach extension classes already used
+         by the recovered CraneSupport/CraneRB profiles for privileged lookup
+         of cranehelperd.xpc. Do not grant filesystem or any other service. -->
     <key>AllowedProcesses</key>
     <array>
         <string>*</string>
@@ -17,6 +17,14 @@
             <string>mach</string>
             <key>extension_class</key>
             <string>com.apple.app-sandbox.mach</string>
+            <key>mach_name</key>
+            <string>com.opa334.cranehelperd.xpc</string>
+        </dict>
+        <dict>
+            <key>type</key>
+            <string>mach</string>
+            <key>extension_class</key>
+            <string>com.apple.security.exception.mach-lookup.global-name</string>
             <key>mach_name</key>
             <string>com.opa334.cranehelperd.xpc</string>
         </dict>

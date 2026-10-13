@@ -56,22 +56,19 @@ The device confirms `/Library/libSandy/CraneAppRuntime.plist` is installed
 (198-byte, root:wheel) and Chrome is using the same selected UUID
 `F7555D97-7AE9-4D62-9BF2-9A9E42AE5BBB`, yet app `runtime_report`
 and same-peer diagnostic ping still return Code=1003, while SpringBoard's
-helper lookup succeeds. The supplied excerpt contains NO
-`Crane: app runtime Mach profile ... status=` output; the on-disk profile's
-existence cannot establish a successful libSandy grant or even verify
-which dylib build is installed. Avoid escalating permission breadth,
-bypassing the privileged Mach flag, or fabricating helper registration
-without a confirmed root cause. The diagnostic update now logs
-`APP_RUNTIME_MACH_DIAGNOSTIC_V2` entry, resolved libSandy path,
-`dlopen` error/symbol presence, and precise profile apply status before
-the unchanged runtime report. Added a mobile-safe, read-only
-`diagnose_crane_app_mach.sh` to inspect the installed leading-space
-dylib marker, plist and relevant logs (no root or container modifications).
-`check_app_runtime_sandbox_contract.py` now asserts the markers, safe
-log branches and script nonmutation. F-19 remains unresolved until
-libSandy status/actual app Mach bootstrap access and helper peer lifecycle
-are validated on device. This batch changes NO XPC auth, application
-sandbox permissions, or Chrome user-data paths.
+helper lookup succeeds. Follow-up Chrome PID 4261 now proves the diagnostic
+path and libSandy call both execute: `APP_RUNTIME_MACH_DIAGNOSTIC_V2` is logged
+and `Crane: app runtime Mach profile pid=4261 status=0`. Therefore profile
+loading/application is no longer the leading failure; the remaining Code=1003
+is after a successful libSandy apply. Comparing the app profile with the
+recovered `CraneSupport.plist` / `CraneRB.plist` exposes a concrete mismatch:
+those original profiles grant the same exact helper Mach name with BOTH
+`com.apple.app-sandbox.mach` and
+`com.apple.security.exception.mach-lookup.global-name`, while the new app
+profile granted only the first class. The app profile now mirrors those two
+service-specific classes for `com.opa334.cranehelperd.xpc` only. It still grants
+no filesystem/keychain/wildcard service, keeps the privileged XPC bootstrap
+flag, and does not weaken helper PID/signing authorization or touch Chrome data.
 
 **F-19 app-sandbox Helper Mach lookup fix (Chrome PID 3411, 2026-10-13):**
 Chrome log proves main ` Crane.dylib` loaded, selected nondefault
@@ -90,8 +87,10 @@ supports granting an exact Mach service via
 reconstruction-only runtime attestation channel, added
 `layout/Library/libSandy/CraneAppRuntime.plist` with
 `AllowedProcesses=["*"]` (necessary for arbitrary managed bundle IDs)
-and **exactly one** mach extension to
-`com.opa334.cranehelperd.xpc`; no filesystem, keychain, wildcard Mach
+and the two service-specific Mach extension classes already recovered in
+`CraneSupport` / `CraneRB` (`com.apple.app-sandbox.mach` plus
+`com.apple.security.exception.mach-lookup.global-name`) for the exact
+`com.opa334.cranehelperd.xpc` name; no filesystem, keychain, wildcard Mach
 or other RPC access. Main `CRMainDylib.m` only requests it for
 nondefault container launch before the unchanged
 `CRReportRuntimeInjection` call, through the jbroot-resolved libSandy

@@ -37,12 +37,15 @@ Latest Roothide 15.8.8 trace (Chrome PID 3756) shows the **same selected**
 `runtime_report` / same-connection `ping` Code=1003. The file
 `/Library/libSandy/CraneAppRuntime.plist` is present and root-owned
 (198-byte on-device plist); **this alone does not prove it was applied**.
-The supplied log omits the `Crane: app runtime Mach profile ... status=N`
-line. Without that result, it is unsafe to conclude that adding broader
-sandbox permissions or changing the Helper XPC ABI will repair the transport.
-The error may mean sandbox/Mach lookup was denied, a wrong bootstrap namespace,
-or a rejected/invalid connection; SpringBoard reaching the helper does not
-distinguish these from Chrome's sandbox.
+A later Chrome PID 4261 trace now includes
+`Crane: app runtime Mach profile begin pid=4261 marker=APP_RUNTIME_MACH_DIAGNOSTIC_V2`
+and `Crane: app runtime Mach profile pid=4261 status=0`. This proves the current
+binary entered the diagnostic path and libSandy accepted the profile. The
+remaining Code=1003 is therefore downstream of profile application. Comparing
+with the recovered `CraneSupport` / `CraneRB` profiles shows the app profile
+was missing their second service-specific class,
+`com.apple.security.exception.mach-lookup.global-name`, for the same helper
+name. The fix mirrors both recovered classes without changing the XPC ABI.
 
 The main dylib now emits a versioned marker
 `APP_RUNTIME_MACH_DIAGNOSTIC_V2` before attempting libSandy,
@@ -100,18 +103,20 @@ could also represent a rejected peer or broken listener, so validate again
 with the new profile status and the helper's peer logs.
 
 The reconstruction now ships **an additional** profile
-`Library/libSandy/CraneAppRuntime.plist`: it allows one application sandbox
-extension (`type=mach`, `extension_class=com.apple.app-sandbox.mach`,
-`mach_name=com.opa334.cranehelperd.xpc`) and **nothing else**. Its
-`AllowedProcesses=["*"]` permits Crane to support arbitrary managed apps,
-but the extension is only requested by the injected Crane main dylib when a
+`Library/libSandy/CraneAppRuntime.plist`: it allows exactly two Mach extension
+classes for the same exact helper name `com.opa334.cranehelperd.xpc`:
+`com.apple.app-sandbox.mach` and
+`com.apple.security.exception.mach-lookup.global-name`. This mirrors the
+recovered `CraneSupport` / `CraneRB` profile pattern and grants **nothing else**.
+Its `AllowedProcesses=["*"]` permits Crane to support arbitrary managed apps,
+but the profile is only requested by the injected Crane main dylib when a
 nondefault container was supplied. Before the existing one-way
 `runtime_report`, that dylib calls `libSandy_applyProfile("CraneAppRuntime")`
 using the jbroot-resolved libSandy library. It does not grant filesystem
 access, authorize other helper operations, claim a PID supplied by the
 client, or bypass the Helper's runtime-attestation checks. Both rootful and
-roothide package inspection verify that the shipped profile still has exactly
-one Mach permission. If loading/applying libSandy fails, the existing
+roothide package inspection verify that the shipped profile contains exactly
+these two classes for this one Mach service and no broader permission. If loading/applying libSandy fails, the existing
 connection still attempts normally and the source reports the failure.
 
 After rebuilding/reinstalling the package, on the mobile shell:
