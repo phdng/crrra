@@ -14,14 +14,26 @@
 #include <stdio.h>
 #include <string.h>
 #include <sys/wait.h>
+#ifndef CRANE_ROOTHIDE
+#define CRANE_ROOTHIDE 0
+#endif
+#if CRANE_ROOTHIDE
+#include <roothide.h>
+#endif
 
 extern char **environ;
 
 int main(void)
 {
+    /* System APIs need the resolved bootstrap executable path on Roothide;
+     * argv[0] remains the virtual bootstrap path, as required by its SDK. */
+#if CRANE_ROOTHIDE
+    const char *launchctl = jbroot("/bin/launchctl");
+#else
     const char *launchctl = "/bin/launchctl";
+#endif
     char *const argv[] = {
-        (char *)launchctl,
+        (char *)"/bin/launchctl",
         (char *)"kickstart",
         (char *)"-k",
         (char *)"system/com.opa334.cranehelperd",

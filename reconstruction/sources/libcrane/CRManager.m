@@ -33,6 +33,37 @@
 #import "CRPaths.h"
 #import "CRPreferences.h"
 #import "CRCommon.h"
+#import "CRContainerScaffold.h"
+#import "CRContainerRegistry.h"
+#import "CRXPCDiagnostics.h"
+
+/* The native launch gate classifies transport errors through getLastError. */
+@interface CraneManager (CRHelperTransportDiagnostics)
+- (void)crane_recordHelperTransportError:(NSError *)error;
+@end
+
+static NSString *const CRHelperReplyErrorContext = @"com.opa334.crane.helper.replyError";
+
+static void CRManagerRecordHelperTransportError(NSError *error)
+{
+    [[CraneManager sharedManager] crane_recordHelperTransportError:error];
+}
+
+/* Recovered callers fetch getLastError synchronously inside their reply.
+ * Scope it to this request so a concurrent badge lookup cannot clear the
+ * launch error. Restore the context after nested callbacks, including throws. */
+static void CRManagerDeliverHelperReply(NSError *error, dispatch_block_t reply)
+{
+    CRManagerRecordHelperTransportError(error);
+    NSMutableDictionary *context = NSThread.currentThread.threadDictionary;
+    id previous = context[CRHelperReplyErrorContext];
+    context[CRHelperReplyErrorContext] = error ?: NSNull.null;
+    @try { reply(); }
+    @finally {
+        if (previous) context[CRHelperReplyErrorContext] = previous;
+        else [context removeObjectForKey:CRHelperReplyErrorContext];
+    }
+}
 
 #include <notify.h>
 #include <xpc/xpc.h>
@@ -50,38 +81,45 @@ static void CRManagerLookupActiveContainerForPid(pid_t pid,
     if (!reply)
         return;
     if (pid <= 0) {
-        reply(nil, NO);
+        NSError *error = CRHelperTransportError(CRHelperInvalidPID,
+            @"lookup_pid", @"Target PID is invalid");
+        CRManagerDeliverHelperReply(error, ^{ reply(nil, NO); });
         return;
     }
 
     xpc_connection_t connection = CRManagerXPCConnectionCreateMachService(
-        CR_HELPERD_MACH_SERVICE.UTF8String, NULL, 0);
+        CR_HELPERD_MACH_SERVICE.UTF8String, NULL, XPC_CONNECTION_MACH_SERVICE_PRIVILEGED);
     if (!connection) {
-        reply(nil, NO);
+        NSError *error = CRHelperTransportError(CRHelperConnectionCreationFailed,
+            @"lookup_pid", @"Unable to create XPC connection");
+        CRManagerDeliverHelperReply(error, ^{ reply(nil, NO); });
         return;
     }
 
     NSObject *replyLock = [NSObject new];
     __block BOOL finished = NO;
-    void (^finish)(NSString *, BOOL) = ^(NSString *containerID, BOOL connectionWorks) {
+    void (^finish)(NSString *, BOOL, NSError *) =
+        ^(NSString *containerID, BOOL connectionWorks, NSError *error) {
         @synchronized(replyLock) {
             if (finished)
                 return;
             finished = YES;
         }
-        reply(containerID, connectionWorks);
+        if (error) NSLog(@"CraneManager: helper lookup_pid target=%d error=%@", pid, error);
+        CRManagerDeliverHelperReply(error, ^{ reply(containerID, connectionWorks); });
         xpc_connection_cancel(connection);
     };
 
     xpc_connection_set_event_handler(connection, ^(xpc_object_t event) {
         if (xpc_get_type(event) == XPC_TYPE_ERROR)
-            finish(nil, NO);
+            finish(nil, NO, CRHelperXPCEventError(event, @"lookup_pid"));
     });
     xpc_connection_resume(connection);
 
     xpc_object_t request = xpc_dictionary_create(NULL, NULL, 0);
     if (!request) {
-        finish(nil, NO);
+        finish(nil, NO, CRHelperTransportError(CRHelperRequestAllocationFailed,
+            @"lookup_pid", @"Unable to allocate XPC request"));
         return;
     }
     xpc_dictionary_set_string(request, "operation", "lookup_pid");
@@ -89,12 +127,8 @@ static void CRManagerLookupActiveContainerForPid(pid_t pid,
     xpc_dictionary_set_int64(request, "pid", pid);
     xpc_connection_send_message_with_reply(connection, request,
         dispatch_get_global_queue(QOS_CLASS_UTILITY, 0), ^(xpc_object_t response) {
-            BOOL valid = xpc_get_type(response) == XPC_TYPE_DICTIONARY;
-            const char *version = valid
-                ? xpc_dictionary_get_string(response, "protocol") : NULL;
-            valid = valid && version &&
-                strcmp(version, CR_HELPERD_PING_PROTOCOL_V1) == 0 &&
-                xpc_dictionary_get_bool(response, "alive");
+            NSError *error = nil;
+            BOOL valid = CRHelperValidateHealthReply(response, @"lookup_pid", &error);
             BOOL authorized = valid &&
                 xpc_dictionary_get_bool(response, "authorized");
             BOOL injected = authorized &&
@@ -107,7 +141,15 @@ static void CRManagerLookupActiveContainerForPid(pid_t pid,
             /* CraneSB 0x19608: second reply argument is 1 when helperd
              * answered but the app dylib/container proof is missing; 0 means
              * the daemon path itself failed. */
-            finish(containerID, authorized);
+            if (valid && !authorized)
+                error = CRHelperTransportError(CRHelperUnauthorizedPeer, @"lookup_pid",
+                    @"Helper rejected caller identity");
+            finish(containerID, authorized, error);
+        });
+    dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(2 * NSEC_PER_SEC)),
+        dispatch_get_global_queue(QOS_CLASS_UTILITY, 0), ^{
+            finish(nil, NO, CRHelperTransportError(CRHelperReplyTimedOut,
+                @"lookup_pid", @"No helper reply within 2 seconds"));
         });
 }
 
@@ -119,7 +161,7 @@ static void CRManagerVerifyRuntimeComponent(NSString *component,
         return;
 
     xpc_connection_t connection = CRManagerXPCConnectionCreateMachService(
-        CR_HELPERD_MACH_SERVICE.UTF8String, NULL, 0);
+        CR_HELPERD_MACH_SERVICE.UTF8String, NULL, XPC_CONNECTION_MACH_SERVICE_PRIVILEGED);
     if (!connection) {
         reply(NO);
         return;
@@ -195,9 +237,11 @@ static void CRManagerVerifyRuntimeComponent(NSString *component,
         return;
 
     xpc_connection_t connection = CRManagerXPCConnectionCreateMachService(
-        CR_HELPERD_MACH_SERVICE.UTF8String, NULL, 0);
+        CR_HELPERD_MACH_SERVICE.UTF8String, NULL, XPC_CONNECTION_MACH_SERVICE_PRIVILEGED);
     if (!connection) {
-        reply(NO, @"cranehelperd", nil, NO);
+        NSError *error = CRHelperTransportError(CRHelperConnectionCreationFailed,
+            @"insurance", @"Unable to create XPC connection");
+        CRManagerDeliverHelperReply(error, ^{ reply(NO, @"cranehelperd", error, NO); });
         return;
     }
 
@@ -210,31 +254,32 @@ static void CRManagerVerifyRuntimeComponent(NSString *component,
                     return;
                 finished = YES;
             }
-            reply(works, brokenDaemons, error, connectionWorks);
+            NSLog(@"CraneManager: helper insurance works=%d connection=%d broken=%@ error=%@",
+                  works, connectionWorks, brokenDaemons, error);
+            CRManagerDeliverHelperReply(error, ^{
+                reply(works, brokenDaemons, error, connectionWorks);
+            });
             xpc_connection_cancel(connection);
         };
 
     xpc_connection_set_event_handler(connection, ^(xpc_object_t event) {
         if (xpc_get_type(event) == XPC_TYPE_ERROR)
-            finish(NO, @"cranehelperd", nil, NO);
+            finish(NO, @"cranehelperd", CRHelperXPCEventError(event, @"insurance"), NO);
     });
     xpc_connection_resume(connection);
 
     xpc_object_t request = xpc_dictionary_create(NULL, NULL, 0);
     if (!request) {
-        finish(NO, @"cranehelperd", nil, NO);
+        finish(NO, @"cranehelperd", CRHelperTransportError(CRHelperRequestAllocationFailed,
+            @"insurance", @"Unable to allocate XPC request"), NO);
         return;
     }
     xpc_dictionary_set_string(request, "operation", "insurance");
     xpc_dictionary_set_string(request, "protocol", CR_HELPERD_PING_PROTOCOL_V1);
     xpc_connection_send_message_with_reply(connection, request,
         dispatch_get_global_queue(QOS_CLASS_UTILITY, 0), ^(xpc_object_t response) {
-            BOOL valid = xpc_get_type(response) == XPC_TYPE_DICTIONARY;
-            const char *version = valid
-                ? xpc_dictionary_get_string(response, "protocol") : NULL;
-            valid = valid && version &&
-                strcmp(version, CR_HELPERD_PING_PROTOCOL_V1) == 0 &&
-                xpc_dictionary_get_bool(response, "alive");
+            NSError *error = nil;
+            BOOL valid = CRHelperValidateHealthReply(response, @"insurance", &error);
 
             BOOL injectionVerified = valid &&
                 xpc_dictionary_get_bool(response, "injection_verified");
@@ -249,7 +294,12 @@ static void CRManagerVerifyRuntimeComponent(NSString *component,
                 [broken addObject:@"CraneSB"];
             if (!valid)
                 [broken addObject:@"cranehelperd"];
-            finish(works, [broken componentsJoinedByString:@", "], nil, valid);
+            finish(works, [broken componentsJoinedByString:@", "], error, valid);
+        });
+    dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(2 * NSEC_PER_SEC)),
+        dispatch_get_global_queue(QOS_CLASS_UTILITY, 0), ^{
+            finish(NO, @"cranehelperd", CRHelperTransportError(CRHelperReplyTimedOut,
+                @"insurance", @"No helper reply within 2 seconds"), NO);
         });
 }
 
@@ -423,47 +473,15 @@ static BOOL CRManagerSafeManagedPath(NSString *appID, NSString *containerID,
         ![path isEqualToString:base];
 }
 
-/* Do not descend through a symlink inside an existing container during
- * create/repopulate. This is a best-effort Foundation check, NOT atomic
- * protection against concurrent filesystem mutation by another process. */
-static BOOL CRManagerDirectoryComponentIsSafe(NSString *path)
-{
-    NSFileManager *fm = NSFileManager.defaultManager;
-    if ([fm destinationOfSymbolicLinkAtPath:path error:NULL])
-        return NO;
-    BOOL isDirectory = NO;
-    return ![fm fileExistsAtPath:path isDirectory:&isDirectory] || isDirectory;
-}
-
-static BOOL CRManagerCreateEmptyContainer(NSString *path, NSError **error)
-{
-    if (!path.length || !CRManagerDirectoryComponentIsSafe(path))
-        return NO;
-    NSFileManager *fm = NSFileManager.defaultManager;
-    if (![fm createDirectoryAtPath:path withIntermediateDirectories:YES
-                        attributes:nil error:error])
-        return NO;
-    for (NSString *subdir in @[@"tmp", @"Library/Caches",
-                               @"Library/Preferences", @"Documents",
-                               @"SystemData"]) {
-        NSString *next = path;
-        for (NSString *component in [subdir pathComponents]) {
-            next = [next stringByAppendingPathComponent:component];
-            if (!CRManagerDirectoryComponentIsSafe(next) ||
-                ![fm createDirectoryAtPath:next withIntermediateDirectories:NO
-                               attributes:nil error:error])
-                return NO;
-        }
-    }
-    return YES;
-}
+/* Idempotent, symlink-guarded app directory scaffolding lives in
+ * CRContainerScaffold.h so the production implementation can run in CI. */
 
 @interface CraneManager ()
 /* [INFERRED] The original keeps the registry in cfprefsd-backed preferences.
  * This build keeps it in memory and persists to a plist, which is the smallest
  * thing that makes the documented container paths work. */
 @property (nonatomic, strong) NSMutableDictionary *applications;
-@property (nonatomic, strong) id lastError;
+@property (atomic, strong) id lastError;
 @property (nonatomic, strong) id unsandboxHandler;
 @property (nonatomic, strong) NSHashTable *observers;
 @property (nonatomic, strong) dispatch_queue_t queue;
@@ -556,7 +574,7 @@ static BOOL CRManagerCreateEmptyContainer(NSString *path, NSError **error)
 {
     if (!appID)
         return NO;
-    return self.applications[appID] != nil;
+    return [self applicationSettingsForApplicationWithIdentifier:appID].count > 0;
 }
 
 - (NSArray<NSString *> *)identifiersOfAllSupportedApplications
@@ -567,13 +585,17 @@ static BOOL CRManagerCreateEmptyContainer(NSString *path, NSError **error)
 - (NSArray<NSString *> *)identfiersOfApplicationsThatHaveNonDefaultContainers
 {
     NSMutableArray *result = [NSMutableArray new];
-    [self.applications enumerateKeysAndObjectsUsingBlock:^(NSString *appID,
-                                                           NSDictionary *settings,
-                                                           BOOL *stop) {
-        NSArray *containers = settings[CRAppSetting_Containers];
-        if (containers.count)
-            [result addObject:appID];
-    }];
+    for (NSString *appID in [self.applications.allKeys copy]) {
+        NSArray *containers = [self applicationSettingsForApplicationWithIdentifier:appID]
+            [CRAppSetting_Containers];
+        for (NSDictionary *container in containers) {
+            if (![container[CRCContainer_Identifier]
+                isEqualToString:CR_DEFAULT_CONTAINER_IDENTIFIER]) {
+                [result addObject:appID];
+                break;
+            }
+        }
+    }
     return result;
 }
 
@@ -585,11 +607,13 @@ static BOOL CRManagerCreateEmptyContainer(NSString *path, NSError **error)
      * registry on reads so Active Container selection is not stuck at the
      * snapshot loaded by -init. */
     @synchronized(self) {
+        /* Fetch changes written by Preferences before the menu support gate. */
+        CFPreferencesAppSynchronize(CFSTR("com.opa334.cranereconstruction.apps"));
         NSDictionary *saved = CFBridgingRelease(CFPreferencesCopyAppValue(
             CFSTR("applications"), CFSTR("com.opa334.cranereconstruction.apps")));
         if ([saved isKindOfClass:NSDictionary.class])
             self.applications = [saved mutableCopy];
-        return [self.applications[appID] copy] ?: @{};
+        return CRManagerSettingsIncludingDefault(self.applications[appID]);
     }
 }
 
@@ -598,6 +622,7 @@ static BOOL CRManagerCreateEmptyContainer(NSString *path, NSError **error)
 {
     if (!appID)
         return;
+    settings = CRManagerSettingsIncludingDefault(settings);
     NSArray *previousContainers = [[self applicationSettingsForApplicationWithIdentifier:appID][CRAppSetting_Containers] valueForKey:CRCContainer_Identifier];
     NSArray *newContainers = [settings[CRAppSetting_Containers] valueForKey:CRCContainer_Identifier];
     BOOL containerListChanged = ![(previousContainers ?: @[]) isEqual:(newContainers ?: @[])];
@@ -865,6 +890,7 @@ usingBiometricsIfNeededWithSuccessHandler:(void (^)(BOOL authenticated))handler
 {
     if (!CRManagerSafePathComponent(appID))
         return nil;
+    [self resetLastError];
     NSString *identifier = [[NSUUID UUID] UUIDString];
     [self createNewContainerWithName:name
                       andIdentifier:identifier
@@ -919,11 +945,13 @@ usingBiometricsIfNeededWithSuccessHandler:(void (^)(BOOL authenticated))handler
     if (!CRManagerCreateEmptyContainer(staging, &error)) {
         if (!registered)
             [fm removeItemAtPath:staging error:NULL];
+        self.lastError = error;
         NSLog(@"CraneManager: container creation failed %@: %@", identifier, error);
         return;
     }
     if (!registered && ![fm moveItemAtPath:staging toPath:path error:&error]) {
         [fm removeItemAtPath:staging error:NULL];
+        self.lastError = error;
         NSLog(@"CraneManager: container creation collision %@: %@", identifier, error);
         return;
     }
@@ -1293,7 +1321,7 @@ usingBiometricsIfNeededWithSuccessHandler:(void (^)(BOOL authenticated))handler
     NSObject *completionLock = [NSObject new];
     dispatch_semaphore_t done = dispatch_semaphore_create(0);
     xpc_connection_t connection = CRManagerXPCConnectionCreateMachService(
-        CR_HELPERD_MACH_SERVICE.UTF8String, NULL, 0);
+        CR_HELPERD_MACH_SERVICE.UTF8String, NULL, XPC_CONNECTION_MACH_SERVICE_PRIVILEGED);
     if (!connection)
         return NO;
     xpc_connection_set_event_handler(connection, ^(xpc_object_t event) {
@@ -1425,8 +1453,13 @@ usingBiometricsIfNeededWithSuccessHandler:(void (^)(BOOL authenticated))handler
     [self setApplicationSettings:settings forApplicationWithIdentifier:appID];
 }
 
+- (void)crane_recordHelperTransportError:(NSError *)error { self.lastError = error; }
 - (void)resetLastError { self.lastError = nil; }
-- (id)getLastError { return self.lastError; }
+- (id)getLastError
+{
+    id scoped = NSThread.currentThread.threadDictionary[CRHelperReplyErrorContext];
+    return scoped ? (scoped == NSNull.null ? nil : scoped) : self.lastError;
+}
 - (void)_setXPCUnsandboxHandler:(id)handler { self.unsandboxHandler = handler; }
 
 @end

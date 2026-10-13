@@ -98,7 +98,8 @@ static BOOL CRNotificationRedirectionEnabledForApp(NSString *appID)
         return NO;
     NSDictionary *settings =
         [[CraneManager sharedManager] applicationSettingsForApplicationWithIdentifier:appID];
-    return [settings[CRAppSetting_SeparateNotificationRegistrationsEnabled] boolValue];
+    id separate = settings[CRAppSetting_SeparateNotificationRegistrationsEnabled];
+    return separate ? [separate boolValue] : YES;
 }
 
 /* ------------------------------------------------------------------------- */
@@ -183,6 +184,8 @@ static NSMutableDictionary *CRApplyEnvironmentChanges(NSMutableDictionary *envir
     __block BOOL insuranceOK = NO;
     __block NSString *brokenDaemons = nil;
     __block NSError *insuranceError = nil;
+    __block NSError *replyLastError = nil;
+    __block BOOL helperReplied = NO;
     dispatch_semaphore_t sem = dispatch_semaphore_create(0);
     NSObject *replyLock = [NSObject new];
     __block BOOL replyClosed = NO;
@@ -206,6 +209,8 @@ static NSMutableDictionary *CRApplyEnvironmentChanges(NSMutableDictionary *envir
                 insuranceOK = works;
                 brokenDaemons = daemons;
                 insuranceError = error;
+                replyLastError = [manager getLastError];
+                helperReplied = YES;
                 replyClosed = YES;
                 dispatch_semaphore_signal(sem);
             }
@@ -219,7 +224,9 @@ static NSMutableDictionary *CRApplyEnvironmentChanges(NSMutableDictionary *envir
         }
     }
 
-    NSError *lastError = [manager getLastError];
+    /* Snapshot the native getLastError classification in the reply scope;
+     * other concurrent helper queries may finish while this thread wakes. */
+    NSError *lastError = helperReplied ? replyLastError : [manager getLastError];
 
     /* CraneSB 0x1B45C gates injection on the insurance reply's works bit.
      * getLastError only helps classify a failed check for the error alert. */
@@ -291,7 +298,8 @@ static void CRRegisterInjectionCheckForProcess(id self, SEL _cmd, id process,
                 if (connectionWorks == YES) {
                     CRPresentMainDylibNotLoadedError(processName);
                 } else {
-                    CRPresentDaemonError(@[@"runningboardd"], nil, NO);
+                    CRPresentDaemonError(@[@"runningboardd"],
+                        [CraneManager.sharedManager getLastError], NO);
                 }
             }];
     };

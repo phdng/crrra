@@ -46,6 +46,9 @@ jobs:
       - name: Verify daemon safety contracts
         run: python3 reconstruction/tools/check_daemon_contract.py
 
+      - name: Verify helper transport diagnostics and signing inputs
+        run: python3 reconstruction/tools/check_helper_transport_contract.py
+
       - name: Verify unsupported privileged helper calls fail closed
         run: python3 reconstruction/tools/check_helper_privileged_contract.py
 
@@ -54,6 +57,9 @@ jobs:
 
       - name: Verify APNs topic/hash isolation decoding
         run: python3 reconstruction/tools/check_apsd_topic_contract.py
+
+      - name: Verify original shortcut gates and default container
+        run: python3 reconstruction/tools/check_shortcut_gate_contract.py
 
       - name: Verify native menu badge contracts
         run: python3 reconstruction/tools/check_menu_badge_contract.py
@@ -142,6 +148,24 @@ jobs:
             -o xpc_protocol_metadata_smoke
           ./xpc_protocol_metadata_smoke 2>&1 | tee xpc_protocol_metadata_smoke.log
 
+      - name: Smoke-test container scaffold and shortcut defaults
+        working-directory: reconstruction
+        run: |
+          set -euo pipefail
+          clang -fobjc-arc -fblocks -Wall -Wextra -Werror \
+            -I sources/common tools/container_menu_smoke.m \
+            -framework Foundation -o container_menu_smoke
+          ./container_menu_smoke 2>&1 | tee container_menu_smoke.log
+
+      - name: Smoke-test production XPC diagnostic decoder
+        working-directory: reconstruction
+        run: |
+          set -euo pipefail
+          clang -fobjc-arc -fblocks -Wall -Wextra -Werror \
+            -I sources/common tools/xpc_diagnostics_smoke.m \
+            -framework Foundation -o xpc_diagnostics_smoke
+          ./xpc_diagnostics_smoke 2>&1 | tee xpc_diagnostics_smoke.log
+
       - name: Smoke-test shared localization fallback
         working-directory: reconstruction
         run: |
@@ -214,6 +238,7 @@ jobs:
 
           python3 tools/verify_package_layout.py pkg
           python3 tools/verify_architectures.py pkg
+          python3 tools/verify_helper_entitlements.py pkg "${{ matrix.variant }}"
           echo '### Mach-O dependencies (installed payload)' >> "$GITHUB_STEP_SUMMARY"
           echo '~~~text' >> "$GITHUB_STEP_SUMMARY"
           for binary in \
@@ -259,6 +284,8 @@ jobs:
             reconstruction/xpc_protocol_metadata_smoke.log
             reconstruction/choicy_editor_smoke.log
             reconstruction/localization_smoke.log
+            reconstruction/container_menu_smoke.log
+            reconstruction/xpc_diagnostics_smoke.log
 
       - name: Upload package
         if: success()

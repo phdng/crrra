@@ -16,4 +16,12 @@ cranehelperd_FILES  = CRHelperd.m
 cranehelperd_CFLAGS  = -fobjc-arc -I$(THEOS_PROJECT_DIR)/sources/common
 cranehelperd_FRAMEWORKS = Foundation CoreFoundation Security
 
+# Original XML entitlements are recovered from code-signature slot 5.
+# Roothide adds the executable permissions required by its developer SDK.
+ifeq ($(THEOS_PACKAGE_SCHEME),roothide)
+cranehelperd_CODESIGN_FLAGS = -Sentitlements.roothide.plist
+else
+cranehelperd_CODESIGN_FLAGS = -Sentitlements.original.plist
+endif
+
 include $(THEOS_MAKE_PATH)/tool.mk

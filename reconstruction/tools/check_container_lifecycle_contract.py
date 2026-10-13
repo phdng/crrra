@@ -33,7 +33,8 @@ assert 'if ([identifier isEqualToString:CR_DEFAULT_CONTAINER_IDENTIFIER])' in pa
 assert 'return basePath;' in paths
 assert 'CRJailbreakRootPath(CR_DATA_DIR)' in manager  # only as a rejected root
 
-safety = part('static BOOL CRManagerSafePathComponent(', '@interface CraneManager ()')
+scaffold = (root / "sources/common/CRContainerScaffold.h").read_text(encoding="utf-8")
+safety = part('static BOOL CRManagerSafePathComponent(', '@interface CraneManager ()') + scaffold
 for expected in [
     '[component isEqualToString:@"."]',
     '[component isEqualToString:@".."]',
@@ -47,9 +48,9 @@ for expected in [
     'if (!path.length || !CRManagerDirectoryComponentIsSafe(path))',
     'for (NSString *component in [subdir pathComponents])',
     'if (!CRManagerDirectoryComponentIsSafe(next) ||',
-    'withIntermediateDirectories:NO',
+    'CRManagerEnsureDirectory(next, NO, error)',
     'destinationOfSymbolicLinkAtPath:path error:NULL',
-    'if (![fm createDirectoryAtPath:',
+    'return [fm createDirectoryAtPath:path withIntermediateDirectories:intermediates',
 ]:
     assert expected in safety, expected
 
@@ -185,11 +186,19 @@ assert create.index('[fm fileExistsAtPath:staging]') < create.index('if (!CRMana
 assert 'if (!registered && ![fm moveItemAtPath:staging toPath:path error:&error])' in create
 assert 'if (!registered)\n            [fm removeItemAtPath:staging error:NULL];' in create
 assert '[fm removeItemAtPath:staging error:NULL];' in create
+# Device-reported repeated Library creation must be idempotent. Check the
+# existing real directory before calling the single-level create API.
+ensure = scaffold[scaffold.index('static inline BOOL CRManagerEnsureDirectory('):
+                  scaffold.index('static inline BOOL CRManagerCreateEmptyContainer(')]
+assert ensure.index('fileExistsAtPath:path isDirectory:&isDirectory') < ensure.index('createDirectoryAtPath:path')
+assert 'return isDirectory;' in ensure
+assert '@"Library/SplashBoard"' in scaffold
+assert '#import "CRContainerScaffold.h"' in manager
 # Existing registered container scaffolds cannot follow an attacker-added
 # Library/Caches or Library/Preferences symlink into another directory.
 assert 'NSString *staging = registered ? path :' in create
 assert 'CRManagerDirectoryComponentIsSafe(next)' in safety
-assert 'withIntermediateDirectories:NO' in safety
+assert 'CRManagerEnsureDirectory(next, NO, error)' in safety
 assert create.index('if (!CRManagerCreateEmptyContainer') < create.index('moveItemAtPath:staging toPath:path') < create.index('[self setContainerSettings:settings')
 
 deletion = part('- (void)deleteContentOfContainerWithIdentifier:', '- (void)wipeContainerWithIdentifier:')

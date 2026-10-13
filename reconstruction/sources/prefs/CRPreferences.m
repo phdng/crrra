@@ -1476,6 +1476,11 @@
             forApplicationWithIdentifier:strongSelf.applicationIdentifier];
         [strongSelf loadApplicationSettings];
         [manager addObserver:strongSelf];
+        if (!identifier.length) {
+            NSLog(@"CranePrefs: container creation failed app=%@ error=%@",
+                  strongSelf.applicationIdentifier, [manager getLastError]);
+            return;
+        }
         NSLog(@"CranePrefs: created container app=%@ id=%@", strongSelf.applicationIdentifier, identifier);
         [strongSelf scheduleConfigurationReload];
     }]];

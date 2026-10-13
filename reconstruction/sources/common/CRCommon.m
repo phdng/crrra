@@ -12,6 +12,7 @@
 
 #import "CRCommon.h"
 #import "CRLocalization.h"
+#import "CRXPCDiagnostics.h"
 #import <LocalAuthentication/LocalAuthentication.h>
 #import <xpc/xpc.h>
 #import <unistd.h>
@@ -178,7 +179,7 @@ void CRReportRuntimeInjection(NSString *component, NSString *containerID)
         reports[component] = containerID.length ? [containerID copy] : NSNull.null;
         if (!connection) {
             xpc_connection_t created = CRCommonXPCConnectionCreateMachService(
-                CR_HELPERD_MACH_SERVICE.UTF8String, NULL, 0);
+                CR_HELPERD_MACH_SERVICE.UTF8String, NULL, XPC_CONNECTION_MACH_SERVICE_PRIVILEGED);
             if (!created) {
                 /* A temporary launchd/Mach-service failure must not leave
                  * constructor-only injection reports permanently unregistered. */
@@ -222,6 +223,8 @@ void CRReportRuntimeInjection(NSString *component, NSString *containerID)
                 }
                 if (!retire)
                     return;
+                NSLog(@"Crane: helper runtime_report error=%@",
+                      CRHelperXPCEventError(event, @"runtime_report"));
                 /* Retire the failed peer even when another retry is queued. */
                 xpc_connection_cancel(created);
                 if (!reconnect)

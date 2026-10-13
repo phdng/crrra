@@ -315,8 +315,10 @@ static UIMenu *CRBuildReplacementMenu(void)
 {
     NSString *appID = gCRSelectedApplicationIdentifier;
     gCRSelectedApplicationIdentifier = nil;
-    if (!appID.length)
+    if (!appID.length) {
+        NSLog(@"CraneSB: menu replacement skipped: missing selected application");
         return nil;
+    }
 
     CraneManager *manager = CraneManager.sharedManager;
     NSString *active =
@@ -329,6 +331,8 @@ static UIMenu *CRBuildReplacementMenu(void)
     NSDictionary *appSettings =
         [manager applicationSettingsForApplicationWithIdentifier:appID];
     NSArray *containers = appSettings[CRAppSetting_Containers] ?: @[];
+    NSLog(@"CraneSB: replacement menu app=%@ containers=%lu active=%@",
+          appID, (unsigned long)containers.count, active);
     NSMutableArray<UIMenuElement *> *children = [NSMutableArray new];
     BOOL showBadges = CRShouldShowContainerBadges(appID, appSettings, manager);
 
@@ -483,13 +487,15 @@ static id CRUIMenuInitModern(id self,
                              UIMenuOptions options,
                              NSArray *children)
 {
-    if ([title isEqualToString:kMenuPlaceholder]) {
+    /* Native 0x145B8 replaces a child placeholder before checking the
+     * enclosing menu's title. Only consume the selected application once. */
+    NSArray *replaced = CRChildrenByReplacingPlaceholder(children);
+    if (replaced == children && [title isEqualToString:kMenuPlaceholder]) {
         UIMenu *replacement = CRBuildReplacementMenu();
         if (replacement)
             return replacement;
     }
 
-    NSArray *replaced = CRChildrenByReplacingPlaceholder(children);
     id (*original)(id, SEL, id, id, id, id, UIMenuOptions, id) =
         (id (*)(id, SEL, id, id, id, id, UIMenuOptions, id))
             gOrigUIMenuInitModern;
@@ -507,13 +513,15 @@ static id CRUIMenuInitLegacy(id self,
                              UIMenuOptions options,
                              NSArray *children)
 {
-    if ([title isEqualToString:kMenuPlaceholder]) {
+    /* Native 0x145B8 replaces a child placeholder before checking the
+     * enclosing menu's title. Only consume the selected application once. */
+    NSArray *replaced = CRChildrenByReplacingPlaceholder(children);
+    if (replaced == children && [title isEqualToString:kMenuPlaceholder]) {
         UIMenu *replacement = CRBuildReplacementMenu();
         if (replacement)
             return replacement;
     }
 
-    NSArray *replaced = CRChildrenByReplacingPlaceholder(children);
     id (*original)(id, SEL, id, id, id, UIMenuOptions, id) =
         (id (*)(id, SEL, id, id, id, UIMenuOptions, id))
             gOrigUIMenuInitLegacy;
@@ -532,6 +540,7 @@ void CRInitUIMenuHooks(void)
         NSSelectorFromString(
             @"initWithTitle:image:imageName:identifier:options:children:");
     if ([menuClass instancesRespondToSelector:modern]) {
+        NSLog(@"CraneSB: UIMenu placeholder hook selector=%@", NSStringFromSelector(modern));
         MSHookMessageEx(menuClass,
                         modern,
                         (IMP)CRUIMenuInitModern,
@@ -543,6 +552,7 @@ void CRInitUIMenuHooks(void)
         NSSelectorFromString(
             @"initWithTitle:image:identifier:options:children:");
     if ([menuClass instancesRespondToSelector:legacy]) {
+        NSLog(@"CraneSB: UIMenu placeholder hook selector=%@", NSStringFromSelector(legacy));
         MSHookMessageEx(menuClass,
                         legacy,
                         (IMP)CRUIMenuInitLegacy,
@@ -1321,12 +1331,15 @@ static NSArray *CRApplicationShortcutItems(id self, SEL _cmd)
         (NSArray *(*)(id, SEL))gOrigApplicationShortcutItems;
     NSArray *existing = original ? original(self, _cmd) : nil;
 
-    if (!CRPrefBool(CRPref_AppShortcutEnabled))
+    if (!CRPrefBool(CRPref_AppShortcutEnabled)) {
+        NSLog(@"CraneSB: shortcut query skipped: applicationShortcutEnabled=NO");
         return existing;
+    }
 
     NSString *appID = CRShortcutApplicationIdentifier(self);
     if (!appID.length ||
         ![CraneManager.sharedManager isApplicationSupportedByCrane:appID]) {
+        NSLog(@"CraneSB: shortcut query skipped: app=%@ unsupported or missing identifier", appID);
         return existing;
     }
 
@@ -1336,13 +1349,19 @@ static NSArray *CRApplicationShortcutItems(id self, SEL _cmd)
     NSArray *containers = settings[CRAppSetting_Containers] ?: @[];
     if (containers.count <= 1 &&
         CRPrefBool(CRPref_OnlyShowIfContainersExist)) {
+        NSLog(@"CraneSB: shortcut query skipped: app=%@ containers=%lu onlyShow=YES",
+              appID, (unsigned long)containers.count);
         return existing;
     }
 
     Class itemClass = NSClassFromString(@"SBSApplicationShortcutItem");
     id placeholder = [itemClass new];
-    if (!placeholder)
+    if (!placeholder) {
+        NSLog(@"CraneSB: shortcut query skipped: SBSApplicationShortcutItem unavailable");
         return existing;
+    }
+    NSLog(@"CraneSB: shortcut placeholder app=%@ containers=%lu",
+          appID, (unsigned long)containers.count);
 
     CRDynamicObjectSetter(placeholder,
                           NSSelectorFromString(@"setLocalizedTitle:"),
@@ -1368,9 +1387,11 @@ static id CRContextMenuConfiguration(id self,
                                      id interaction,
                                      CGPoint location)
 {
-    if (CRPrefBool(CRPref_AppShortcutEnabled))
+    if (CRPrefBool(CRPref_AppShortcutEnabled)) {
         gCRSelectedApplicationIdentifier =
             [CRShortcutApplicationIdentifier(self) copy];
+        NSLog(@"CraneSB: context menu selected app=%@", gCRSelectedApplicationIdentifier);
+    }
 
     id (*original)(id, SEL, id, CGPoint) =
         (id (*)(id, SEL, id, CGPoint))
@@ -1893,6 +1914,11 @@ void CRInitApplicationShortcutHooks(void)
                             &gOrigContextMenuConfiguration);
         }
     }
+
+    NSLog(@"CraneSB: shortcut hooks SBIconView=%@ items=%@ context=%@",
+          iconViewClass ? @"YES" : @"NO",
+          gOrigApplicationShortcutItems ? @"YES" : @"NO",
+          gOrigContextMenuConfiguration ? @"YES" : @"NO");
 
     Class listClass =
         NSClassFromString(@"_UIContextMenuActionsListView");

@@ -137,6 +137,8 @@ static void CRErrorAlertConfigure(id self,
     if (!controller)
         return;
 
+    NSLog(@"CraneSB: error alert title=%@ message=%@",
+          [self valueForKey:@"errorTitle"], [self valueForKey:@"errorMessage"]);
     [controller setTitle:[self valueForKey:@"errorTitle"]];
     [controller setMessage:[self valueForKey:@"errorMessage"]];
 

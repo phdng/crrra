@@ -2,6 +2,30 @@
 
 Ngày kiểm kê: 2026-10-12. Nhánh quan sát: `chore/reconstruction-build-ci`.
 
+## Helper communication follow-up — empty Crane Error suffix
+
+The supplied Chrome alert identifies the helper communication branch, with no
+underlying description. The raw-XPC adapter discarded errors and the original
+post-launch nil/false branch forwarded nil. Added shared transport diagnostics,
+reply-scoped getLastError handling, bounded insurance/PID lookup, and helper
+startup/listener/peer logs. The original insurance/injection gates and caller
+authentication remain intact. Clients select the privileged Mach bootstrap for
+the recovered launchd service; no original NSXPC wire equivalence is claimed.
+
+Recovered XML entitlement dictionaries directly from original helper-tool code
+signature slot 5, wired them into Theos signing, and added documented Roothide
+executable permissions separately. Fixed the starter's Roothide bootstrap
+executable resolution. Source/evidence checks pass; CI compiles the production
+diagnostic decoder and verifies actual packaged entitlement slots. Native build
+and device results remain unverified.
+
+P0 pending: determine installed job/process state from launchctl/ps and error
+logs; verify matching daemon/client build, launch path and authentication.
+Package configuration/removal hooks are also pending explicit approval:
+automatic review rejected adding root-service bootstrap/restart lifecycle
+scripts and their executable staging. No maintainer-script changes remain.
+The original package's maintainer scripts and helper/libcrane bodies are absent.
+
 ## Quy ước
 
 - **ABSENT**: chưa có triển khai chức năng tương ứng trong source.
@@ -23,6 +47,46 @@ User reported blank Applications/Active Container labels and crashes on create, 
 - App initialization now snapshots all `getenv` values before `unsetenv`. Sandbox-path rewriting checks HOME/buffer/size and leaves the original output intact when the full home cannot fit. Added init/home/environment-ready logs.
 - Added `check_ui_runtime_contract.py` and an actual shared-localization Foundation smoke to both CI variants. Local contracts do not establish runtime crash resolution. **Need rootful/roothide native builds, the Preferences/Chrome crash reports and device re-test.**
 
+## Device log follow-up — mkdir EEXIST and missing long-press menu
+
+The 23:12:41/23:12:52 device logs identify a deterministic reconstruction
+failure: `CRManagerCreateEmptyContainer` visits `Library` for each nested
+subdirectory and called single-level mkdir again after it already existed.
+The original Crane initializer `0x65D0` uses `0x6BE0`'s existence check.
+`CRContainerScaffold.h` now uses a real-directory existence check before mkdir,
+retains symlink/non-directory rejection, and includes the original
+`Library/SplashBoard` directory. Fresh create, repopulation and wipe share the
+same actual helper. Creation returns/stores a filesystem error and Settings
+does not log a nil ID as a successful creation.
+
+Long-press code was compared with CraneSB `0x1ECD8/0x1EE64/0x1EEF0/0x1EF7C`,
+`0x15E20`, `0x1611C`, `0x145B8`, `0x1497C`, `0x14D18` and `0x137FC`.
+The recovered predicates explicitly return YES for unset shortcut/new/only-show/
+badge preferences, while reconstructed menu queries treated every nil as NO.
+The shared boolean helper now restores those defaults, preserving explicit
+false values and nil->NO for launch/expand switches. The original >1 count gate
+is unchanged: it assumes `Containers` includes DEFAULT. A compatibility
+projection in `CRContainerRegistry.h` supplies one DEFAULT for older custom-only
+registries and preserves registered custom entries; saved settings use that
+same representation. This is an explicit adapter because libcrane's native
+storage body has no export, not a claimed recovery of its binary internals.
+
+The supported-app gate now reads the shared synchronized registry before
+checking membership. Modern/legacy menu initialization restores the original
+children-before-title placeholder replacement precedence. Exact original
+SpringBoard selectors and the context->placeholder->replacement chain remain.
+Added diagnostics for installed selectors, query gate reason, selected app,
+replacement count/active ID, and the Crane Error alert's actual message.
+The supplied log proves corrected resource lookup and labels but does not
+contain the alert text or a Chrome crash backtrace.
+
+`check_shortcut_gate_contract.py` checks the original defaults/gates and optional
+local export cross-check; `container_menu_smoke.m` executes the production
+scaffold, registry projection and boolean defaults on macOS CI, including real
+fresh/repeated directory creation and file/symlink collisions. All 24 local
+Python contracts pass; **native CI and device menu/create verification remain
+pending**. No commit/push.
+
 ## 1. Danh sách triển khai
 
 | ID | Feature | Trạng thái | Đầu việc cụ thể | Bằng chứng / nơi kiểm tra | Priority | Điều kiện nghiệm thu |
@@ -39,10 +103,10 @@ User reported blank Applications/Active Container labels and crashes on create, 
 | F-10 | Game Center | STRUCTURE ONLY | Khôi phục model Game Center/manager state từ binary còn thiếu; không phỏng đoán | U-06 trong hiện trạng feature (lưu ý U-06 trong uncertainty register là backup format) | P1 BLOCKED BY EVIDENCE | Đúng enable list và container/account behavior |
 | F-11 | Device ID | PARTIAL, guarded settings subset | Manager UUID selection corrected to match LSD fallback; readonly ID and conditional non-DEFAULT use-container-ID switch (only with valid existing custom UUID) added; original setter/helped lsd storage and authentication remain unverified | `CRLsd.m`, `CRManager.m`, `CRPreferences.m`, CranePrefs 0x10608/0xF8F0/0x12F74 | P1 | UUID ổn định và cách ly theo container |
 | F-12 | Plug-in enumeration | PARTIAL, scoped synchronous query + Shortcuts fallback | The 0xFD70/0xF174 container rule is now scoped to the synchronous match on the invoking thread, with nested restoration and one-shot consumption; protects different threads from global cross-tagging. Async cross-thread attribution remains unverified; Shortcuts discovery is guarded | `CRPkd.m`, CraneSupport 0xE888/0xEC44/0xF174/0xFD70/0x101CC, U-10 | P1 | Correct plugin results by synchronous container query, no pkd crash/hang |
-| F-13 | Selection UI | PARTIAL, BOOL callback ported | Manager switch success callback now accepts BOOL and modern menu applies old-CF one-second launch delay; verify exact boolean semantics and native build/device UI | `CRManager.h`, `CRManager.m`, `CRMenuHooks.m`, 0x14214/0x14294/0x143CC | P1 | Menu modern/legacy, biometric, launch, UI comparison |
+| F-13 | Selection UI | PARTIAL, native defaults/gates restored | BOOL callback/delay ported; restore unset shortcut defaults, DEFAULT-inclusive registry/count model and child-before-title placeholder replacement; native menu/device verification pending | `CRMenuHooks.m`, `CRPreferences.h`, `CRContainerRegistry.h`, 0x1ECD8/0x15E20/0x1611C/0x145B8/0x137FC | P1 | Menu modern/legacy, biometric, launch, UI comparison |
 | F-14 | Badge UI + store | PARTIAL, active work | Badge store + native-aware `SBIconBadgeView`/`CRFakeIcon` menu renderer ported, fallback label retained; verify Theos build and UI/device screenshot, validate async refresh | `CRBadgeStore.m`, `CRBadgeAction.m`, `CRMenuHooks.m`, 0x7F58/0x8ED4/0x13508/0x190D4 | P1 | Accurate aggregate and per-container display, zero removes scoped notifications |
 | F-15 | Settings UI | PARTIAL, notification permissions + Browse Data | Game Center settings, async size, Filza app-path browser and native-gated per-container Allow Notifications toggle implemented; reset registration backend remains stub; finish backup/restore, groups/plugins, device ID and device UI tests | `CRPreferences.m`, `CRBadgeStore.m`, CranePrefs 0x11734/0x13980 | P1 | 3/3 panes + expected subcontrollers and navigation |
-| F-16 | Lifecycle | PARTIAL, app-home path guarded | Scoped per-app directory resolution and read-only unknown-container discovery restored conditionally; retain destructive guards, staging, wipe rollback; import/delete unknown and migration need device tests | `CRManager.m`, `CranePrefs` 0x86A8/0xB638, U-04/U-09 | P0 | CRUD không mất dữ liệu; migration consistency |
+| F-16 | Lifecycle | PARTIAL, idempotent guarded scaffold | Scoped app-home and unknown discovery retained; repeated Library mkdir EEXIST fixed, SplashBoard added, creation error propagated; retain staging/wipe guards and validate device CRUD | `CRManager.m`, `CRContainerScaffold.h`, Crane 0x65D0/0x6BE0, U-04/U-09 | P0 | CRUD không mất dữ liệu; migration consistency |
 | F-17 | Backup/restore | ABSENT | Reverse/archive manifest, restore, encryption, keychain dump; triển khai sau lifecycle/keychain | `CranePrefs_export_for_ai`, U-06 | P1 BLOCKED BY EVIDENCE | Round-trip data/keychain, corrupted archive failure safe |
 | F-18 | Biometrics | SOURCE_PORTED / untested | Biometric switch regression tests | Source biometric hooks | P1 VERIFY | Success/cancel/locked behavior |
 | F-19 | Helper XPC | PARTIAL, safe unsupported delegates | Authenticated raw-XPC health/attestation remains; credential-less ObjC delegate no longer fabricates Device ID from daemon defaults or fake empty Keychain backups; restore/setter refuse unsupported operations | `CRHelperd.m`, `CRManager.m`, U-01 | P0 BLOCKED BY EVIDENCE | Authorized requests and original protocol compatibility, runtime tested |

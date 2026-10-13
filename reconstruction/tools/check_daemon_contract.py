@@ -99,7 +99,10 @@ assert '"operation", "lookup_pid"' in lookup_body
 assert 'xpc_dictionary_set_int64(request, "pid", pid)' in lookup_body
 assert 'xpc_dictionary_get_bool(response, "authorized")' in lookup_body
 assert 'xpc_dictionary_get_bool(response, "injection_verified")' in lookup_body
-assert 'finish(containerID, authorized)' in lookup_body
+assert 'finish(containerID, authorized, error)' in lookup_body
+assert 'CRHelperValidateHealthReply(response, @"lookup_pid", &error)' in lookup_body
+assert 'CRHelperReplyTimedOut' in lookup_body
+assert 'CRManagerDeliverHelperReply(error,' in lookup_body
 assert 'reply(CR_DEFAULT_CONTAINER_IDENTIFIER)' not in lookup_body
 assert manager_header.count('reply:(void (^)(NSString *containerID, BOOL connectionWorks))reply;') == 2
 assert 'reply:(void (^)(NSString *, BOOL))reply' in manager

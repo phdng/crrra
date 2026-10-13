@@ -35,6 +35,7 @@
 #import "CRManager.h"
 #import "CRPaths.h"
 #import "CRCommon.h"
+#import "CRXPCDiagnostics.h"
 
 #include <notify.h>
 #include <xpc/xpc.h>
@@ -703,6 +704,8 @@ static void CRAcceptHealthPeer(xpc_connection_t peer)
     NSString *peerProcess = CRProcessNameForPid(peerPid);
     NSString *peerSigningID = CRSigningIdentifierForPeer(peer);
     NSString *peerToken = NSUUID.UUID.UUIDString;
+    NSLog(@"Crane helper: accepted peer pid=%d process=%@ signingID=%@",
+          peerPid, peerProcess, peerSigningID);
     __block BOOL registeredOnPeer = NO;
 
     xpc_connection_set_event_handler(peer, ^(xpc_object_t message) {
@@ -725,6 +728,8 @@ static void CRAcceptHealthPeer(xpc_connection_t peer)
 int main(int argc, char *argv[], char *envp[])
 {
     @autoreleasepool {
+        NSLog(@"Crane helper: starting pid=%d uid=%d protocol=%s",
+              getpid(), geteuid(), CR_HELPERD_PING_PROTOCOL_V1);
         CRHServiceShared *shared = CRHServiceShared.sharedService;
 
         CRHPreferencesService *prefs = [CRHPreferencesService new];
@@ -743,7 +748,8 @@ int main(int argc, char *argv[], char *envp[])
             xpc_connection_set_event_handler(prefsConn,
                 ^(xpc_object_t event) {
                     if (xpc_get_type(event) == XPC_TYPE_ERROR) {
-                        NSLog(@"Crane helper: preferences XPC listener error");
+                        NSLog(@"Crane helper: preferences XPC listener error=%@",
+                              CRHelperXPCEventError(event, @"listen_preferences"));
                         return;
                     }
                     if (xpc_get_type(event) != XPC_TYPE_CONNECTION)
@@ -762,7 +768,8 @@ int main(int argc, char *argv[], char *envp[])
             xpc_connection_set_event_handler(globalConn,
                 ^(xpc_object_t event) {
                     if (xpc_get_type(event) == XPC_TYPE_ERROR) {
-                        NSLog(@"Crane helper: global XPC listener error");
+                        NSLog(@"Crane helper: global XPC listener error=%@",
+                              CRHelperXPCEventError(event, @"listen_global"));
                         return;
                     }
                     if (xpc_get_type(event) != XPC_TYPE_CONNECTION)

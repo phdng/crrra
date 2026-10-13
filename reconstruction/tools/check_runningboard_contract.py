@@ -40,7 +40,9 @@ assert 'reply:^(NSString *actualContainer, BOOL connectionWorks)' in source
 assert '(void)[actualContainer isEqualToString:expectedContainer];' in source
 assert 'if (connectionWorks == YES)' in source
 assert 'CRPresentMainDylibNotLoadedError(processName);' in source
-assert 'CRPresentDaemonError(@[@"runningboardd"], nil, NO);' in source
+assert 'CRPresentDaemonError(@[@"runningboardd"],\n                        [CraneManager.sharedManager getLastError], NO);' in source
+# Reconstruction adapter now retains the underlying transport error; the
+# recovered nil/false -> communication-error branch and two-argument ABI stay.
 assert 'reply lacks the original second status' not in source
 badge = (Path(__file__).resolve().parents[1] / 'sources/cranesb/CRBadgeStore.m').read_text(encoding='utf-8')
 # Native 0xB00C -> 0xAC2C projects corrected badge counts after startup

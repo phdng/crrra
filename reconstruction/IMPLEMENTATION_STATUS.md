@@ -59,6 +59,51 @@ F-IDs refer to `analysis/behavior_specification.md`.
 | F-22 | Shortcuts / Siri | **Not implemented** | No source for `CraneIntentHandlerShared` (U-08) |
 | F-23 | Activator | Partial — dynamic load, listener/event registration, name parsing, switch/abort callbacks, metadata and app-icon generation are transcribed | `generateIconImageWithInfo:` is now recovered as a four-double HFA from both arm64 slices; remaining gap is the reconstructed `CraneManager` observer-dispatch semantics plus runtime testing |
 
+### Device log follow-up: container creation and long-press gates
+
+The new device log shows the localization resource exists and Active Container
+has a visible label. Creating a new container fails with Cocoa 516 / POSIX
+EEXIST on the repeated Library mkdir. The production scaffold now skips real
+existing directories, refuses symlinks/files and includes SplashBoard as in
+Crane 0x65D0. The Settings creation action does not treat nil as success.
+
+Original CraneSB nil->YES shortcut predicates and child-before-title UIMenu
+placeholder precedence are restored. DEFAULT is projected into older
+custom-only reconstruction registries, satisfying the original >1 container
+gate without changing it. This registry projection is an adapter to the
+unexported libcrane body. Source contracts pass; an actual-helper Foundation
+filesystem/defaults/registry smoke is added to CI. Native menu/UI verification
+and the unspecified Crane Error/Chrome crash remain unverified.
+
+### Device alert follow-up: helper communication
+
+The user supplied the COMMUNICATION_ERROR_MESSAGE alert with an empty suffix.
+The adapter was discarding XPC errors, returning nil NSError, and the recovered
+post-launch nil/false branch also presented nil as the error. It now decodes
+transport invalidation/interruption, malformed/version-mismatched replies and
+two-second insurance/PID-lookup timeouts. Errors are retained in a reply-scoped
+getLastError context (plus the existing manager snapshot), and the launch
+insurance gate snapshots its original getLastError classification in the reply.
+Connectivity never implies successful injection or peer authorization.
+
+Helper signing inputs are recovered directly from LC_CODE_SIGNATURE SuperBlob
+slot 5 in the original cranehelperd and cranehelperd_start. Rootful uses the
+original entitlement dictionaries; Roothide adds its documented executable
+permissions. All raw clients explicitly target the privileged Mach bootstrap,
+consistent with the recovered LaunchDaemons job. The starter resolves its
+bootstrap launchctl executable through jbroot on Roothide. These are adapter
+and build corrections, not a recovered original helper implementation.
+
+Static contracts and original entitlement comparisons pass. CI additionally
+compiles the actual diagnostic decoder and checks emitted package signatures.
+Native build and device results are still unobserved. This alert does not prove
+whether the installed daemon is absent, cannot start, or cannot communicate.
+
+Automatic approval review rejected proposed package post-install bootstrap /
+restart hooks and their executable staging step because they affect a root
+service. No maintainer scripts or staging changes remain. That packaging
+adapter awaits explicit user approval; the original scripts are unavailable.
+
 ## 3. Coverage summary
 
 | Measure | Value |

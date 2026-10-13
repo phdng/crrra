@@ -82,13 +82,25 @@
 
 /* ---- helpers ----------------------------------------------------------- */
 
+static inline BOOL CRPrefBoolValue(NSString *key, id value)
+{
+    if (value)
+        return [value boolValue];
+    /* Explicit nil->YES branches recovered in CraneSB 0x1ECD8, 0x1EE64,
+     * 0x1EEF0, 0x1EF7C; notification/title defaults also match Root.plist.
+     * Launch/expand and unrecognized/per-app keys keep nil->NO. */
+    return [key isEqualToString:CRPref_AppShortcutEnabled] ||
+           [key isEqualToString:CRPref_NewContainerShortcut] ||
+           [key isEqualToString:CRPref_OnlyShowIfContainersExist] ||
+           [key isEqualToString:CRPref_ShowContainerNotificationBadges] ||
+           [key isEqualToString:CRPref_NotificationsSupportEnabled] ||
+           [key isEqualToString:CRPref_ShowContainerInTitle];
+}
+
 static inline BOOL CRPrefBool(NSString *key)
 {
-    /* Mirrors CraneSB 0x1ED64 exactly: CraneManager may return nil for an unset
-     * key, and [nil boolValue] is 0, i.e. every unset per-app switch reads NO.
-     * The one exception is separateNotificationRegistrationsEnabled, which
-     * carries an explicit `default = 1` on its specifier (CranePrefs 0x8D00). */
-    return [[[CraneManager sharedManager] preferenceValueForKey:key] boolValue];
+    return CRPrefBoolValue(key,
+        [[CraneManager sharedManager] preferenceValueForKey:key]);
 }
 
 #endif /* CR_PREFERENCES_H */
