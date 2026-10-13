@@ -1,0 +1,51 @@
+{
+  "source": "CranePrefs_export_for_ai/memory virtual-address dumps (ignored by git)",
+  "architecture": "arm64",
+  "entries": [
+    {
+      "pc": "0x3f180",
+      "instruction": "81f20c58",
+      "slot": "0x58fd0",
+      "slot_bytes": "676d040000000000",
+      "string_address": "0x46d67",
+      "string_bytes": "73686f756c6453686f77417070506c7567496e7300",
+      "selector": "shouldShowAppPlugIns"
+    },
+    {
+      "pc": "0x3f1a0",
+      "instruction": "c1f10c58",
+      "slot": "0x58fd8",
+      "slot_bytes": "7c6d040000000000",
+      "string_address": "0x46d7c",
+      "string_bytes": "73686f756c6453686f77547765616b3a00",
+      "selector": "shouldShowTweak:"
+    },
+    {
+      "pc": "0x3f1c0",
+      "instruction": "01f10c58",
+      "slot": "0x58fe0",
+      "slot_bytes": "8d6d040000000000",
+      "string_address": "0x46d8d",
+      "string_bytes": "72656164507265666572656e63657300",
+      "selector": "readPreferences"
+    },
+    {
+      "pc": "0x3f1e0",
+      "instruction": "41f00c58",
+      "slot": "0x58fe8",
+      "slot_bytes": "9d6d040000000000",
+      "string_address": "0x46d9d",
+      "string_bytes": "7772697465507265666572656e63657300",
+      "selector": "writePreferences"
+    },
+    {
+      "pc": "0x3f200",
+      "instruction": "81ef0c58",
+      "slot": "0x58ff0",
+      "slot_bytes": "ae6d040000000000",
+      "string_address": "0x46dae",
+      "string_bytes": "73656e64506f73744e6f74696669636174696f6e00",
+      "selector": "sendPostNotification"
+    }
+  ]
+}

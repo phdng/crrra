@@ -85,8 +85,8 @@ jobs:
       - name: Verify Preferences Game Center settings
         run: python3 reconstruction/tools/check_prefs_settings_contract.py
 
-      - name: Verify optional Choicy integration
-        run: python3 reconstruction/tools/check_choicy_integration_contract.py
+      - name: Verify optional Choicy integration (tracked native evidence)
+        run: CRANE_CHOICY_SKIP_NATIVE_EXPORT=1 python3 reconstruction/tools/check_choicy_integration_contract.py
 
       - name: Verify asynchronous container size footer
         run: python3 reconstruction/tools/check_container_size_contract.py

@@ -84,32 +84,16 @@ assert display_rows("C1", False, True) == ["group", "active", "rename"]
 assert display_rows("C1", True, False)[-1] == "toggle"
 assert display_rows("C1", True, True)[-1] == "preview"
 
-# Resolve the five hidden initialization selectors from the original export.
-# Memory dumps are indexed by virtual address and need no disassembler in CI.
+# Resolve the five hidden initialization selectors from native evidence.
+# Full CranePrefs memory dumps are ignored by Git (Library/ in .gitignore),
+# so a GitHub Actions checkout cannot read virtual address 0x3F180.
+# A small checked-in byte-for-byte fixture is the CI source of evidence.
+# If the native export is present locally, cross-check ALL sampled bytes.
+import json
+import os
 import re
 import struct
-export = root.parent / "Library/PreferenceBundles/CranePrefs.bundle/CranePrefs_export_for_ai"
-memory = {}
-line_pattern = re.compile(r"^([0-9A-Fa-f]+)\s\|\s([0-9A-Fa-f\s]+?)\s*\|")
-for dump in (export / "memory").glob("*.txt"):
-    for line in dump.read_text(encoding="utf-8").splitlines():
-        match = line_pattern.match(line)
-        if match:
-            address = int(match[1], 16)
-            data = bytes.fromhex(match[2])
-            memory.update((address + i, byte) for i, byte in enumerate(data))
 
-def read(address, size):
-    return bytes(memory[address + i] for i in range(size))
-
-def cstring(address):
-    result = bytearray()
-    while memory[address]:
-        result.append(memory[address])
-        address += 1
-    return result.decode("utf-8")
-
-# ARM64 LDR-literal x1 at each call setup points to the selector-reference slot.
 expected = [
     (0x3F180, 0x58FD0, "shouldShowAppPlugIns"),
     (0x3F1A0, 0x58FD8, "shouldShowTweak:"),
@@ -117,17 +101,68 @@ expected = [
     (0x3F1E0, 0x58FE8, "writePreferences"),
     (0x3F200, 0x58FF0, "sendPostNotification"),
 ]
+fixture_file = root / "tools/fixtures/choicy_native_selectors.json"
+fixture = json.loads(fixture_file.read_text(encoding="utf-8"))
+assert fixture["architecture"] == "arm64"
+assert len(fixture["entries"]) == len(expected)
+
 editor = (root / "sources/prefs/CRChoicyEditor.m").read_text(encoding="utf-8")
-for pc, slot, selector in expected:
-    instruction = struct.unpack("<I", read(pc, 4))[0]
+samples = []
+for (pc, slot, selector), record in zip(expected, fixture["entries"]):
+    assert int(record["pc"], 16) == pc
+    assert int(record["slot"], 16) == slot
+    assert record["selector"] == selector
+    instruction_bytes = bytes.fromhex(record["instruction"])
+    slot_bytes = bytes.fromhex(record["slot_bytes"])
+    string_bytes = bytes.fromhex(record["string_bytes"])
+    assert len(instruction_bytes) == 4
+    assert len(slot_bytes) == 8
+    assert string_bytes == selector.encode("utf-8") + b"\0"
+    instruction = struct.unpack("<I", instruction_bytes)[0]
     assert instruction & 0xFF00001F == 0x58000001  # LDR x1, literal
     immediate = (instruction >> 5) & 0x7FFFF
     if immediate & 0x40000:
         immediate -= 0x80000
     assert pc + immediate * 4 == slot
-    pointer = struct.unpack("<Q", read(slot, 8))[0]
-    assert cstring(pointer) == selector
+    pointer = struct.unpack("<Q", slot_bytes)[0]
+    assert pointer == int(record["string_address"], 16)
     assert '{"' + selector + '", (IMP)CRChoicy' in editor
+    samples.append((pc, instruction_bytes, slot, slot_bytes, pointer, string_bytes))
+
+export = root.parent / "Library/PreferenceBundles/CranePrefs.bundle/CranePrefs_export_for_ai"
+dump_files = sorted((export / "memory").glob("*.txt"))
+skip_native = os.environ.get("CRANE_CHOICY_SKIP_NATIVE_EXPORT") == "1"
+require_native = os.environ.get("CRANE_CHOICY_REQUIRE_NATIVE_EXPORT") == "1"
+assert not (skip_native and require_native)
+if require_native:
+    assert dump_files, "Native CranePrefs memory export is required but missing"
+
+if dump_files and not skip_native:
+    memory = {}
+    line_pattern = re.compile(r"^([0-9A-Fa-f]+)\s\|\s([0-9A-Fa-f\s]+?)\s*\|")
+    for dump in dump_files:
+        for line in dump.read_text(encoding="utf-8").splitlines():
+            match = line_pattern.match(line)
+            if match:
+                address = int(match[1], 16)
+                data = bytes.fromhex(match[2])
+                memory.update((address + i, byte) for i, byte in enumerate(data))
+
+    def read_native(address, size):
+        missing = [address + i for i in range(size) if address + i not in memory]
+        assert not missing, (
+            f"Incomplete CranePrefs memory export at 0x{missing[0]:X}; "
+            "checked-in selector fixture remains available"
+        )
+        return bytes(memory[address + i] for i in range(size))
+
+    for pc, instruction_bytes, slot, slot_bytes, pointer, string_bytes in samples:
+        assert read_native(pc, 4) == instruction_bytes
+        assert read_native(slot, 8) == slot_bytes
+        assert read_native(pointer, len(string_bytes)) == string_bytes
+    print("CranePrefs selector evidence: tracked fixture + native export cross-check PASS")
+else:
+    print("CranePrefs selector evidence: tracked fixture PASS (native export unavailable/skipped)")
 
 for fragment in (
     'objc_allocateClassPair(parent,',
