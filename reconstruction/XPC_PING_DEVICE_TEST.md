@@ -30,6 +30,69 @@ passed only after observing it on-device. The wrong-protocol and delayed-reply
 cases require a controlled diagnostic client/peer; no such harness is currently
 included in the reconstruction.
 
+## Chrome PID 3411: sandboxed app cannot reach helper XPC (2026-10-13)
+
+New device evidence after the app runtime probe is definitive at the
+**transport** level:
+
+```text
+Chrome[3411]: Crane: app init ... container=F7555D97-7AE9-4D62-9BF2-9A9E42AE5BBB
+Chrome[3411]: Crane: app runtime_report queued pid=3411
+Chrome[3411]: Crane: helper runtime_report error=... Code=1003 ... Connection invalid
+Chrome[3411]: Crane: app runtime_report transport probe error ... Code=1003
+SpringBoard: post-launch proof missing ... helper=1 (attempts 1/2/3)
+```
+
+Chrome is injected and its container environment is present. The helper is
+reachable **from SpringBoard**, not from the Chrome app sandbox. Existing
+package libSandy profiles `CraneRB`, `CraneSupport` and
+`CraneShortcuts` grant the helper's Mach lookup to those processes, but
+there is no corresponding grant for arbitrary third-party applications.
+This is a strong sandbox/Mach-lookup hypothesis. A Connection invalid result
+could also represent a rejected peer or broken listener, so validate again
+with the new profile status and the helper's peer logs.
+
+The reconstruction now ships **an additional** profile
+`Library/libSandy/CraneAppRuntime.plist`: it allows one application sandbox
+extension (`type=mach`, `extension_class=com.apple.app-sandbox.mach`,
+`mach_name=com.opa334.cranehelperd.xpc`) and **nothing else**. Its
+`AllowedProcesses=["*"]` permits Crane to support arbitrary managed apps,
+but the extension is only requested by the injected Crane main dylib when a
+nondefault container was supplied. Before the existing one-way
+`runtime_report`, that dylib calls `libSandy_applyProfile("CraneAppRuntime")`
+using the jbroot-resolved libSandy library. It does not grant filesystem
+access, authorize other helper operations, claim a PID supplied by the
+client, or bypass the Helper's runtime-attestation checks. Both rootful and
+roothide package inspection verify that the shipped profile still has exactly
+one Mach permission. If loading/applying libSandy fails, the existing
+connection still attempts normally and the source reports the failure.
+
+After rebuilding/reinstalling the package, on the mobile shell:
+
+```sh
+ls -l /Library/libSandy/CraneAppRuntime.plist
+plutil -p /Library/libSandy/CraneAppRuntime.plist
+oslog | grep -E 'Crane: app runtime Mach profile|Crane: app runtime_report|Crane: helper runtime_report error|Crane helper: (accepted peer|runtime_report|PID proof missing|lookup_pid)|CraneSB: post-launch'
+```
+
+- `app runtime Mach profile ... status=0`: libSandy said it applied the
+  extension; confirm the **separate** XPC probe reaches `alive=1 compatible=1`.
+- `Mach profile unavailable` or nonzero `status`: inspect libSandy
+  installation/profile support in the active Roothide bootstrap.
+- Compatible app ping but no Helper `runtime_report accepted`: do not infer
+  injection proof; inspect rejection and peer registration logs instead.
+- Chrome's app report accepted for the **same PID** and Helper
+  `lookup_pid ... hasProof=1` is the required end-to-end success.
+
+User data warning: at least THREE different Chrome container IDs have
+appeared during testing:
+`007FADC7-01AC-4740-AD98-0099E98A32FC`,
+`1947F19D-7E24-40BF-9E8F-2EA7C70B65B9`, and
+`F7555D97-7AE9-4D62-9BF2-9A9E42AE5BBB`. Their profiles are separate.
+Do not delete, reset, merge or overwrite any of them or Chrome's default
+container while confirming the current active selection. The XPC fix does
+not read/write Chrome's profile files.
+
 ## Chrome PID 3100: container supplied, runtime proof missing (2026-10-13)
 
 The latest Roothide 15.8.8 device log conclusively shows Chrome accepted

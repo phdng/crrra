@@ -51,6 +51,46 @@ The existing read-only diagnostic remains available for verification.
 
 ## Device incident — Chrome launched into DEFAULT after Helper XPC recovery
 
+**F-19 app-sandbox Helper Mach lookup fix (Chrome PID 3411, 2026-10-13):**
+Chrome log proves main ` Crane.dylib` loaded, selected nondefault
+`F7555D97-7AE9-4D62-9BF2-9A9E42AE5BBB` is present, and app
+`runtime_report` was queued, but the app's same-connection probe returns
+`Code=1003 Connection invalid` repeatedly. In parallel SpringBoard
+`lookup_pid` has `helper=1` and no Chrome proof. This isolates an
+**app-to-helper XPC transport** fault; a sandbox Mach-lookup permission
+gap is the leading hypothesis, not a proven denial. Profile diff: all
+original/reconstructed libSandy profiles for runningboardd
+(`CraneRB`), CraneSupport daemons and CraneShortcuts grant the helper
+Mach service, but the original `libCrane` profile for arbitrary apps
+only grants preferences-file access. The `libSandy` upstream API
+supports granting an exact Mach service via
+`com.apple.app-sandbox.mach` to sandboxed applications. To address this
+reconstruction-only runtime attestation channel, added
+`layout/Library/libSandy/CraneAppRuntime.plist` with
+`AllowedProcesses=["*"]` (necessary for arbitrary managed bundle IDs)
+and **exactly one** mach extension to
+`com.opa334.cranehelperd.xpc`; no filesystem, keychain, wildcard Mach
+or other RPC access. Main `CRMainDylib.m` only requests it for
+nondefault container launch before the unchanged
+`CRReportRuntimeInjection` call, through the jbroot-resolved libSandy
+`libSandy_applyProfile("CraneAppRuntime")` function, and logs
+success/failure without faking proof. Helper PID and signing-based
+caller authorization remain unchanged. Added
+`check_app_runtime_sandbox_contract.py` in both CI schemes and
+strengthened the extracted-package verifier to reject an overbroad or
+malformed installed profile. **Native build and on-device libSandy
+profile application / app-to-helper XPC / live same-PID proof remain
+unverified.** If libSandy fails, log its return code and inspect the
+Roothide install; do not bypass XPC authorization.
+
+**Data isolation caution:** Chrome container UUIDs
+`007FADC7-01AC-4740-AD98-0099E98A32FC`,
+`1947F19D-7E24-40BF-9E8F-2EA7C70B65B9` and
+`F7555D97-7AE9-4D62-9BF2-9A9E42AE5BBB` are distinct profiles.
+App init only creates missing skeleton directories; no delete of prior
+profiles in this fix. Preserve these directories and DEFAULT; the new
+Mach extension neither accesses nor migrates app data.
+
 **New app-to-Helper attestation incident (Chrome PID 3100, 2026-10-13):**
 After the Roothide SpringBoard launch fallback was deployed, Chrome logged
 `Crane: app init ... container=1947F19D-7E24-40BF-9E8F-2EA7C70B65B9`

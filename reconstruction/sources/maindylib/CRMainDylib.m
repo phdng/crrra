@@ -231,6 +231,34 @@ static int CRSandboxContainerPathForPidHook(int pid, char *buffer, size_t size)
     return rc;
 }
 
+/* Reconstruction-only app-to-helper attestation access.
+ *
+ * Native libSandy profiles grant the helper Mach name to runningboardd,
+ * CraneSupport daemons and CraneShortcuts, but not ordinary app sandboxes.
+ * Chrome's Code=1003 report confirms the app XPC client cannot reach the
+ * same Helper listener used by SpringBoard. Ask libSandy for only the
+ * com.opa334.cranehelperd.xpc Mach extension before reporting injection.
+ * No app credential, filesystem capability, helper authorization or
+ * message ABI is changed by this attempt. */
+static BOOL CRPrepareAppRuntimeMachLookup(void)
+{
+    NSString *path = CRJailbreakRootPath(CR_LIB_SANDY);
+    void *handle = path.length
+        ? dlopen(path.fileSystemRepresentation, RTLD_NOW) : NULL;
+    if (!handle) {
+        NSLog(@"Crane: app runtime Mach profile unavailable pid=%d libSandy=%@",
+              getpid(), path);
+        return NO;
+    }
+    int (*applyProfile)(const char *) =
+        (int (*)(const char *))dlsym(handle, "libSandy_applyProfile");
+    int rc = applyProfile ? applyProfile("CraneAppRuntime") : -1;
+    dlclose(handle);
+    NSLog(@"Crane: app runtime Mach profile pid=%d status=%d",
+          getpid(), rc);
+    return rc == 0;
+}
+
 /* ------------------------------------------------------------------------- */
 /* InitFunc_0 (0x65D0)                                                        */
 /* ------------------------------------------------------------------------- */
@@ -321,6 +349,8 @@ static void CRInitFunc(void)
 
     /* Runtime proof for SpringBoard's post-launch injection check. The helper
      * binds this container claim to our kernel-reported XPC PID. */
-    if (_crActiveContainerIdentifier.length)
+    if (_crActiveContainerIdentifier.length) {
+        CRPrepareAppRuntimeMachLookup();
         CRReportRuntimeInjection(@"Crane", _crActiveContainerIdentifier);
+    }
 }

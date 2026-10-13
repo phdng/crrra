@@ -79,6 +79,29 @@ def main(root_arg: str, control_arg: str | None = None) -> int:
             failures += 1
             print("FAIL cranehelperd is not executable in package")
 
+    # The app-side runtime_report uses a single libSandy Mach lookup grant.
+    # The package must not accidentally widen this app sandbox exception
+    # (AllowedProcesses='*' is necessary for arbitrary Crane-managed apps).
+    app_profile = root / "Library/libSandy/CraneAppRuntime.plist"
+    if app_profile.is_file():
+        try:
+            actual_profile = plistlib.loads(app_profile.read_bytes())
+            valid_profile = actual_profile == {
+                "AllowedProcesses": ["*"],
+                "Extensions": [{
+                    "type": "mach",
+                    "extension_class": "com.apple.app-sandbox.mach",
+                    "mach_name": "com.opa334.cranehelperd.xpc",
+                }],
+            }
+        except (OSError, ValueError, TypeError, plistlib.InvalidFileException):
+            valid_profile = False
+        if valid_profile:
+            print("OK   app runtime sandbox: exact single Mach service")
+        else:
+            failures += 1
+            print("FAIL app runtime sandbox: invalid or overbroad permissions")
+
     # Maintainer scripts belong to control.tar.*, never the installed data tree.
     if control_arg is None:
         failures += 1
