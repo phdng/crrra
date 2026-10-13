@@ -46,7 +46,7 @@ rather than full control-flow transcription.
 F-16 (partially) and F-19 remain declarations/dispatch or incomplete
 implementations. F-20 now has its recovered `CRErrorAlert`/presenter core
 transcribed, but launch-injection verification still depends on U-01. F-21 now has its recovered Choicy provider/runtime core
-transcribed, but the reconstructed settings bundle still lacks its per-container Choicy editor. F-08 now has its recovered apsd-side token/topic hook chain
+transcribed, and the optional per-container Choicy editor is now ported from 0x3F108-0x3F774; native and device validation remain pending. F-08 now has its recovered apsd-side token/topic hook chain
 transcribed but still lacks the SpringBoard notification-routing half and U-01 health proxy. F-11 now has its recovered lsd/device-identifier hook chain
 transcribed but still depends on U-01 helperd/PID plumbing. F-09 now has its recovered accountsd/Core Data hook chain
 transcribed but still depends on U-01/U-06 runtime plumbing. F-05 now has its recovered cfprefsd hook/ABI chain transcribed
@@ -185,7 +185,7 @@ delayed-launch nuance; reconstructed libcrane does not expose that reply detail,
 so the reconstructed menu paths act immediately after their available success
 callback. No device or visual comparison has been performed.
 
-### D-09 — Choicy provider/runtime core is reconstructed; the per-container editor is absent
+### D-09 — Choicy provider and container editor source are reconstructed; runtime validation is pending
 
 **Original:** `crane_initChoicyIntegration` resolves the jailbreak-root-aware
 `ChoicySB.dylib` path, loads it dynamically, obtains
@@ -205,11 +205,21 @@ and all six provider bodies, including NSNumber-only fallback parsing,
 corrected: the gate and nested payload are per-container, as corroborated by
 CranePrefs 0x10E68 and 0x3F44C/0x3F5C.
 
-**Remaining difference:** the reconstruction still does not implement
-`CRPContainerChoicyOverwriteListController`, so users cannot edit the nested
-Choicy configuration through the rebuilt settings UI. Runtime registration
-against a real Choicy build has not been tested. The older-CF SpringBoard branch
-interaction remains recorded under U-07 rather than normalized.
+**Container editor:** `CRChoicyEditor.m` now creates the optional dynamic
+`CRPContainerChoicyOverwriteListController` subclass, with the five initializer
+selectors proven against the original ARM64 memory dump. It scopes
+`readPreferences`/`writePreferences` to the selected container, hides plug-ins
+and the main `" Crane"` tweak, delegates other tweak visibility, and reloads only
+the active application's container. It does not invoke Choicy's global store
+writers. The settings row opens this editor only after checking private method
+ABIs; incompatible versions retain the read-only preview. Rejecting stale or
+DEFAULT containers and non-plist edits are explicit reconstruction guards.
+
+**Remaining difference:** real Settings/Choicy registration and editor/provider
+behavior have not been tested. An actual-source Foundation smoke test is wired
+into rootful/roothide CI, but no native execution or Theos build was possible in
+this Windows session. U-07's older-CF SpringBoard branch interaction remains
+unresolved.
 
 ### D-10 — The backup/restore engine is absent
 

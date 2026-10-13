@@ -15,8 +15,9 @@
  *
  * The class *names*, the preference *keys*, their *defaults*, the specifier
  * *order* and the section predicate are all CONFIRMED_STATIC. The custom
- * table cells, the backup/restore flows and the Choicy pane are NOT reproduced
- * - see final/KNOWN_DIFFERENCES.md.
+ * table cells and backup/restore flows remain incomplete. The optional Choicy
+ * editor is recovered separately in CRChoicyEditor.m; its native behavior
+ * remains unverified - see final/KNOWN_DIFFERENCES.md.
  */
 
 #import <UIKit/UIKit.h>
@@ -27,6 +28,7 @@
 #import "CRPaths.h"
 #import "CRPreferences.h"
 #import "CRCommon.h"
+#import "CRChoicyEditor.h"
 
 /* AltList and the Preferences framework are linked by the original. They are
  * declared minimally here so the file can be read without their headers; the
@@ -497,10 +499,9 @@
              * reconstruction; do not expose an action that cannot work. */
         }
 
-        /* CranePrefs 0x10BD4/0x10E68/0x11734: optional Choicy integration
-         * is shown only for non-DEFAULT containers when Choicy exists.
-         * The original dynamic subclass editor remains unported; expose
-         * only the persisted override toggle and a read-only preview. */
+        /* CranePrefs 0x10BD4/0x10E68/0x11734: optional container editor (0x3F108).
+         * Keep the read-only preview if the installed Choicy private ABI
+         * cannot support the recovered callbacks. */
         if (![self.containerIdentifier isEqualToString:CR_DEFAULT_CONTAINER_IDENTIFIER] &&
             [self craneChoicyIntegrationAvailable]) {
             PSSpecifier *choicyGroup = [PSSpecifier emptyGroupSpecifier];
@@ -517,10 +518,14 @@
             self.choicyOverwriteToggleSpecifier = toggle;
             [rows addObject:toggle];
 
+            Class editorClass = CRChoicyContainerEditorClass();
             PSSpecifier *preview = [PSSpecifier preferenceSpecifierNamed:
                 CRLocalize(@"CHOICY_CONFIGURATION") target:self set:NULL
                 get:@selector(previewStringForChoicyConfiguration:)
-                detail:NULL cell:4 edit:0];
+                detail:editorClass cell:(editorClass ? 2 : 4) edit:0];
+            [preview setProperty:@YES forKey:@"enabled"];
+            if (editorClass)
+                [preview setDetailControllerClass:editorClass];
             [preview setProperty:CRCContainer_ChoicyConfigurationOverwrite
                          forKey:@"key"];
             [preview setProperty:self.applicationIdentifier
@@ -767,7 +772,14 @@
 /* Native 0x10CD0: toggle row persistence and immediate preview visibility. */
 - (void)setChoicyOverwriteEnabled:(id)value specifier:(PSSpecifier *)specifier
 {
-    if (!self.applicationIdentifier.length || !self.containerIdentifier.length)
+    if (![value respondsToSelector:@selector(boolValue)] ||
+        ![[specifier propertyForKey:@"key"]
+            isEqualToString:CRCContainer_ChoicyConfigurationOverwriteEnabled] ||
+        !self.applicationIdentifier.length || !self.containerIdentifier.length ||
+        [self.containerIdentifier isEqualToString:CR_DEFAULT_CONTAINER_IDENTIFIER] ||
+        ![[CraneManager.sharedManager
+            containerIdentifiersOfApplicationWithIdentifier:self.applicationIdentifier]
+            containsObject:self.containerIdentifier])
         return;
     CraneManager *manager = CraneManager.sharedManager;
     NSMutableDictionary *settings = [[manager
@@ -775,7 +787,7 @@
                           ofApplicationWithIdentifier:self.applicationIdentifier]
         mutableCopy];
     if (!settings)
-        settings = [NSMutableDictionary new];
+        return;
     settings[CRCContainer_ChoicyConfigurationOverwriteEnabled] = @([value boolValue]);
     [manager setContainerSettings:settings
         forContainerWithIdentifier:self.containerIdentifier

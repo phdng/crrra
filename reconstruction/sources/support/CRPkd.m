@@ -40,7 +40,7 @@
                    reply:(dispatch_block_t)reply;
 @end
 
-static NSString *gCRPkdContainerID;
+static NSString * const kCRPkdScopedContainerIDKey = @"com.opa334.crane.pkd.scopedContainerID";
 static id gCRPkdServer;
 
 static IMP gOrigEnableFull;
@@ -317,10 +317,15 @@ static NSString *CRPkdVerifiedContainerID(const char *value)
 
 static void CRPkdMatchPlugIns(id self, SEL _cmd)
 {
-    /* Unlike original 0xFD70, discard an unconsumed ID before a new match.
-     * Otherwise a request with no Crane rule could inherit the previous
-     * request's container when no findPlugIns hook consumed the old value. */
-    gCRPkdContainerID = nil;
+    /* Original CraneSupport 0xFD70 holds this value in a process-global
+     * string. If unrelated transactions overlap, the last caller wins and
+     * 0xF174 can tag the wrong extension. Scope the ID to the synchronous
+     * matchPlugIns call on the invoking thread instead. An asynchronous
+     * database query on a different thread is intentionally left untagged,
+     * not associated with another caller's container. */
+    NSMutableDictionary *scope = [[NSThread currentThread] threadDictionary];
+    NSString *previous = scope[kCRPkdScopedContainerIDKey];
+    [scope removeObjectForKey:kCRPkdScopedContainerIDKey];
     xpc_object_t request = [self request];
     xpc_object_t rules = request
         ? xpc_dictionary_get_dictionary(request, "rules")
@@ -331,12 +336,13 @@ static void CRPkdMatchPlugIns(id self, SEL _cmd)
         if (container) {
             /* Reject unsafe path components, but retain non-UUID imported
              * IDs. Strip the private key even when it is invalid. */
-            gCRPkdContainerID = CRPkdVerifiedContainerID(container);
+            NSString *verified = CRPkdVerifiedContainerID(container);
+            if (verified)
+                scope[kCRPkdScopedContainerIDKey] = verified;
             xpc_dictionary_set_value(rules, "crane_containerID", NULL);
             xpc_dictionary_set_value(request, "rules", rules);
 
-            /* Recovered code materialises/free()s descriptions; no logging is
-             * emitted, but preserve the side-effect-free calls. */
+            /* The recovered binary materialises and frees descriptions. */
             char *rulesDescription = xpc_copy_description(rules);
             if (rulesDescription)
                 free(rulesDescription);
@@ -347,7 +353,16 @@ static void CRPkdMatchPlugIns(id self, SEL _cmd)
     }
 
     void (*original)(id, SEL) = (void (*)(id, SEL))gOrigMatchPlugIns;
-    original(self, _cmd);
+    @try {
+        original(self, _cmd);
+    } @finally {
+        /* Restore the outer match context on reentrancy and discard any
+         * unconsumed ID even if the original implementation throws. */
+        if (previous)
+            scope[kCRPkdScopedContainerIDKey] = previous;
+        else
+            [scope removeObjectForKey:kCRPkdScopedContainerIDKey];
+    }
 }
 
 typedef NSArray *(^CRPkdFindPlugInsContinuation)(void);
@@ -357,11 +372,14 @@ typedef NSArray *(^CRPkdFindPlugInsContinuation)(void);
 static NSArray *CRPkdFindPlugIns(CRPkdFindPlugInsContinuation continuation)
 {
     NSArray *result = continuation();
-    NSString *containerIdentifier = gCRPkdContainerID;
-    if (containerIdentifier) {
+    NSMutableDictionary *scope = [[NSThread currentThread] threadDictionary];
+    NSString *containerIdentifier = scope[kCRPkdScopedContainerIDKey];
+    /* 0xF174 consumes the ID once per matching query. Clearing this
+     * thread's value must not change other threads' active transactions. */
+    [scope removeObjectForKey:kCRPkdScopedContainerIDKey];
+    if (containerIdentifier && [result isKindOfClass:NSArray.class]) {
         for (id plugIn in result)
             [plugIn crane_updateActiveContainerID:containerIdentifier];
-        gCRPkdContainerID = nil;
     }
     return result;
 }

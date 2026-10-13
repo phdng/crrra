@@ -49,6 +49,9 @@ jobs:
       - name: Verify runningboardd launch hook ABI
         run: python3 reconstruction/tools/check_runningboard_contract.py
 
+      - name: Verify APNs topic/hash isolation decoding
+        run: python3 reconstruction/tools/check_apsd_topic_contract.py
+
       - name: Verify native menu badge contracts
         run: python3 reconstruction/tools/check_menu_badge_contract.py
 
@@ -135,6 +138,18 @@ jobs:
             -framework Foundation \
             -o xpc_protocol_metadata_smoke
           ./xpc_protocol_metadata_smoke 2>&1 | tee xpc_protocol_metadata_smoke.log
+
+      - name: Smoke-test dynamic Choicy container editor
+        working-directory: reconstruction
+        run: |
+          set -euo pipefail
+          clang -fobjc-arc -fblocks -Wall -Wextra -Werror \
+            -I sources/common -I sources/prefs \
+            sources/prefs/CRChoicyEditor.m tools/choicy_editor_smoke.m \
+            -framework Foundation -o choicy_editor_smoke
+          for mode in missing incomplete incompatible collision valid; do
+            ./choicy_editor_smoke "$mode" 2>&1 | tee -a choicy_editor_smoke.log
+          done
 
       - name: Select Roothide package dependencies
         if: matrix.variant == 'roothide'
@@ -230,6 +245,7 @@ jobs:
             reconstruction/deb.sha256
             reconstruction/linkage.txt
             reconstruction/xpc_protocol_metadata_smoke.log
+            reconstruction/choicy_editor_smoke.log
 
       - name: Upload package
         if: success()
