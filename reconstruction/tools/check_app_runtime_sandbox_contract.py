@@ -46,6 +46,8 @@ assert {x["extension_class"] for x in profile["Extensions"]} == {
 }
 
 main = (root / "sources/maindylib/CRMainDylib.m").read_text(encoding="utf-8")
+support = (root / "sources/support/CRSupport.m").read_text(encoding="utf-8")
+manager = (root / "sources/libcrane/CRManager.m").read_text(encoding="utf-8")
 common = (root / "sources/common/CRCommon.m").read_text(encoding="utf-8")
 helper = (root / "sources/cranehelperd/CRHelperd.m").read_text(encoding="utf-8")
 master = (root / "Makefile").read_text(encoding="utf-8")
@@ -96,6 +98,42 @@ for name in ("CraneRB.plist", "CraneSupport.plist"):
         "com.apple.app-sandbox.mach",
         "com.apple.security.exception.mach-lookup.global-name",
     }, name
+
+# Original CraneSupport 0x6C5C installs a global _setXPCUnsandboxHandler:
+# block whose invoke target 0x6E44 applies libSandy profile "CraneSupport"
+# and caches only success. The reconstruction runtime_report bypasses the
+# unrecovered original libcrane XPC transport, so it must invoke the same
+# profile gate explicitly before reporting while preserving the manager hook.
+support_profile = plistlib.loads(
+    (root / "layout/Library/libSandy/CraneSupport.plist").read_bytes())
+assert "com.apple.securityd" in support_profile["AllowedProcesses"]
+assert any(x.get("mach_name") == "com.opa334.cranehelperd.xpc"
+           for x in support_profile["Extensions"])
+unsandbox_start = support.index("static BOOL CRPrepareSupportXPCUnsandbox(void)")
+unsandbox_end = support.index("__attribute__((constructor))", unsandbox_start)
+unsandbox = support[unsandbox_start:unsandbox_end]
+for needle in (
+    'CRJailbreakRootPath(CR_LIB_SANDY)',
+    'dlopen(path.fileSystemRepresentation, RTLD_NOW)',
+    'dlsym(handle, "libSandy_applyProfile")',
+    'applyProfile("CraneSupport")',
+    'applied = (status == 0);',
+    'CraneSupport: XPC unsandbox profile process=%@ status=%d',
+):
+    assert needle in unsandbox, needle
+constructor_support = support[support.index("static void CRInitFunc(void)"):]
+assert '[manager _setXPCUnsandboxHandler:^BOOL{' in constructor_support
+assert 'BOOL unsandboxed = CRPrepareSupportXPCUnsandbox();' in constructor_support
+assert constructor_support.index('BOOL unsandboxed = CRPrepareSupportXPCUnsandbox();') < constructor_support.index('CRReportRuntimeInjection(@"CraneSupport", nil);')
+assert 'CraneSupport: init process=%@ xpcUnsandbox=%d' in constructor_support
+
+# libcrane's reconstructed raw-XPC paths now honor the recovered handler.
+assert 'static xpc_connection_t CRManagerCreateHelperConnection(void)' in manager
+assert 'if (![manager crane_prepareXPCUnsandbox])' in manager
+assert 'return handler ? handler() : YES;' in manager
+assert '- (void)_setXPCUnsandboxHandler:(id)handler' in manager
+assert 'self.unsandboxHandler = [handler copy];' in manager
+assert manager.count('xpc_connection_t connection = CRManagerCreateHelperConnection();') >= 4
 shortcuts = plistlib.loads((root / "layout/Library/libSandy/CraneShortcuts.plist").read_bytes())
 assert any(x.get("mach_name") == "com.opa334.cranehelperd.xpc"
            for x in shortcuts["Extensions"])

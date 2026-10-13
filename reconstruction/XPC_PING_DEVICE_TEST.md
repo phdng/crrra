@@ -227,10 +227,13 @@ reused PID cannot inherit a previous positive mapping. It does **not** prove the
 first daemon request cannot precede runtime proof.
 
 For the next package, start the log before launching Chrome and look for the
-same PID in this order:
+same PID in this order. **Do not reuse the older grep that ends with only
+`CraneSB: post-launch` / `CraneSupport: securityd keychain isolation`: that
+filter intentionally cannot show the newer `CraneManager`, `support health`,
+or `securityd client` diagnostics.**
 
 ```sh
-oslog | grep -E 'Crane: app (init|environment ready|runtime_report)|CraneManager: helper lookup_pid|Crane helper: (runtime_report accepted|PID proof missing|lookup_pid|runtime peer disconnected)|CraneSupport: securityd (keychain isolation|client)|CraneSB: (post-launch|support health)'
+oslog | grep -E 'Crane: app (init|environment ready|runtime_report)|CraneManager: helper lookup_pid|Crane helper: (runtime_report accepted|PID proof missing|lookup_pid|runtime peer disconnected)|CraneSupport: (init process=securityd|XPC unsandbox profile.*securityd|securityd (keychain isolation|client))|CraneSB: (post-launch|support health)'
 ```
 
 For a non-default container, a transient early `lookup_pid ... hasProof=0` is
@@ -241,11 +244,21 @@ the caller-side equivalent and remains visible even when helperd's own NSLog is
 not surfaced by the device log tool. If lookups remain unproven after the app
 proof, the cache-coherence adapter is not working.
 
-For F-07, the startup line `CraneSupport: securityd keychain isolation hooks=5
-status=0` may have occurred before live log capture. The post-launch diagnostic
-now asks the authenticated helper registry directly and emits `CraneSB: support
-health process=securityd loaded=1 appPid=<pid>` when CraneSupport is live in
-securityd. When a real SecItem operation for the app reaches the installed
+For F-07, device evidence on 2026-10-13 first showed `CraneSB: support health
+process=securityd loaded=0` while the app PID/container proof was healthy. The
+recovered CraneSupport constructor 0x6C5C installs `_setXPCUnsandboxHandler:`;
+its block target 0x6E44 applies `libSandy_applyProfile("CraneSupport")` and caches
+only success. The reconstruction had preserved the setter but never invoked the
+handler, while its new runtime-report transport bypassed the original libcrane
+XPC machinery entirely. The reconstruction now applies the exact named profile
+before its support runtime report and makes later libcrane raw-XPC connections
+honor the same handler for retry semantics.
+
+On the rebuilt package, `CraneSupport: init process=securityd xpcUnsandbox=1`
+and `CraneSupport: XPC unsandbox profile process=securityd status=0` establish
+that the dylib loaded and the recovered profile gate succeeded. The post-launch
+diagnostic then asks the authenticated helper registry directly and should emit
+`CraneSB: support health process=securityd loaded=1 appPid=<pid>`. When a real SecItem operation for the app reaches the installed
 hooks, securityd emits a transition-only line `CraneSupport: securityd client
 pid=<pid> signingID=<id> container=<container>`. For a non-default Chrome
 container, this line should eventually carry the same container ID as the app

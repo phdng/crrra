@@ -75,6 +75,24 @@ extern xpc_connection_t CRManagerXPCConnectionCreateMachService(
 
 typedef void (^CRManagerPIDLookupReply)(NSString *containerID, BOOL connectionWorks);
 
+typedef BOOL (^CRManagerXPCUnsandboxHandler)(void);
+
+@interface CraneManager (CRXPCUnsandboxInternal)
+- (BOOL)crane_prepareXPCUnsandbox;
+@end
+
+static xpc_connection_t CRManagerCreateHelperConnection(void)
+{
+    CraneManager *manager = [CraneManager sharedManager];
+    if (![manager crane_prepareXPCUnsandbox]) {
+        NSLog(@"CraneManager: helper XPC unsandbox handler refused connection");
+        return NULL;
+    }
+    return CRManagerXPCConnectionCreateMachService(
+        CR_HELPERD_MACH_SERVICE.UTF8String, NULL,
+        XPC_CONNECTION_MACH_SERVICE_PRIVILEGED);
+}
+
 static void CRManagerLookupActiveContainerForPid(pid_t pid,
                                                   CRManagerPIDLookupReply reply)
 {
@@ -87,8 +105,7 @@ static void CRManagerLookupActiveContainerForPid(pid_t pid,
         return;
     }
 
-    xpc_connection_t connection = CRManagerXPCConnectionCreateMachService(
-        CR_HELPERD_MACH_SERVICE.UTF8String, NULL, XPC_CONNECTION_MACH_SERVICE_PRIVILEGED);
+    xpc_connection_t connection = CRManagerCreateHelperConnection();
     if (!connection) {
         NSError *error = CRHelperTransportError(CRHelperConnectionCreationFailed,
             @"lookup_pid", @"Unable to create XPC connection");
@@ -162,8 +179,7 @@ static void CRManagerVerifyRuntimeComponent(NSString *component,
     if (!reply || !component.length)
         return;
 
-    xpc_connection_t connection = CRManagerXPCConnectionCreateMachService(
-        CR_HELPERD_MACH_SERVICE.UTF8String, NULL, XPC_CONNECTION_MACH_SERVICE_PRIVILEGED);
+    xpc_connection_t connection = CRManagerCreateHelperConnection();
     if (!connection) {
         reply(NO);
         return;
@@ -238,8 +254,7 @@ static void CRManagerVerifyRuntimeComponent(NSString *component,
     if (!reply)
         return;
 
-    xpc_connection_t connection = CRManagerXPCConnectionCreateMachService(
-        CR_HELPERD_MACH_SERVICE.UTF8String, NULL, XPC_CONNECTION_MACH_SERVICE_PRIVILEGED);
+    xpc_connection_t connection = CRManagerCreateHelperConnection();
     if (!connection) {
         NSError *error = CRHelperTransportError(CRHelperConnectionCreationFailed,
             @"insurance", @"Unable to create XPC connection");
@@ -1322,8 +1337,7 @@ usingBiometricsIfNeededWithSuccessHandler:(void (^)(BOOL authenticated))handler
     __block BOOL completed = NO;
     NSObject *completionLock = [NSObject new];
     dispatch_semaphore_t done = dispatch_semaphore_create(0);
-    xpc_connection_t connection = CRManagerXPCConnectionCreateMachService(
-        CR_HELPERD_MACH_SERVICE.UTF8String, NULL, XPC_CONNECTION_MACH_SERVICE_PRIVILEGED);
+    xpc_connection_t connection = CRManagerCreateHelperConnection();
     if (!connection)
         return NO;
     xpc_connection_set_event_handler(connection, ^(xpc_object_t event) {
@@ -1462,6 +1476,16 @@ usingBiometricsIfNeededWithSuccessHandler:(void (^)(BOOL authenticated))handler
     id scoped = NSThread.currentThread.threadDictionary[CRHelperReplyErrorContext];
     return scoped ? (scoped == NSNull.null ? nil : scoped) : self.lastError;
 }
-- (void)_setXPCUnsandboxHandler:(id)handler { self.unsandboxHandler = handler; }
+- (BOOL)crane_prepareXPCUnsandbox
+{
+    CRManagerXPCUnsandboxHandler handler =
+        (CRManagerXPCUnsandboxHandler)self.unsandboxHandler;
+    return handler ? handler() : YES;
+}
+
+- (void)_setXPCUnsandboxHandler:(id)handler
+{
+    self.unsandboxHandler = [handler copy];
+}
 
 @end

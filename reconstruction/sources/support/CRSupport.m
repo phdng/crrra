@@ -119,6 +119,44 @@ static void CRInitSecurityd(void)
 /* InitFunc_0 (0x6C5C)                                                         */
 /* ------------------------------------------------------------------------- */
 
+static BOOL CRPrepareSupportXPCUnsandbox(void)
+{
+    /* Exact original block semantics at 0x6E44: once libSandy successfully
+     * applies profile "CraneSupport", later calls return YES without reapplying.
+     * Failures remain retryable. The reconstruction resolves libSandy through
+     * the active jailbreak root because its raw runtime-report XPC bypasses the
+     * original libcrane connection machinery that invoked this handler. */
+    static BOOL applied = NO;
+    if (applied)
+        return YES;
+
+    NSString *path = CRJailbreakRootPath(CR_LIB_SANDY);
+    void *handle = path.length ? dlopen(path.fileSystemRepresentation, RTLD_NOW) : NULL;
+    if (!handle) {
+        NSLog(@"CraneSupport: XPC unsandbox profile failed process=%@ reason=dlopen path=%@ detail=%s",
+              CRGetProcessName(), path, dlerror() ?: "unknown");
+        return NO;
+    }
+
+    dlerror();
+    int (*applyProfile)(const char *) =
+        (int (*)(const char *))dlsym(handle, "libSandy_applyProfile");
+    if (!applyProfile) {
+        const char *failure = dlerror();
+        NSLog(@"CraneSupport: XPC unsandbox profile failed process=%@ reason=no_apply_symbol detail=%s",
+              CRGetProcessName(), failure ?: "unknown");
+        dlclose(handle);
+        return NO;
+    }
+
+    int status = applyProfile("CraneSupport");
+    applied = (status == 0);
+    NSLog(@"CraneSupport: XPC unsandbox profile process=%@ status=%d",
+          CRGetProcessName(), status);
+    dlclose(handle);
+    return applied;
+}
+
 __attribute__((constructor))
 static void CRInitFunc(void)
 {
@@ -130,6 +168,19 @@ static void CRInitFunc(void)
         ignoredProcesses = @[@"watchdogd", @"com.apple.springboard"];
 
         NSString *process = CRGetProcessName();
+
+        /* Original 0x6C5C installs global block stru_206B0 into CraneManager;
+         * its invoke target 0x6E44 applies libSandy profile "CraneSupport".
+         * Preserve that selector surface, and explicitly invoke the same block
+         * before the reconstruction-only CRCommon runtime report because that
+         * raw-XPC path bypasses CraneManager's unrecovered original transport. */
+        CraneManager *manager = [CraneManager sharedManager];
+        [manager _setXPCUnsandboxHandler:^BOOL{
+            return CRPrepareSupportXPCUnsandbox();
+        }];
+        BOOL unsandboxed = CRPrepareSupportXPCUnsandbox();
+        NSLog(@"CraneSupport: init process=%@ xpcUnsandbox=%d",
+              process, unsandboxed);
         CRReportRuntimeInjection(@"CraneSupport", nil);
 
         if ([process isEqualToString:@"cfprefsd"]) {
