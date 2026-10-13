@@ -51,6 +51,26 @@ The existing read-only diagnostic remains available for verification.
 
 ## Device incident — Chrome launched into DEFAULT after Helper XPC recovery
 
+Follow-up Chrome device logs: PID 2339 produced duplicate post-launch checks
+for each of attempts 1–3, all `helper=1 error=(null)`; user confirms Choicy
+is **not installed**. The retry did not produce injection proof. The earlier
+grep did not include the existing `CraneSB: constructor reached` log, and
+` Crane.dylib` only logged app-init when the nondefault container environment
+was already supplied. Added an explicit diagnostic in the main dylib
+constructor for non-Apple apps when `CRANE_CONTAINER_IDENTIFIER` is absent,
+to distinguish a loaded image with no environment from an image that never
+loaded. Added a per-FBProcess/PID association to suppress duplicated
+registration of the same post-launch verification from overlapping
+FBProcessManager hooks (without persisting global PID state). Verified the
+original binary main filter `Bundles: com.apple.Foundation, Flags: 0` and
+CraneSB filter `Bundles: com.apple.springboard, Executables: runningboardd`;
+the reconstruction filter plists match. CI source contracts verify package
+rename to the **leading-space** ` Crane.dylib`, both filters and diagnostic
+lifetime. No proof yet whether the roothide injector loads these dylibs into
+Chrome/runningboardd. Do not blame absent Choicy, skip injection attestation
+or increase retry count; collect the expanded constructor and main-dylib
+diagnostics after deploying the rebuilt package.
+
 The iOS 15.8.8 Roothide device now reaches the Chrome container Settings
 page and opens its Filza container path, but SpringBoard alerts that the
 application started into DEFAULT because ` Crane.dylib` was not loaded. Filza
