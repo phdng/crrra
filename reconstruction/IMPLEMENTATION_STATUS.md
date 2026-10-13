@@ -41,7 +41,7 @@ F-IDs refer to `analysis/behavior_specification.md`.
 | F-04 | Sandbox-lookup spoofing | **Yes** — full transcription | none |
 | F-05 | Per-container preferences | Partial — `handleSourceMessage`, both `withSourceForDomain` ABI families, `__CFPrefsGetPathForTriplet`, version guards and libundirect fallback are transcribed in `CRCfprefs.m`; reconstruction-specific authenticated PID→container lookup is now wired | The transport is not the unrecovered original U-01 protocol and has no device validation, so end-to-end runtime redirection is still NOT_TESTED |
 | F-06 | Container resolution | Partial — `ClientContainerCache`, modern `MCMContainerFactory`, legacy `MCMClientConnection`, group-path rewrite, corrupt suppression, PID capture, guarded Crane proxy, and reconstruction-specific live PID→container lookup are wired | `_populateContainerDirectory:ofType:` body is unavailable; original helper protocol remains U-01; no runtime test |
-| F-07 | Per-container keychain | **Not implemented** | Needs the ~180-function code-signature/Mach-O toolkit; a stub would silently weaken isolation |
+| F-07 | Per-container keychain | Partial — exact CraneSupport normal symbol path is transcribed in `CRSecurityd.m`: host-PID scoping, exact 8-group exclusion list, per-container `.c_r_a_n_e.<id>` access-group rewrite, result decraning, helper-only unrestrict path, and all five securityd hooks installed atomically | Original `patchfindSecurityd` 0x11C08 fallback for hidden private symbols is not ported; if any of the five symbols is unavailable the hook set is not installed. Native build/device keychain separation still needs verification |
 | F-08 | Per-container APNs | Partial — apsd-side topic/hash translation, `crane_topicStorage`, ApplePushService helper fallbacks, keychain topic lookup, token response restoration and all 10 recovered method hooks are transcribed in `CRApsd.m`; reconstructed `verifyCraneSBLoadedAndReply:` now queries an authenticated live CraneSB runtime report | SpringBoard notification hooks are **partially** reconstructed in `CRBadgeStore.m`, including producer, topic, record and badge paths; a selector-by-selector audit against `CBEC.c` is still needed to isolate the missing asynchronous/live-refresh paths (U-10); the health transport is reconstruction-specific rather than original U-01; no runtime test |
 | F-09 | System accounts | Partial — client routing, modern coordinator-per-container, legacy database-per-container, legacy shared-coordinator reset/cache and Start-Using-iCloud suppression are transcribed; reconstruction-specific PID→container lookup is wired | Original helper transport remains U-01; `gamed` path remains limited by unrecovered Game Center account storage (distinct from U-06 backup-format uncertainty); no runtime test |
 | F-10 | Game Center | Structure only | Account storage model still unrecovered; do not conflate with U-06 (backup format) |
@@ -113,8 +113,8 @@ This adapter is reconstruction packaging work; original scripts are unavailable.
 | Measure | Value |
 |---|---|
 | Features with a complete, transcribed implementation | 5 of 23 (F-02, F-03, F-04, F-18, and F-01's contract) |
-| Features partially implemented | 14 |
-| Features not implemented | 4 |
+| Features partially implemented | 15 |
+| Features not implemented | 3 |
 | Recovered functions transcribed | Initial 17-function core plus later main-dylib/libroot work, the 42-method `CraneActivatorManager` surface, cfprefsd preferences, accountsd/Core Data isolation, lsd/device-ID isolation, apsd token/topic isolation, Choicy override provider, self-verification/new-container alerts, modern container-selection menus, containermanagerd/cache/proxy, and pkd/PlugInKit chains; no inflated aggregate 1:1 count is claimed |
 | Reconstruction source | 9051 lines across 17 `.m` and 4 `.h` files |
 | Static consistency audit | 0 failed checks; identifier resolution and brace balance clean |
@@ -151,7 +151,7 @@ one. The line drawn here is: **transcribe what was read, declare what was not.**
 | F-05 prefs redirect | Device-validate the reconstruction-specific PID→container transport with cfprefsd and compare against the original once U-01 is recovered | U-01 original protocol / runtime validation |
 | F-06 containermanagerd | Device-validate live PID→container routing and recover `_populateContainerDirectory:ofType:` semantics | U-01 / missing libcrane body |
 | F-12 PlugInKit | Complete the SpringBoard-side `extension_containerIDToAppend` query-tagging path together with notification support | U-10 / F-08 coupling |
-| F-07 keychain | Port or reimplement the embedded `csd_*`/`macho_*`/`pfsec_*` toolkit from the ~180 exported functions | U-03 |
+| F-07 keychain | Device-verify the five-symbol `securityd` hook path; only if iOS 15.8.8 hides one of those symbols, port the narrower original `patchfindSecurityd` 0x11C08 dependency chain rather than inventing a scanner | U-03 / runtime symbol availability |
 | F-08 notifications | Resolve/port CraneSB `initNotificationSupport` producer/routing/title/badge hooks and device-validate the reconstructed CraneSB-loaded health gate | U-10; U-01 only for original protocol equivalence |
 | F-14 menu badges | The store/count display and `CRBadgeAction` are partially wired; port exact `CRBadgeContextMenuActionView` layout and verify live badge refresh rather than rebuilding existing F-08 hook work | F-08 asynchronous notification / F-14 UI coupling |
 | F-15 settings UI | Read the remaining `CRP*` classes in the existing `CranePrefs` export | — |

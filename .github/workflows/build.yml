@@ -101,6 +101,9 @@ jobs:
       - name: Verify cfprefsd preference isolation
         run: python3 reconstruction/tools/check_preferences_isolation_contract.py
 
+      - name: Verify securityd keychain isolation
+        run: python3 reconstruction/tools/check_keychain_isolation_contract.py
+
       - name: Verify accountsd isolated SQLite stores
         run: python3 reconstruction/tools/check_accountsd_isolation_contract.py
 

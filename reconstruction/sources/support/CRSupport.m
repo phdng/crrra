@@ -5,14 +5,16 @@
  * 0x6C5C) and the redirection hooks whose target class and selector are both
  * CONFIRMED_STATIC from the export.
  *
- * NOT implemented, with reasons:
- *   * initSecurityd's code-signature rewrite (patchfindSecurityd, 0x11E5C) -
- *     it needs the ~180-function embedded Mach-O / code-signature /
- *     arm64-pattern toolkit (csd_*, macho_*, fat_*, memory_stream_*, pfsec_*,
- *     arm64_gen_*, arm64_dec_*). Reproducing that toolkit is a project in its
- *     own right and its exact behaviour is only partially recoverable; a stub
- *     would silently weaken the keychain isolation, so it is left out and
- *     called out in final/KNOWN_DIFFERENCES.md;
+ * Keychain isolation is transcribed in CRSecurityd.m for the normal 0x11E5C
+ * symbol-resolution path. Original 0x11C08 patchfinding remains unported.
+ * Remaining partial/unimplemented work:
+ *   * securityd private-symbol fallback (patchfindSecurityd, 0x11C08) -
+ *     it needs the embedded Mach-O / arm64 pattern-scanning toolkit;
+ *     the normal five-symbol path and keychain transformations are ported.
+ *     A missing symbol therefore leaves F-07 unavailable rather than partly
+ *     hooked, which avoids inconsistent Add/Read/Delete/Update isolation.
+ *
+ *
  *   * initAccountsd, initApsd, initLsd, initPkd and initContainermanagerd
  *     have since been transcribed into CRAccountsd.m, CRApsd.m, CRLsd.m,
  *     CRPkd.m and CRMCM.m;
@@ -56,15 +58,18 @@ NSString *CRStripCraneContainerFromPath(NSString *path)
 /* getSecurityAccessGroupsToIgnore (0x62BC)                                     */
 /* ------------------------------------------------------------------------- */
 
-/* [INFERRED] These groups must stay shared or keychain items become
- * unreachable. The exact list is not recoverable from the available evidence. */
+/* CONFIRMED_STATIC: exact CraneSupport 0x62FC list.
+ * These Apple groups deliberately remain shared. */
 static NSSet<NSString *> *CRSecurityAccessGroupsToIgnore(void)
 {
     static NSSet *set;
     static dispatch_once_t once;
     dispatch_once(&once, ^{
         set = [NSSet setWithObjects:
-               @"apple", @"group.com.apple.icloud", @"*", nil];
+               @"com.apple.token", @"com.apple.certificates",
+               @"com.apple.identities", @"apple", @"com.apple.cfnetwork",
+               @"com.apple.ProtectedCloudStorage", @"com.apple.passd",
+               @"com.apple.managed.vpn.shared", nil];
     });
     return set;
 }
@@ -98,13 +103,16 @@ extern void CRInitPkd(void);
 extern void CRInitApsd(void);
 
 extern void CRInitLsd(void);
+extern void CRInstallSecuritydHooks(void);
 
 static void CRInitSecurityd(void)
 {
-    /* SecItemAdd / SecItemCopyMatching / SecItemDelete / SecItemUpdate are
-     * hooked with _orig storage, and securityd itself is patched so that
-     * CoreTrust accepts Crane's rewritten code signature. Neither the hook
-     * bodies nor the patcher are reproduced. */
+    /* SecItemAdd / SecItemCopyMatching / SecItemDelete / SecItemUpdate and
+     * securityd_xpc_dictionary_handler are hooked with _orig storage. Their bodies
+     *
+     * are implemented in CRSecurityd.m; the original private-symbol
+     * patchfinder fallback remains unported. */
+    CRInstallSecuritydHooks();
 }
 
 /* ------------------------------------------------------------------------- */
