@@ -51,6 +51,30 @@ The existing read-only diagnostic remains available for verification.
 
 ## Device incident — Chrome launched into DEFAULT after Helper XPC recovery
 
+Latest Roothide iOS 15.8.8 Chrome evidence: PID 2767 logs
+`Crane: app dylib loaded bundle=com.google.chrome.ios pid=2767
+containerEnvPresent=0`, so main ` Crane.dylib` injection **works** but
+the selected `CRANE_CONTAINER_IDENTIFIER` is absent. Helper replies
+`helper=1` for attempts 1/2/3 but cannot attest an app container it never
+received. Compared original CraneSB `0x180F0/0x1BF10/0x1BD44`: on modern
+iOS SpringBoard returns a container ID, while a separate runningboardd
+RBProcessManager hook injects it into `_additionalEnvironment`. Some Roothide
+Bootstrap variants restrict daemon injection, so the missing runningboardd
+path is plausible, not yet independently proven. Implemented a
+**CRANE_ROOTHIDE-only, source-backed compatibility attempt** in
+`CRApplyModificationsIfNeededToExecutionContext`: before the FBProcess
+launch call, use the available `_additionalEnvironment` modern or
+`environment` native legacy context accessor pair, run the unchanged
+`CRApplyEnvironmentChanges` libSandy/helper insurance and validated ID
+check, and write only when a new environment for the selected UUID was
+returned. Rootful/native runningboardd path unchanged; post-launch
+missing-proof alert remains. The fallback may fail when the context
+lacks both selector pairs or fails to propagate values between SpringBoard
+and runningboardd. `check_roothide_launch_environment_contract.py` tests
+source guards, rootful compile gating and denial/validity cases in CI.
+**Requires native build and Chrome proof after installation; do not claim fixed
+based on an applied log alone.**
+
 Follow-up Chrome device logs: PID 2339 produced duplicate post-launch checks
 for each of attempts 1–3, all `helper=1 error=(null)`; user confirms Choicy
 is **not installed**. The retry did not produce injection proof. The earlier

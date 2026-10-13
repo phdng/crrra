@@ -389,10 +389,59 @@ static id CRApplyModificationsIfNeededToExecutionContext(id self, SEL _cmd,
     if (!hasFinishedLaunching || !appID.length)
         return nil;
 
-    /* On iOS 13+ the original returns the container ID for the calling
-     * FBProcessManager launch hook to process. It does not set environment. */
-    if (kCFCoreFoundationVersionNumber >= 1665.15)
-        return CRContainerToRedirectTo(appID);
+    /* Native 0x180F0 returns only a container ID on iOS 13+ and expects
+     * CraneSB in runningboardd to supply _additionalEnvironment later.
+     * Roothide Bootstrap may not inject third-party tweaks into daemons.
+     * Attempt a bounded, authenticated compatibility route using the
+     * *same* executionContext environment API that native 0x180F0 uses on
+     * iOS 11/12. This is roothide-only and preserves the native return
+     * value, so verification still catches launches with no injected env. */
+    if (kCFCoreFoundationVersionNumber >= 1665.15) {
+        NSString *containerID = CRContainerToRedirectTo(appID);
+#if defined(CRANE_ROOTHIDE)
+        if (containerID.length) {
+            SEL getEnvironment = @selector(environment);
+            SEL setEnvironment = @selector(setEnvironment:);
+            NSString *surface = @"environment";
+            /* 0x1BD44 establishes _additionalEnvironment on modern
+             * RBLaunchRequestContext; the SpringBoard execution context
+             * can expose either pair depending on iOS. Prefer the modern
+             * surface when actually available, never assume the selector. */
+            SEL modernRead = NSSelectorFromString(@"_additionalEnvironment");
+            SEL modernWrite = NSSelectorFromString(@"_setAdditionalEnvironment:");
+            if ([executionContext respondsToSelector:modernRead] &&
+                [executionContext respondsToSelector:modernWrite]) {
+                getEnvironment = modernRead;
+                setEnvironment = modernWrite;
+                surface = @"additionalEnvironment";
+            }
+            BOOL canApply = executionContext &&
+                [executionContext respondsToSelector:getEnvironment] &&
+                [executionContext respondsToSelector:setEnvironment];
+            if (!canApply) {
+                NSLog(@"CraneSB: roothide SpringBoard launch fallback unavailable app=%@ contextEnvironmentSelectors=0", appID);
+            } else {
+                id original = ((id (*)(id, SEL))objc_msgSend)(
+                    executionContext, getEnvironment);
+                if (original && ![original isKindOfClass:NSDictionary.class]) {
+                    NSLog(@"CraneSB: roothide SpringBoard launch fallback refused invalid environment app=%@", appID);
+                } else {
+                    NSMutableDictionary *updated = CRApplyEnvironmentChanges(
+                        (NSMutableDictionary *)original, appID);
+                    if (updated != original &&
+                        [updated[CR_ENV_CONTAINER_IDENTIFIER] isEqualToString:containerID]) {
+                        ((void (*)(id, SEL, id))objc_msgSend)(
+                            executionContext, setEnvironment, updated);
+                        NSLog(@"CraneSB: roothide SpringBoard launch fallback applied app=%@ container=%@ surface=%@", appID, containerID, surface);
+                    } else {
+                        NSLog(@"CraneSB: roothide SpringBoard launch fallback blocked app=%@ (insurance or environment)", appID);
+                    }
+                }
+            }
+        }
+#endif
+        return containerID;
+    }
 
     /* Pre-iOS 13 path from 0x180F0: update the execution context only if
      * crane_applyEnvironmentChanges returned a different environment. */

@@ -66,6 +66,9 @@ jobs:
       - name: Verify app injection and per-process diagnostic coverage
         run: python3 reconstruction/tools/check_main_injection_diagnostics_contract.py
 
+      - name: Verify Roothide SpringBoard launch-environment compatibility
+        run: python3 reconstruction/tools/check_roothide_launch_environment_contract.py
+
       - name: Verify APNs topic/hash isolation decoding
         run: python3 reconstruction/tools/check_apsd_topic_contract.py
 

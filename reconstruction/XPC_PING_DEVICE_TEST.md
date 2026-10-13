@@ -32,6 +32,46 @@ included in the reconstruction.
 
 ## Chrome launch reports default container (main dylib not confirmed)
 
+Further device evidence (Chrome PID 2767 on the new package): the main
+` Crane.dylib` is **definitely loaded** by Chrome, but reports
+`Crane: app dylib loaded bundle=com.google.chrome.ios pid=2767
+containerEnvPresent=0`. Meanwhile the helper responds successfully for
+that PID, yet all three proof attempts fail. This conclusively separates
+tweak injection from **missing launch environment**, so do not increase
+injection-proof retries, relabel the main dylib, or blame absent Choicy.
+
+The native CraneSB iOS 13+ (`0x180F0`) returns a container ID but relies on
+the separate `runningboardd` hook (`0x1BF10/0x1BD44`) to add
+`CRANE_CONTAINER_IDENTIFIER`. Some Roothide Bootstrap deployments restrict
+daemon injection, which can leave Chrome loaded without a redirected env.
+Reconstruction now has a **Roothide-only** guarded SpringBoard compatibility
+route: before submitting the FBProcess launch, it attempts the original
+`CRApplyEnvironmentChanges` insurance gate using an available
+`_additionalEnvironment/_setAdditionalEnvironment:` (preferred) or native
+legacy `environment/setEnvironment:` accessor pair. It only writes when
+the same validated target ID is returned. The rootful path and native
+runningboardd hook remain unchanged. An unavailable execution-context API,
+failed insurance or failed propagation still leaves the launch unredirected
+and triggers the original post-launch error; do not claim success based
+on an `applied` log alone.
+
+On the rebuilt Roothide package, collect only mobile-readable logs:
+
+```sh
+oslog | grep -E 'CraneSB: roothide SpringBoard launch fallback|CraneSB: runningboardd|Crane: app (dylib loaded|init|environment ready)|CraneSB: post-launch|Crane helper:'
+```
+
+`fallback unavailable ... contextEnvironmentSelectors=0` means neither
+verified accessor pair is present on the SpringBoard launch context;
+`fallback blocked` means Helper/libSandy verification or ID equality failed;
+`fallback applied ... surface=...` says the environment was set on the
+context but is **not** evidence that the value survived into Chrome. Success
+requires `Crane: app init ... container=<selected UUID>` in Chrome AND
+an accepted Helper runtime proof for that PID. If
+`fallback applied` is followed by `containerEnvPresent=0`, the execution
+context did not propagate the value; inspect Roothide daemon injection
+capability and launch request APIs, rather than bypassing Crane's proof.
+
 Follow-up device evidence: Chrome PID 2339 produced *two copies of each*
 `CraneSB: post-launch proof missing` line, attempts 1/2/3, all with
 `helper=1 error=(null)`. The device has **no Choicy**. This is strong evidence
