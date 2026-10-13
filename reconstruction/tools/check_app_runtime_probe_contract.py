@@ -62,6 +62,15 @@ assert 'CRCreateDirectoryIfNotExists(container);' in init
 assert 'setenv(CR_ENV_HOME.UTF8String, container.UTF8String, 1);' in init
 assert 'if (count >= 1)' in init
 assert 'Crane: app environment ready container=%@ hooks=%u' in init
+# Reconstruction runtime proof must be emitted after the borrowed launch-env
+# claim is snapshotted/hidden, but before filesystem/HOME work, minimizing the
+# first-daemon-request window without changing native 0x65D0 setup ordering.
+assert init.count('CRReportRuntimeInjection(@"Crane", _crActiveContainerIdentifier);') == 1
+assert init.index('unsetenv(CR_ENV_CONTAINER_IDENTIFIER.UTF8String);') < init.index('CRPrepareAppRuntimeMachLookup();')
+assert init.index('CRPrepareAppRuntimeMachLookup();') < init.index('CRReportRuntimeInjection(@"Crane", _crActiveContainerIdentifier);')
+assert init.index('CRReportRuntimeInjection(@"Crane", _crActiveContainerIdentifier);') < init.index('CRCreateDirectoryIfNotExists(container);')
+assert init.index('CRReportRuntimeInjection(@"Crane", _crActiveContainerIdentifier);') < init.index('setenv(CR_ENV_HOME.UTF8String, container.UTF8String, 1);')
+assert 'It does not claim that the remaining 0x65D0 environment setup is done.' in init
 assert 'removeItemAtPath:' not in init
 
 def probe_outcome(reply_kind, alive, version_ok):

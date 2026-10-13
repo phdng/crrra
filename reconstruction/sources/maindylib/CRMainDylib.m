@@ -319,6 +319,17 @@ static void CRInitFunc(void)
     if (protect)
         unsetenv(CR_ENV_PROTECT_CONTAINERS.UTF8String);
 
+    /* Reconstruction-only runtime proof is deliberately sent as early as
+     * possible after the launch claim has been snapshotted and hidden from
+     * environ. System daemons use this live PID→container proof for prefs,
+     * keychain and container lookup; sending it before directory/HOME work
+     * narrows the window in which their first request could see DEFAULT.
+     * It does not claim that the remaining 0x65D0 environment setup is done. */
+    if (_crActiveContainerIdentifier.length) {
+        CRPrepareAppRuntimeMachLookup();
+        CRReportRuntimeInjection(@"Crane", _crActiveContainerIdentifier);
+    }
+
     unsigned count = 0;
     if (spoofLookups) {
         _crHookTable[count].original = (void *)&sandbox_container_path_for_pid;
@@ -367,10 +378,4 @@ static void CRInitFunc(void)
         NSLog(@"Crane: app environment ready container=%@ hooks=%u",
               _crActiveContainerIdentifier, count);
 
-    /* Runtime proof for SpringBoard's post-launch injection check. The helper
-     * binds this container claim to our kernel-reported XPC PID. */
-    if (_crActiveContainerIdentifier.length) {
-        CRPrepareAppRuntimeMachLookup();
-        CRReportRuntimeInjection(@"Crane", _crActiveContainerIdentifier);
-    }
 }

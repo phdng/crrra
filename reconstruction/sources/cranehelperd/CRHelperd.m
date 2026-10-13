@@ -638,9 +638,17 @@ static NSString *CRHandleHealthRequest(xpc_connection_t peer,
             CRRuntimeComponentAllowed(component, peerProcess, peerSigningID)) {
             CRRegisterRuntime(peerPid, peerProcess, component, containerID,
                               peerToken);
+            BOOL containerProof = [component isEqualToString:@"Crane"] &&
+                containerID.length > 0;
             NSLog(@"Crane helper: runtime_report accepted pid=%d process=%@ component=%@ containerProof=%d",
-                  peerPid, peerProcess, component,
-                  [component isEqualToString:@"Crane"] && containerID.length > 0);
+                  peerPid, peerProcess, component, containerProof);
+            if (containerProof) {
+                /* Reconstruction-only cache coherence: CraneSupport may have
+                 * looked up this PID before the app's asynchronous report and
+                 * cached DEFAULT. Wake every injected system daemon so its
+                 * ClientContainerCache retries against the now-live proof. */
+                notify_post(CR_NOTIFICATION_RUNTIME_REGISTRY_CHANGED.UTF8String);
+            }
             return component;
         }
         NSLog(@"Crane helper: runtime_report rejected pid=%d process=%@ component=%@ compatible=%d signingID=%@",
@@ -736,6 +744,9 @@ static void CRAcceptHealthPeer(xpc_connection_t peer)
                 NSLog(@"Crane helper: runtime peer disconnected pid=%d process=%@; removing live proof",
                       peerPid, peerProcess);
                 CRUnregisterRuntime(peerPid, peerToken);
+                /* Also invalidate positive PID entries on process/peer exit;
+                 * otherwise a later PID reuse could inherit a stale container. */
+                notify_post(CR_NOTIFICATION_RUNTIME_REGISTRY_CHANGED.UTF8String);
             }
             xpc_connection_cancel(peer);
             return;

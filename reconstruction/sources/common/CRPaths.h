@@ -79,6 +79,9 @@
 #define CR_NOTIFICATION_SB_LOADED               @"com.opa334.cranesb/Loaded"
 #define CR_NOTIFICATION_RELOAD_APPLICATION      @"com.opa334.crane/ReloadApplication"
 #define CR_NOTIFICATION_HELPERD_STARTED         @"com.opa334.cranehelperd/Started"
+/* Reconstruction-only: helper runtime proof changed, so daemon PID caches must
+ * discard any earlier DEFAULT/positive result for a recycled or newly-proven PID. */
+#define CR_NOTIFICATION_RUNTIME_REGISTRY_CHANGED @"com.opa334.cranehelperd/RuntimeRegistryChanged"
 #define CR_NOTIFICATION_LITE_NEW_APP            @"com.opa334.craneliteprefs.newApp"
 
 /* --- UIMenu identifiers (externally visible; Choicy/Shortcut configs use them) */

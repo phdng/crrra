@@ -74,11 +74,16 @@
     id _daemonCenter;
     NSMutableDictionary<NSNumber *, NSString *> *_activeContainerCache;
     dispatch_queue_t _activeContainerCacheQueue;
+    NSUInteger _activeContainerCacheGeneration;
 }
 + (instancetype)sharedInstance;
 - (NSString *)activeContainerIdentifierForPid:(pid_t)pid;
 - (NSString *)_getActiveContainerFromCacheForPid:(pid_t)pid;
 - (void)_setActiveContainer:(NSString *)identifier toCacheForPid:(pid_t)pid;
+- (NSUInteger)_activeContainerCacheGenerationSnapshot;
+- (void)_setActiveContainer:(NSString *)identifier
+              toCacheForPid:(pid_t)pid
+               ifGeneration:(NSUInteger)generation;
 - (void)_clearActiveContainerCache;
 - (void)_registerForClearMessages;
 @end
@@ -128,11 +133,27 @@ static void CRClearActiveContainerCache(CFNotificationCenterRef center,
 
 - (void)_registerForClearMessages
 {
+    CFNotificationCenterRef center =
+        CFNotificationCenterGetDarwinNotifyCenter();
     CFNotificationCenterAddObserver(
-        CFNotificationCenterGetDarwinNotifyCenter(),
+        center,
         NULL,
         CRClearActiveContainerCache,
-        CFSTR("com.opa334.cranesb/Loaded"),
+        (__bridge CFStringRef)CR_NOTIFICATION_SB_LOADED,
+        NULL,
+        CFNotificationSuspensionBehaviorDeliverImmediately);
+
+    /* Original 0x12724 listens only for CraneSB/Loaded.  The reconstructed
+     * helper learns PID→container state asynchronously from the app's live
+     * runtime report, so a lookup can transiently cache DEFAULT before that
+     * proof arrives. Invalidate the cache when that reconstruction-only
+     * registry changes; this preserves the original steady-state DEFAULT cache
+     * without allowing a transient miss to remain sticky for the PID. */
+    CFNotificationCenterAddObserver(
+        center,
+        NULL,
+        CRClearActiveContainerCache,
+        (__bridge CFStringRef)CR_NOTIFICATION_RUNTIME_REGISTRY_CHANGED,
         NULL,
         CFNotificationSuspensionBehaviorDeliverImmediately);
 }
@@ -155,9 +176,35 @@ static void CRClearActiveContainerCache(CFNotificationCenterRef center,
     });
 }
 
+- (NSUInteger)_activeContainerCacheGenerationSnapshot
+{
+    __block NSUInteger generation = 0;
+    dispatch_sync(_activeContainerCacheQueue, ^{
+        generation = self->_activeContainerCacheGeneration;
+    });
+    return generation;
+}
+
+- (void)_setActiveContainer:(NSString *)identifier
+              toCacheForPid:(pid_t)pid
+               ifGeneration:(NSUInteger)generation
+{
+    if (!identifier)
+        return;
+    dispatch_async(_activeContainerCacheQueue, ^{
+        /* A runtime-registry notification may have invalidated the lookup
+         * while its helper reply was in flight. Never let that stale result
+         * repopulate the cache after the clear. */
+        if (self->_activeContainerCacheGeneration != generation)
+            return;
+        self->_activeContainerCache[@(pid)] = identifier;
+    });
+}
+
 - (void)_clearActiveContainerCache
 {
     dispatch_sync(_activeContainerCacheQueue, ^{
+        self->_activeContainerCacheGeneration += 1;
         self->_activeContainerCache = [NSMutableDictionary new];
     });
 }
@@ -181,6 +228,12 @@ static void CRClearActiveContainerCache(CFNotificationCenterRef center,
      * the reconstructed manager now backs the same fetch selector with its
      * caller-authenticated raw-XPC PID/runtime registry.
      */
+    /* Snapshot after the cache miss and before starting raw-XPC. If helperd
+     * publishes a runtime-registry change while this request is in flight,
+     * the generation changes and the old reply is forbidden from repopulating
+     * the just-cleared cache. */
+    NSUInteger lookupGeneration =
+        [self _activeContainerCacheGenerationSnapshot];
     __block NSString *fetched = nil;
     __block BOOL replied = NO;
     dispatch_semaphore_t semaphore = dispatch_semaphore_create(0);
@@ -204,7 +257,9 @@ static void CRClearActiveContainerCache(CFNotificationCenterRef center,
         return nil;
 
     NSString *normalized = fetched ?: CR_DEFAULT_CONTAINER_IDENTIFIER;
-    [self _setActiveContainer:normalized toCacheForPid:pid];
+    [self _setActiveContainer:normalized
+                toCacheForPid:pid
+                 ifGeneration:lookupGeneration];
     return [normalized isEqualToString:CR_DEFAULT_CONTAINER_IDENTIFIER]
         ? nil
         : normalized;

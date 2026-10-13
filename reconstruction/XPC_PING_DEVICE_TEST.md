@@ -210,6 +210,38 @@ No client-side probe result turns `injection_verified` true, and nothing
 modifies or deletes Chrome's container data. Source contract:
 `check_app_runtime_probe_contract.py`. Real device behavior is pending.
 
+### PID cache coherence after runtime proof
+
+The original CraneSupport cache (0x12724/0x12A4C) clears on
+`com.opa334.cranesb/Loaded`. The reconstruction additionally learns a
+non-default PID/container asynchronously from the app runtime report. A daemon
+can therefore perform an early lookup before that report and temporarily cache
+DEFAULT. The helper now posts reconstruction-only
+`com.opa334.cranehelperd/RuntimeRegistryChanged` when an accepted `Crane`
+report carries a real container and when that live peer disconnects; every
+CraneSupport `ClientContainerCache` clears on that notification. Each lookup
+also snapshots a cache generation before raw XPC, and its asynchronous cache
+write is accepted only if the generation is unchanged. Therefore an old
+pre-proof reply cannot repopulate DEFAULT after the proof-triggered clear, and a
+reused PID cannot inherit a previous positive mapping. It does **not** prove the
+first daemon request cannot precede runtime proof.
+
+For the next package, start the log before launching Chrome and look for the
+same PID in this order:
+
+```sh
+oslog | grep -E 'Crane: app (init|environment ready|runtime_report)|Crane helper: (runtime_report accepted|PID proof missing|lookup_pid|runtime peer disconnected)|CraneSupport: securityd keychain isolation|CraneSB: post-launch'
+```
+
+For a non-default container, a transient early `lookup_pid ... hasProof=0` is
+acceptable only if `runtime_report accepted ... component=Crane
+containerProof=1` follows and later lookups for that live PID report
+`hasProof=1`. If lookups remain `hasProof=0` after the accepted report, the
+cache-coherence adapter is not working. For F-07 also require
+`CraneSupport: securityd keychain isolation hooks=5 status=0`. Do not use or
+reset the user's existing Chrome containers merely to generate this test; use a
+throwaway account or non-destructive state difference when checking isolation.
+
 ## Chrome launch reports default container (main dylib not confirmed)
 
 Further device evidence (Chrome PID 2767 on the new package): the main

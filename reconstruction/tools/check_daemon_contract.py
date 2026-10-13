@@ -15,6 +15,7 @@ support = (root / "support" / "CRSupport.m").read_text(encoding="utf-8")
 mcm = (root / "support" / "CRMCM.m").read_text(encoding="utf-8")
 prefs = (root / "common" / "CRPreferences.h").read_text(encoding="utf-8")
 manager_header = (root / "common" / "CRManager.h").read_text(encoding="utf-8")
+paths = (root / "common" / "CRPaths.h").read_text(encoding="utf-8")
 
 assert '#define CR_PREFS_DOMAIN @"com.opa334.craneprefs"' in prefs
 # Crane 0x6924 constructs its UI bundle solely from the jbroot-resolved
@@ -143,6 +144,50 @@ assert 'CRRuntimeContainerForPid(targetPid, targetProcess)' in peer_code
 assert 'entry[@"components"][@"Crane"]' in helper
 assert 'xpc_dictionary_set_bool(reply, "authorized", authorized)' in peer_code
 assert 'xpc_dictionary_set_bool(reply, "injection_verified", containerID.length > 0)' in peer_code
+
+# Reconstruction-specific PID cache coherence. The original ClientContainerCache
+# only clears on CraneSB/Loaded, but this build learns non-default PID mappings
+# asynchronously from app runtime_report. A real Crane container proof must
+# invalidate any earlier DEFAULT miss; disconnect must invalidate positive
+# entries as well so PID reuse cannot inherit stale isolation state.
+assert 'CR_NOTIFICATION_RUNTIME_REGISTRY_CHANGED' in paths
+register_start = helper.index('if (strcmp(operation, "runtime_report") == 0)')
+register_end = helper.index('if (strcmp(operation, "ping") != 0', register_start)
+register_body = helper[register_start:register_end]
+assert 'BOOL containerProof = [component isEqualToString:@"Crane"] &&' in register_body
+assert 'if (containerProof)' in register_body
+assert 'notify_post(CR_NOTIFICATION_RUNTIME_REGISTRY_CHANGED.UTF8String);' in register_body
+accept_start = helper.index('static void CRAcceptHealthPeer(')
+accept_end = helper.index('#pragma mark - main', accept_start)
+accept_body = helper[accept_start:accept_end]
+assert 'CRUnregisterRuntime(peerPid, peerToken);' in accept_body
+assert accept_body.index('CRUnregisterRuntime(peerPid, peerToken);') < accept_body.index('notify_post(CR_NOTIFICATION_RUNTIME_REGISTRY_CHANGED.UTF8String);')
+cache_impl_start = mcm.index('@implementation ClientContainerCache')
+cache_register_start = mcm.index('- (void)_registerForClearMessages', cache_impl_start)
+cache_register_end = mcm.index('- (NSString *)_getActiveContainerFromCacheForPid:', cache_register_start)
+cache_register_body = mcm[cache_register_start:cache_register_end]
+assert 'CR_NOTIFICATION_SB_LOADED' in cache_register_body
+assert 'CR_NOTIFICATION_RUNTIME_REGISTRY_CHANGED' in cache_register_body
+assert cache_register_body.count('CRClearActiveContainerCache') == 2
+
+# Closing the in-flight reply race: a registry clear can occur after an old
+# lookup starts but before its async cache write executes. Cache generation is
+# incremented by every clear; lookup captures it before XPC and conditional set
+# refuses to repopulate after any intervening proof/disconnect notification.
+assert 'NSUInteger _activeContainerCacheGeneration;' in mcm
+assert '- (NSUInteger)_activeContainerCacheGenerationSnapshot' in mcm
+assert 'self->_activeContainerCacheGeneration += 1;' in mcm
+assert 'NSUInteger lookupGeneration =' in mcm
+assert '[self _activeContainerCacheGenerationSnapshot];' in mcm
+assert 'if (self->_activeContainerCacheGeneration != generation)' in mcm
+assert '[self _setActiveContainer:normalized' in mcm
+assert 'ifGeneration:lookupGeneration];' in mcm
+active_start = mcm.index('- (NSString *)activeContainerIdentifierForPid:(pid_t)pid', cache_impl_start)
+active_end = mcm.index('\n}\n\n@end', active_start)
+active_body = mcm[active_start:active_end]
+assert active_body.index('[self _activeContainerCacheGenerationSnapshot]') < active_body.index('fetchActiveContainerIDForProcessWithPid:pid')
+assert active_body.index('fetchActiveContainerIDForProcessWithPid:pid') < active_body.index('ifGeneration:lookupGeneration]')
+assert '[self _setActiveContainer:normalized toCacheForPid:pid];' not in active_body
 
 # Read-only component health checks are caller-authenticated and power the
 # recovered CraneSupport 0x9B68 verifyCraneSBLoadedAndReply: path.
