@@ -165,6 +165,8 @@ assert '^(BOOL works, NSArray<NSString *> *daemons,' in springboard
 assert 'BOOL connWorks' not in springboard
 assert 'xpc_dictionary_get_bool(response, "support_complete")' in manager
 assert 'xpc_dictionary_get_string(response, "broken_daemons")' in manager
+assert 'NSString *brokenString = [brokenDaemons componentsJoinedByString:@", "];' in manager
+assert 'works, connectionWorks, brokenString, error' in manager
 assert 'injectionVerified && supportComplete;' in manager
 
 # PID inspection is caller-aware and target results require a live main-dylib

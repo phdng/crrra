@@ -34,6 +34,12 @@ include $(THEOS)/makefiles/common.mk
 SUBPROJECTS += sources/maindylib sources/libcrane sources/cranehelperd \
                sources/cranehelperd_start sources/cranesb sources/support sources/prefs
 
+# Temporary roothide-only daemon-injection probes. Keep them outside rootful
+# fidelity builds: they are diagnostic artifacts, not recovered Crane payload.
+ifeq ($(THEOS_PACKAGE_SCHEME),roothide)
+SUBPROJECTS += sources/supportprobe
+endif
+
 include $(THEOS_MAKE_PATH)/aggregate.mk
 
 # dpkg executes postinst as the installer user; Windows checkouts may lose +x.
@@ -57,5 +63,11 @@ after-stage::
 	       "$(THEOS_STAGING_DIR)/Library/MobileSubstrate/DynamicLibraries/CraneSB.plist"
 	@cp -f "$(THEOS_PROJECT_DIR)/layout/Library/MobileSubstrate/DynamicLibraries/CraneSupport.plist" \
 	       "$(THEOS_STAGING_DIR)/Library/MobileSubstrate/DynamicLibraries/CraneSupport.plist"
+ifeq ($(THEOS_PACKAGE_SCHEME),roothide)
+	@cp -f "$(THEOS_PROJECT_DIR)/sources/supportprobe/CraneSupportProbeFlags.plist" \
+	       "$(THEOS_STAGING_DIR)/Library/MobileSubstrate/DynamicLibraries/CraneSupportProbeFlags.plist"
+	@cp -f "$(THEOS_PROJECT_DIR)/sources/supportprobe/CraneSupportProbePlain.plist" \
+	       "$(THEOS_STAGING_DIR)/Library/MobileSubstrate/DynamicLibraries/CraneSupportProbePlain.plist"
+endif
 	@echo "== staged layout =="
 	@find "$(THEOS_STAGING_DIR)" -type f | sed "s|$(THEOS_STAGING_DIR)/||" | sort

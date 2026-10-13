@@ -286,6 +286,30 @@ This classifies the current failure as global CraneSupport daemon
 injection/load/report failure, not securityd-specific keychain symbol failure.
 Do not port `patchfindSecurityd` from this result.
 
+The roothide diagnostic package now also includes two temporary constructor-only
+probe dylibs with the same seven `Executables`: `CraneSupportProbeFlags` keeps
+the recovered `Flags=1`, while `CraneSupportProbePlain` omits `Flags`. Neither
+probe links Foundation, libcrane, libbsm or Substrate; both only emit an
+`os_log` line. **After installing this diagnostic build, perform a userspace
+reboot from the jailbreak/bootstrap UI before testing. A normal Respring is not
+enough**, because this reconstruction's package `postinst` only kickstarts
+`cranehelperd`, and the unrecovered privileged `reloadDaemons:` backend is not
+implemented.
+
+Capture:
+
+```sh
+oslog | grep -E 'CraneSupportProbe:|CraneSupport: (constructor process=|init process=|XPC unsandbox profile.*process=)|Crane helper: insurance|CraneManager: helper insurance|CraneSB: support health process='
+```
+
+Interpret the first fresh post-reboot run as follows: neither probe constructor
+appears => daemon injector/platform path did not inject even a dependency-free
+dylib; `plain` appears but `flags1` does not => investigate `Flags=1` loader
+semantics; both probes appear but `CraneSupport` constructor does not =>
+CraneSupport Mach-O/load dependency is the fault and CI `linkage.txt` is the
+next evidence; CraneSupport constructor appears but health remains zero =>
+move downstream to libSandy/profile/runtime-report authentication.
+
 The recovered CraneSB 0x1B45C + callback 0x1BAA4 also establish that insurance
 failure returns the original launch environment: the callback is exactly
 `(success, brokenDaemons, error)`, then `getLastError` separately classifies the

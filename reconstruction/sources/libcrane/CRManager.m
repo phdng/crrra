@@ -273,8 +273,9 @@ static void CRManagerVerifyRuntimeComponent(NSString *component,
                 finished = YES;
             }
             BOOL connectionWorks = error == nil;
+            NSString *brokenString = [brokenDaemons componentsJoinedByString:@", "];
             NSLog(@"CraneManager: helper insurance works=%d connection=%d broken=%@ error=%@",
-                  works, connectionWorks, brokenDaemons, error);
+                  works, connectionWorks, brokenString, error);
             /* Original CraneSB 0x1BAA4 reply ABI is exactly
              * (BOOL success, brokenDaemons, NSError *error). Transport state is
              * consumed separately through CraneManager getLastError. */

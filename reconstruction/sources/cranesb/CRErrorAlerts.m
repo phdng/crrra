@@ -577,40 +577,40 @@ void CRPresentDaemonError(id brokenDaemons,
 
         __weak id weakAlert = alert;
         id capturedDaemons = brokenDaemons;
-        UIAlertAction *restart =
-            [UIAlertAction
-                actionWithTitle:
-                    CRLocalize(@"RESTART_AFFECTED_DAEMONS_AND_SPRINGBOARD")
-                          style:UIAlertActionStyleDefault
-                        handler:^(__unused UIAlertAction *action) {
-                            id<CRHelperServiceProtocol> proxy =
-                                (id<CRHelperServiceProtocol>)
-                                    [CraneManager.sharedManager
-                                        cranehelperdGlobalSyncRemoteObjectProxy];
-                            if ([proxy respondsToSelector:
-                                    @selector(reloadDaemons:)]) {
+        id<CRHelperServiceProtocol> restartProxy =
+            (id<CRHelperServiceProtocol>)
+                [CraneManager.sharedManager cranehelperdGlobalSyncRemoteObjectProxy];
+        if ([restartProxy respondsToSelector:@selector(reloadDaemons:)]) {
+            UIAlertAction *restart =
+                [UIAlertAction
+                    actionWithTitle:
+                        CRLocalize(@"RESTART_AFFECTED_DAEMONS_AND_SPRINGBOARD")
+                              style:UIAlertActionStyleDefault
+                            handler:^(__unused UIAlertAction *action) {
                                 NSArray *daemonArray =
                                     [capturedDaemons isKindOfClass:NSArray.class]
                                         ? capturedDaemons
                                         : (capturedDaemons ? @[capturedDaemons]
                                                            : @[]);
-                                [proxy reloadDaemons:daemonArray];
-                            }
+                                [restartProxy reloadDaemons:daemonArray];
 
-                            Class serviceClass =
-                                NSClassFromString(@"FBSystemService");
-                            id service =
-                                [serviceClass respondsToSelector:
-                                    @selector(sharedInstance)]
-                                    ? [serviceClass sharedInstance]
-                                    : nil;
-                            if ([service respondsToSelector:
-                                    NSSelectorFromString(@"exitAndRelaunch:")]) {
-                                [service exitAndRelaunch:YES];
-                            }
-                            [weakAlert deactivateForButton];
-                        }];
-        [actions addObject:restart];
+                                Class serviceClass =
+                                    NSClassFromString(@"FBSystemService");
+                                id service =
+                                    [serviceClass respondsToSelector:
+                                        @selector(sharedInstance)]
+                                        ? [serviceClass sharedInstance]
+                                        : nil;
+                                if ([service respondsToSelector:
+                                        NSSelectorFromString(@"exitAndRelaunch:")]) {
+                                    [service exitAndRelaunch:YES];
+                                }
+                                [weakAlert deactivateForButton];
+                            }];
+            [actions addObject:restart];
+        } else {
+            NSLog(@"CraneSB: daemon restart action unavailable; privileged reloadDaemons backend is not reconstructed");
+        }
         [actions addObject:close];
     }
 

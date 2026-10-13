@@ -77,6 +77,9 @@ jobs:
       - name: Verify Roothide SpringBoard launch-environment compatibility
         run: python3 reconstruction/tools/check_roothide_launch_environment_contract.py
 
+      - name: Verify Roothide daemon injection probes
+        run: python3 reconstruction/tools/check_roothide_daemon_probe_contract.py
+
       - name: Verify APNs topic/hash isolation decoding
         run: python3 reconstruction/tools/check_apsd_topic_contract.py
 
@@ -283,6 +286,15 @@ jobs:
             echo "--- $binary" | tee -a linkage.txt
             otool -L "$binary" | tee -a linkage.txt
           done
+          if [ "${{ matrix.variant }}" = roothide ]; then
+            for binary in \
+              'pkg/Library/MobileSubstrate/DynamicLibraries/CraneSupportProbeFlags.dylib' \
+              'pkg/Library/MobileSubstrate/DynamicLibraries/CraneSupportProbePlain.dylib'; do
+              test -f "$binary" || { echo "::error::Missing daemon injection probe $binary"; exit 1; }
+              echo "--- $binary" | tee -a linkage.txt
+              otool -L "$binary" | tee -a linkage.txt
+            done
+          fi
           cat linkage.txt >> "$GITHUB_STEP_SUMMARY"
           echo '~~~' >> "$GITHUB_STEP_SUMMARY"
           cp pkg-control/control package.control

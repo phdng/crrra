@@ -16,6 +16,7 @@ root = Path(__file__).resolve().parents[1]
 helper = (root / "sources/cranehelperd/CRHelperd.m").read_text(encoding="utf-8")
 header = (root / "sources/common/CRManager.h").read_text(encoding="utf-8")
 manager = (root / "sources/libcrane/CRManager.m").read_text(encoding="utf-8")
+alerts = (root / "sources/cranesb/CRErrorAlerts.m").read_text(encoding="utf-8")
 
 start = helper.index("@implementation CRHGlobalServiceDelegate")
 end = helper.index("@end", start)
@@ -58,7 +59,7 @@ raw = helper[helper.index("static NSString *CRHandleHealthRequest("):
              helper.index("#pragma mark - main")]
 for item in ("setIdentifier", "getIdentifierOfType", "dumpKeychainItems",
              "restoreKeychainItems", "setPreferenceValue:",
-             "runInjectionFixUpIfNeededAndReply"):
+             "runInjectionFixUpIfNeededAndReply", "reload_daemons"):
     assert item not in raw, item
 assert 'strcmp(operation, "insurance") == 0' in raw
 assert 'strcmp(operation, "lookup_pid") == 0' in raw
@@ -95,5 +96,20 @@ async_start = manager.index('- (id)cranehelperdGlobalAsyncRemoteObjectProxy')
 async_end = manager.index('/* A filter plist', async_start)
 async_proxy = manager[async_start:async_end]
 assert 'return [self cranehelperdGlobalSyncRemoteObjectProxy];' in async_proxy
+
+# Original CraneSB 0x1A53C calls privileged reloadDaemons: before relaunching
+# SpringBoard. U-01 does not recover that root implementation and the narrow
+# raw-XPC adapter deliberately does not expose it. Do not show a restart action
+# that would only relaunch SpringBoard while leaving the affected daemons stale.
+assert '- (void)reloadDaemons:(NSArray<NSString *> *)daemons {}' in delegate
+assert '- (void)reloadDaemons:' not in proxy
+daemon_alert_start = alerts.index('void CRPresentDaemonError(')
+daemon_alert_end = alerts.index('void CRPresentMainDylibNotLoadedError', daemon_alert_start)
+daemon_alert = alerts[daemon_alert_start:daemon_alert_end]
+assert 'id<CRHelperServiceProtocol> restartProxy =' in daemon_alert
+assert 'if ([restartProxy respondsToSelector:@selector(reloadDaemons:)])' in daemon_alert
+assert '[restartProxy reloadDaemons:daemonArray];' in daemon_alert
+assert 'daemon restart action unavailable; privileged reloadDaemons backend is not reconstructed' in daemon_alert
+assert daemon_alert.index('if ([restartProxy respondsToSelector:@selector(reloadDaemons:)])') < daemon_alert.rindex('[actions addObject:close];')
 
 print("Crane F-19/F-07 unavailable privileged delegate contracts: PASS (device unverified)")
