@@ -32,6 +32,52 @@ included in the reconstruction.
 
 ## Chrome launch reports default container (main dylib not confirmed)
 
+Follow-up device evidence: Chrome PID 2339 produced *two copies of each*
+`CraneSB: post-launch proof missing` line, attempts 1/2/3, all with
+`helper=1 error=(null)`. The device has **no Choicy**. This is strong evidence
+the helper lookup responds while no app-side attestation is recorded; repeating
+the bounded wait alone did not repair injection. The original grep omitted
+`CraneSB: constructor reached` and a loaded app dylib with **no**
+`CRANE_CONTAINER_IDENTIFIER` previously emitted no `Crane: app init` log.
+Therefore the absence of app-init/runningboard logs from that grep does not
+conclusively prove either image was never loaded.
+
+A diagnostic update prints `Crane: app dylib loaded ... containerEnvPresent=0`
+when the main dylib constructor runs in a third-party app but sees no container
+environment variable; it does not change the launch environment. SpringBoard
+uses an FBProcess-associated PID token to avoid registering duplicate
+post-launch checks for the same FBProcess and PID (a different FBProcess object
+can still have its own check). Neither change repairs a missing injector.
+Confirm newly installed matching package binaries before interpreting new logs.
+
+From the mobile shell, check the **leading-space main filename** and filters:
+
+```sh
+ls -l '/Library/MobileSubstrate/DynamicLibraries/ Crane.dylib'
+ls -l '/Library/MobileSubstrate/DynamicLibraries/ Crane.plist'
+ls -l /Library/MobileSubstrate/DynamicLibraries/CraneSB.dylib
+plutil -p '/Library/MobileSubstrate/DynamicLibraries/ Crane.plist'
+plutil -p /Library/MobileSubstrate/DynamicLibraries/CraneSB.plist
+```
+
+The original main filter is `Bundles=(com.apple.Foundation)`, `Flags=0`,
+and CraneSB matches the SpringBoard bundle plus the `runningboardd`
+executable. Having the package paths is necessary, not proof the injector
+actually loaded either image. Log the full launch with an expanded pattern:
+
+```sh
+oslog | grep -E 'CraneSB: constructor reached|CraneSB: runningboardd|CraneSB: post-launch|Crane: app dylib loaded|Crane: app init|Crane: app environment ready|Crane helper: (runtime_report|lookup_pid)|CraneManager: helper'
+```
+
+If `Crane: app dylib loaded ... containerEnvPresent=0` appears for Chrome,
+the dylib was loaded but the launch environment was not set: focus on
+`runningboardd` hook/profile/context and insurance. If no Chrome constructor
+message appears despite a confirmed new package, investigate Substrate/roothide
+injection/filter and application launch restrictions. If the constructor
+reports a nondefault container yet helper has no proof, investigate the app
+`runtime_report` connection/authorization. Do not blame Choicy on a device
+where it is not installed.
+
 Device report (roothide iOS 15.8.8): Preferences showed the active Chrome
 container as `007FADC7-01AC-4740-AD98-0099E98A32FC`, and the Filza URL was
 successfully opened by LaunchServices. A later SpringBoard alert said Chrome

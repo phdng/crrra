@@ -332,6 +332,11 @@ static void CRVerifyProcessInjectionAfterLaunch(id process, pid_t pid,
         }];
 }
 
+/* The recovered FBProcessManager bootstrap/create hooks can both register
+ * callbacks on one FBProcess. One proof check per process+PID is sufficient;
+ * an association is freed with the process, avoiding stale global PID sets. */
+static char kCRInjectionCheckedPIDAssociation;
+
 static void CRRegisterInjectionCheckForProcess(id self, SEL _cmd, id process,
                                                NSString *containerID)
 {
@@ -350,6 +355,18 @@ static void CRRegisterInjectionCheckForProcess(id self, SEL _cmd, id process,
             ![launched respondsToSelector:@selector(pid)])
             return;
         pid_t pid = (pid_t)((int (*)(id, SEL))objc_msgSend)(launched, @selector(pid));
+        if (pid <= 0)
+            return;
+        @synchronized(launched) {
+            NSNumber *alreadyChecked = objc_getAssociatedObject(
+                launched, &kCRInjectionCheckedPIDAssociation);
+            if (alreadyChecked && alreadyChecked.intValue == pid) {
+                NSLog(@"CraneSB: duplicate post-launch check ignored pid=%d", pid);
+                return;
+            }
+            objc_setAssociatedObject(launched, &kCRInjectionCheckedPIDAssociation,
+                                    @(pid), OBJC_ASSOCIATION_RETAIN_NONATOMIC);
+        }
         CRVerifyProcessInjectionAfterLaunch(launched, pid, expectedContainer, 0);
     };
     SEL callbackSelector = NSSelectorFromString(@"_executeBlockAfterLaunchCompletes:");

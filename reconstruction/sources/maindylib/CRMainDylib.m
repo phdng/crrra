@@ -243,6 +243,15 @@ static void CRInitFunc(void)
     const char *identifier = getenv(CR_ENV_CONTAINER_IDENTIFIER.UTF8String);
     const char *protect = getenv(CR_ENV_PROTECT_CONTAINERS.UTF8String);
     const char *spoof = getenv(CR_ENV_SPOOF_SANDBOX_LOOKUPS.UTF8String);
+    /* A loaded main dylib without the launch environment previously emitted
+     * no log, indistinguishable from failed injection. Log once for non-Apple
+     * app bundles before rewriting any environment state; never invent an ID. */
+    if (!identifier) {
+        NSString *bundleID = CRSafeGetBundleIdentifier();
+        if (bundleID.length && ![bundleID hasPrefix:@"com.apple."])
+            NSLog(@"Crane: app dylib loaded bundle=%@ pid=%d containerEnvPresent=0",
+                  bundleID, getpid());
+    }
 
     if (identifier) {
         /* getenv storage is borrowed; snapshot before mutating environ. */
