@@ -36,6 +36,11 @@ SUBPROJECTS += sources/maindylib sources/libcrane sources/cranehelperd \
 
 include $(THEOS_MAKE_PATH)/aggregate.mk
 
+# dpkg executes postinst as the installer user; Windows checkouts may lose +x.
+# DEBIAN is copied by deb.mk, before this packaging prerequisite completes.
+before-package:: $(THEOS_STAGING_DIR)/DEBIAN
+	@chmod 0755 "$(THEOS_STAGING_DIR)/DEBIAN/postinst"
+
 after-stage::
 	@# Theos requires a filter plist beside every tweak Makefile, so each tweak
 	@# stages an XML copy. Restore the recovered binary filter plists from layout/

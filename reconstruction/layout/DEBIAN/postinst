@@ -1,0 +1,43 @@
+#!/bin/sh
+# Reconstruction packaging adapter; original maintainer scripts were not supplied.
+# The user authorized registration/restart of this job during package configure.
+# Roothide bootstrap tools accept these virtual paths relative to their jbroot.
+set -eu
+PATH=/usr/bin:/bin:/usr/sbin:/sbin
+export PATH
+
+case "${1:-}" in
+    configure)
+        service=system/com.opa334.cranehelperd
+        plist=/Library/LaunchDaemons/com.opa334.cranehelperd.plist
+        binary=/usr/local/libexec/cranehelperd
+        launchctl=/bin/launchctl
+
+        if [ "$(id -u)" != 0 ]; then
+            printf '%s\n' 'Crane: package configure requires the privileged package installer.' >&2
+            exit 1
+        fi
+        if [ ! -f "$plist" ] || [ ! -f "$binary" ] || [ ! -x "$binary" ]; then
+            printf '%s\n' 'Crane: helper plist or executable is missing/unusable; configure failed.' >&2
+            exit 1
+        fi
+
+        if ! "$launchctl" print "$service" >/dev/null 2>&1; then
+            printf '%s\n' 'Crane: registering com.opa334.cranehelperd with launchd.'
+            if ! "$launchctl" bootstrap system "$plist"; then
+                # Another installer/bootstrap may have registered it concurrently.
+                # Only tolerate failure when our exact job can now be queried.
+                if ! "$launchctl" print "$service" >/dev/null 2>&1; then
+                    printf '%s\n' 'Crane: helper registration failed; see launchctl error above.' >&2
+                    exit 1
+                fi
+            fi
+        fi
+
+        # Upgrades must replace the old daemon with the matching helper/client build.
+        printf '%s\n' 'Crane: starting the installed helper build.'
+        "$launchctl" kickstart -k "$service"
+        "$launchctl" print "$service"
+        ;;
+esac
+exit 0

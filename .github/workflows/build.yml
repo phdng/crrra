@@ -49,6 +49,11 @@ jobs:
       - name: Verify helper transport diagnostics and signing inputs
         run: python3 reconstruction/tools/check_helper_transport_contract.py
 
+      - name: Verify helper launchd job and read-only recovery diagnostic
+        run: |
+          python3 reconstruction/tools/check_helper_launch_registration_contract.py
+          sh -n reconstruction/tools/diagnose_cranehelperd.sh
+
       - name: Verify unsupported privileged helper calls fail closed
         run: python3 reconstruction/tools/check_helper_privileged_contract.py
 
@@ -108,6 +113,11 @@ jobs:
 
       - name: Verify guarded device identifier settings
         run: python3 reconstruction/tools/check_device_identifier_settings_contract.py
+
+      - name: Test installer registration with a mock launchctl
+        run: |
+          sh -n reconstruction/layout/DEBIAN/postinst
+          python3 reconstruction/tools/helper_postinst_smoke.py
 
       - name: Set up Theos
         uses: waruhachi/theos-action@v2.6.3
@@ -236,7 +246,11 @@ jobs:
             shasum -a 256 "$file"
           done > pkg.manifest.sha256
 
-          python3 tools/verify_package_layout.py pkg
+          CONTROL_MEMBER="$(ar -t "$DEB" | awk '/^control\.tar\./ { print; exit }')"
+          test -n "$CONTROL_MEMBER" || { echo "::error::Missing control archive"; exit 1; }
+          mkdir pkg-control
+          ar -p "$DEB" "$CONTROL_MEMBER" | tar -xf - -C pkg-control
+          python3 tools/verify_package_layout.py pkg pkg-control
           python3 tools/verify_architectures.py pkg
           python3 tools/verify_helper_entitlements.py pkg "${{ matrix.variant }}"
           echo '### Mach-O dependencies (installed payload)' >> "$GITHUB_STEP_SUMMARY"
@@ -250,9 +264,7 @@ jobs:
           done
           cat linkage.txt >> "$GITHUB_STEP_SUMMARY"
           echo '~~~' >> "$GITHUB_STEP_SUMMARY"
-          CONTROL_MEMBER="$(ar -t "$DEB" | awk '/^control\.tar\./ { print; exit }')"
-          test -n "$CONTROL_MEMBER" || { echo "::error::Missing control archive"; exit 1; }
-          ar -p "$DEB" "$CONTROL_MEMBER" | tar -xOf - ./control > package.control
+          cp pkg-control/control package.control
           grep -Fx "Architecture: ${{ matrix.deb_arch }}" package.control || {
             echo "::error::Unexpected architecture for ${{ matrix.variant }}"; exit 1;
           }

@@ -99,10 +99,14 @@ compiles the actual diagnostic decoder and checks emitted package signatures.
 Native build and device results are still unobserved. This alert does not prove
 whether the installed daemon is absent, cannot start, or cannot communicate.
 
-Automatic approval review rejected proposed package post-install bootstrap /
-restart hooks and their executable staging step because they affect a root
-service. No maintainer scripts or staging changes remain. That packaging
-adapter awaits explicit user approval; the original scripts are unavailable.
+The user subsequently authorized a package configure adapter. postinst now
+registers only the Crane helper job if absent and restarts the installed build,
+checks installer privileges/files, and fails configuration visibly on launchctl
+errors. A registration race is accepted only after querying the exact job.
+Theos stages it as 0755; CI inspects its content/mode in the control archive.
+Eight production-script control-flow cases pass with a mock launchctl on the
+Windows host. Real native packages and device registration remain unverified.
+This adapter is reconstruction packaging work; original scripts are unavailable.
 
 ## 3. Coverage summary
 

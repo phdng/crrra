@@ -19,12 +19,35 @@ executable resolution. Source/evidence checks pass; CI compiles the production
 diagnostic decoder and verifies actual packaged entitlement slots. Native build
 and device results remain unverified.
 
-P0 pending: determine installed job/process state from launchctl/ps and error
-logs; verify matching daemon/client build, launch path and authentication.
-Package configuration/removal hooks are also pending explicit approval:
-automatic review rejected adding root-service bootstrap/restart lifecycle
-scripts and their executable staging. No maintainer-script changes remain.
-The original package's maintainer scripts and helper/libcrane bodies are absent.
+P0 incident: SpringBoard repeatedly reports `runtime_report` Code=1003
+Connection invalid. Package 6.0 / iphoneos-arm64e is installed, the recovered
+plist fields match and the helper is executable, but no helper PID is visible.
+The user's only shell is mobile; its job query cannot conclusively distinguish
+missing system registration from restricted visibility. Missing installer
+registration is the leading hypothesis, not a proven exclusion of signing,
+dependency or resolved-path failures.
+
+The user explicitly authorized the package install adapter. Added
+`layout/DEBIAN/postinst`: during configure it requires the privileged package
+installer, checks the helper/plist, queries only `com.opa334.cranehelperd`,
+bootstraps it if absent and kickstarts the installed build. A bootstrap failure
+is tolerated only when the job becomes queryable (concurrent registration);
+otherwise package configuration fails visibly. User container data and peer
+authentication are untouched. The standalone starter remains kickstart-only.
+
+Theos stages postinst as 0755. CI extracts control.tar.* separately and verifies
+the exact script contents/mode, while excluding DEBIAN metadata from installed
+data. Eight production-script control-flow tests pass with mocked launchctl
+(fresh, registered, registration race/failure, kickstart failure, non-root,
+missing files and ignored actions). Rootful/Roothide native packages and real
+device registration still require validation. Installing the newly rebuilt
+package through the trusted package manager is the mobile-only repair path;
+reinstalling an older package without this hook does not add registration.
+
+The original package maintainer scripts and helper/libcrane bodies are absent,
+so this install hook is explicitly reconstruction packaging work. Earlier
+automatic-review refusal was resolved by the user's explicit approval.
+The existing read-only diagnostic remains available for verification.
 
 ## Quy ước
 

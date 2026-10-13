@@ -1,0 +1,3 @@
+# dpkg maintainer scripts and device shell diagnostics require LF line endings.
+reconstruction/layout/DEBIAN/postinst text eol=lf
+reconstruction/tools/*.sh text eol=lf
