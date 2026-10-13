@@ -243,6 +243,7 @@ static void CRManagerVerifyRuntimeComponent(NSString *component,
 - (void)verifySupportLoadedIntoProcessNamed:(NSString *)name
                                       reply:(void (^)(BOOL))reply;
 - (void)verifyCraneSBLoadedAndReply:(void (^)(BOOL))reply;
+- (void)runInjectionFixUpIfNeededAndReply:(void (^)(BOOL, NSError *))reply;
 - (void)verifyCraneSupportLoadedIntoDaemon:(NSString *)daemon
                                       reply:(void (^)(BOOL))reply;
 - (void)fetchActiveContainerIDForProcessWithPid:(pid_t)pid
@@ -331,6 +332,20 @@ static void CRManagerVerifyRuntimeComponent(NSString *component,
     /* CraneSupport 0x9B68 asks specifically whether SpringBoard-side CraneSB
      * is live before rewriting incoming APS traffic. */
     CRManagerVerifyRuntimeComponent(@"CraneSB", @"SpringBoard", reply);
+}
+
+- (void)runInjectionFixUpIfNeededAndReply:(void (^)(BOOL, NSError *))reply
+{
+    if (!reply)
+        return;
+
+    /* Original helper protocol/implementation is U-01. Preserve the recovered
+     * selector and 0x179C4 (BOOL, NSError *) reply ABI, but never report a
+     * privileged fix-up that this reconstruction did not actually perform. */
+    NSError *error = [NSError errorWithDomain:@"com.opa334.crane.helper.unsupported"
+        code:2001 userInfo:@{NSLocalizedDescriptionKey:
+            @"Original Crane injection fix-up operation is unavailable in this reconstruction"}];
+    reply(NO, error);
 }
 
 /* CraneSB 0x11CA4 expects a synchronous reply from its "sync" proxy.
@@ -1411,7 +1426,14 @@ usingBiometricsIfNeededWithSuccessHandler:(void (^)(BOOL authenticated))handler
     dispatch_once(&once, ^{ proxy = [CRInsuranceHealthProxy new]; });
     return proxy;
 }
-- (id)cranehelperdGlobalAsyncRemoteObjectProxy { return nil; }
+- (id)cranehelperdGlobalAsyncRemoteObjectProxy
+{
+    /* CraneSB 0x1782C uses the async proxy only for
+     * runInjectionFixUpIfNeededAndReply:. Return the same narrow adapter; it
+     * fails that unrecovered privileged operation explicitly rather than
+     * exposing a speculative raw-XPC command. */
+    return [self cranehelperdGlobalSyncRemoteObjectProxy];
+}
 /* A filter plist is not a dylib and must not be passed to dlopen().
  * This is an installation-presence check, not proof of injection into a
  * particular process.  Never report success unconditionally. */

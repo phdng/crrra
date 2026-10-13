@@ -15,6 +15,7 @@ from pathlib import Path
 root = Path(__file__).resolve().parents[1]
 helper = (root / "sources/cranehelperd/CRHelperd.m").read_text(encoding="utf-8")
 header = (root / "sources/common/CRManager.h").read_text(encoding="utf-8")
+manager = (root / "sources/libcrane/CRManager.m").read_text(encoding="utf-8")
 
 start = helper.index("@implementation CRHGlobalServiceDelegate")
 end = helper.index("@end", start)
@@ -56,7 +57,8 @@ assert '- (void)restoreKeychainItems:(NSDictionary *)items' in helper
 raw = helper[helper.index("static NSString *CRHandleHealthRequest("):
              helper.index("#pragma mark - main")]
 for item in ("setIdentifier", "getIdentifierOfType", "dumpKeychainItems",
-             "restoreKeychainItems", "setPreferenceValue:"):
+             "restoreKeychainItems", "setPreferenceValue:",
+             "runInjectionFixUpIfNeededAndReply"):
     assert item not in raw, item
 assert 'strcmp(operation, "insurance") == 0' in raw
 assert 'strcmp(operation, "lookup_pid") == 0' in raw
@@ -76,4 +78,22 @@ assert not isinstance(unsupported_dump, dict)
 # the live CraneSupport/lsd transport has been added.
 assert '@protocol CRHGlobalServiceProtocol <NSObject>' in helper
 assert 'CRHelperServiceProtocol <NSObject>' in header
+
+# CraneSB 0x1782C sends the original privileged fix-up selector through the
+# async helper proxy. U-01 means its helper implementation is unavailable: the
+# reconstruction must preserve the selector/reply ABI but return an explicit
+# failure rather than fabricate a successful fix-up or add a raw-XPC command.
+assert '- (void)runInjectionFixUpIfNeededAndReply:(void (^)(BOOL success, NSError *error))reply;' in header
+proxy_start = manager.index('@implementation CRInsuranceHealthProxy')
+proxy_end = manager.index('@end', proxy_start)
+proxy = manager[proxy_start:proxy_end]
+assert '- (void)runInjectionFixUpIfNeededAndReply:(void (^)(BOOL, NSError *))reply' in proxy
+assert '@"com.opa334.crane.helper.unsupported"' in proxy
+assert 'reply(NO, error);' in proxy
+assert 'reply(YES' not in proxy
+async_start = manager.index('- (id)cranehelperdGlobalAsyncRemoteObjectProxy')
+async_end = manager.index('/* A filter plist', async_start)
+async_proxy = manager[async_start:async_end]
+assert 'return [self cranehelperdGlobalSyncRemoteObjectProxy];' in async_proxy
+
 print("Crane F-19/F-07 unavailable privileged delegate contracts: PASS (device unverified)")

@@ -14,6 +14,7 @@ prefs = (root / "sources/common/CRPreferences.h").read_text(encoding="utf-8")
 registry = (root / "sources/common/CRContainerRegistry.h").read_text(encoding="utf-8")
 manager = (root / "sources/libcrane/CRManager.m").read_text(encoding="utf-8")
 menu = (root / "sources/cranesb/CRMenuHooks.m").read_text(encoding="utf-8")
+sb = (root / "sources/cranesb/CRSpringBoard.m").read_text(encoding="utf-8")
 ui = (root / "sources/prefs/CRPreferences.m").read_text(encoding="utf-8")
 workflow = (root.parent / ".github/workflows/build.yml").read_text(encoding="utf-8")
 
@@ -97,5 +98,53 @@ assert "self.lastError = error;" in manager
 add = section(ui, "- (void)addButtonPressed", "@end")
 assert add.index("if (!identifier.length)") < add.index('NSLog(@"CranePrefs: created container')
 assert "tools/container_menu_smoke.m" in workflow
+
+# Always Ask Before Launch is a per-app setting in original 0x1F008, not a
+# global CFPreferences gate. CraneSB 0x17A14 installs three SBIconController
+# launch hooks, all of which route through 0x12B3C only when that app opts in.
+always = section(sb, "static BOOL CRAlwaysAskBeforeLaunch(NSString *appID)",
+                 "/* 0x1EB9C")
+assert "applicationSettingsForApplicationWithIdentifier:appID" in always
+assert "CRAppSetting_AlwaysAskBeforeLaunchEnabled" in always
+assert "CRPrefBool(CRPref_AlwaysAskBeforeLaunch)" not in always
+for selector in (
+    '@"_launchFromIconView:"',
+    '@"_launchFromIconView:withActions:"',
+    '@"_launchFromIconView:withActions:modifierFlags:"',
+):
+    assert selector in sb, selector
+for hook in (
+    "static void CRLaunchFromIconView(",
+    "static void CRLaunchFromIconViewActions(",
+    "static void CRLaunchFromIconViewActionsFlags(",
+):
+    body = section(sb, hook, "\n}\n")
+    assert "CRAlwaysAskBeforeLaunch(appID)" in body
+    assert "CRHandleAppLaunchContainerPicker(" in body
+picker = section(sb, "static void CRHandleAppLaunchContainerPicker(",
+                 "static id CRLaunchPickerPresenter(")
+for fragment in (
+    'CRLocalize(@"SELECT_CONTAINER")',
+    "containerIdentifiersOfApplicationWithIdentifier:appID",
+    "displayNameForContainerWithIdentifier:containerID",
+    "shouldUseShortVersion:NO",
+    'systemImageNamed:@"checkmark"',
+    'CRIcon(@"SelectedContainerCheckmark")',
+    "setActiveContainerIdentifier:containerID",
+    "usingBiometricsIfNeededWithSuccessHandler:",
+    "CROpenApplicationAfterContainerSwitch(appID);",
+    'CRLocalize(@"CANCEL")',
+    "popover.sourceView = sourceView;",
+    "popover.sourceRect = ((UIView *)sourceView).bounds;",
+):
+    assert fragment in picker, fragment
+assert picker.index("if ([containerID isEqualToString:active])") < picker.index(
+    "setActiveContainerIdentifier:containerID")
+
+native_always = original / "1F008.c"
+if native_always.exists():
+    evidence = native_always.read_text(encoding="utf-8")
+    assert 'CFSTR("alwaysAskBeforeLaunchEnabled")' in evidence
+    assert "applicationSettingsForApplicationWithIdentifier:" in evidence
 
 print("Crane original shortcut/default-container source contracts: PASS (device unverified)")

@@ -63,6 +63,8 @@ extern void CRInitBadgeRepositoryHooks(void);
 
 static BOOL gIsSpringBoard = NO;          /* CraneSB 0x2DDFB */
 static BOOL hasFinishedLaunching = NO;    /* CraneSB 0x2DDF9, set by didFinishLaunching */
+static BOOL keychainOutdated = NO;        /* CraneSB 0x2DDF8 */
+NSError *CRInjectionFixupError = nil;     /* CraneSB 0x2DDF0 */
 
 extern int sandbox_container_path_for_pid(int pid, char *buf, size_t size);
 
@@ -88,8 +90,15 @@ static BOOL CROnlyShowIfContainersExist(void)    /* 0x1EE64 */
 { return CRPrefBool(CRPref_OnlyShowIfContainersExist); }
 static BOOL CRShowContainerBadges(void)          /* 0x1EF7C */
 { return CRPrefBool(CRPref_ShowContainerNotificationBadges); }
-static BOOL CRAlwaysAskBeforeLaunch(void)        /* 0x1F008 */
-{ return CRPrefBool(CRPref_AlwaysAskBeforeLaunch); }
+static BOOL CRAlwaysAskBeforeLaunch(NSString *appID) /* 0x1F008 */
+{
+    if (!appID.length)
+        return NO;
+    NSDictionary *settings = [CraneManager.sharedManager
+        applicationSettingsForApplicationWithIdentifier:appID];
+    id value = settings[CRAppSetting_AlwaysAskBeforeLaunchEnabled];
+    return value ? [value boolValue] : NO;
+}
 
 /* 0x1EB9C - global gate AND per-app gate */
 static BOOL CRNotificationRedirectionEnabledForApp(NSString *appID)
@@ -540,6 +549,215 @@ static id CRFBProcessContainerIdentifier(id self, SEL _cmd)
 }
 
 /* ------------------------------------------------------------------------- */
+/* Always Ask Before Launch (0x12B3C / 0x18354 / 0x18580 / 0x18710)          */
+/* ------------------------------------------------------------------------- */
+
+static void (*gOriginalLaunchFromIconView)(id, SEL, id);
+static void (*gOriginalLaunchFromIconViewActions)(id, SEL, id, id);
+static void (*gOriginalLaunchFromIconViewActionsFlags)(id, SEL, id, id, NSUInteger);
+
+static NSString *CRLaunchBundleIdentifierFromIconView(id iconView,
+                                                       BOOL allowIconFallback)
+{
+    if (!iconView)
+        return nil;
+
+    SEL applicationBundleIdentifier =
+        NSSelectorFromString(@"applicationBundleIdentifier");
+    if ([iconView respondsToSelector:applicationBundleIdentifier])
+        return ((id (*)(id, SEL))objc_msgSend)(
+            iconView, applicationBundleIdentifier);
+
+    SEL shortcutsIdentifier =
+        NSSelectorFromString(@"applicationBundleIdentifierForShortcuts");
+    if ([iconView respondsToSelector:shortcutsIdentifier])
+        return ((id (*)(id, SEL))objc_msgSend)(iconView, shortcutsIdentifier);
+
+    /* Native 0x18354 alone has this third fallback. The two overloads with
+     * actions stop after the shortcut identifier probes. */
+    if (!allowIconFallback)
+        return nil;
+
+    SEL iconSEL = NSSelectorFromString(@"icon");
+    id icon = [iconView respondsToSelector:iconSEL]
+        ? ((id (*)(id, SEL))objc_msgSend)(iconView, iconSEL) : nil;
+    Class applicationIconClass = NSClassFromString(@"SBApplicationIcon");
+    if (!applicationIconClass || ![icon isKindOfClass:applicationIconClass])
+        return nil;
+
+    SEL applicationSEL = NSSelectorFromString(@"application");
+    id application = [icon respondsToSelector:applicationSEL]
+        ? ((id (*)(id, SEL))objc_msgSend)(icon, applicationSEL) : nil;
+    SEL bundleIdentifierSEL = NSSelectorFromString(@"bundleIdentifier");
+    return [application respondsToSelector:bundleIdentifierSEL]
+        ? ((id (*)(id, SEL))objc_msgSend)(application, bundleIdentifierSEL)
+        : nil;
+}
+
+static void CROpenApplicationAfterContainerSwitch(NSString *appID)
+{
+    Class serviceClass = NSClassFromString(@"FBSOpenApplicationService");
+    SEL selector = NSSelectorFromString(
+        @"openApplication:withOptions:completion:");
+    id service = serviceClass ? [[serviceClass alloc] init] : nil;
+    if ([service respondsToSelector:selector])
+        ((void (*)(id, SEL, id, id, id))objc_msgSend)(
+            service, selector, appID, nil, nil);
+}
+
+static void CRHandleAppLaunchContainerPicker(id presenter,
+                                              id sourceView,
+                                              NSString *appID,
+                                              dispatch_block_t continuation,
+                                              BOOL continueAfterSwitch)
+{
+    if (!presenter || !sourceView || !appID.length || !continuation) {
+        if (continuation)
+            continuation();
+        return;
+    }
+
+    CraneManager *manager = CraneManager.sharedManager;
+    NSString *appName = [manager displayNameForApplicationWithIdentifier:appID];
+    NSString *active =
+        [manager activeContainerIdentifierForApplicationWithIdentifier:appID];
+    UIAlertController *alert = [UIAlertController
+        alertControllerWithTitle:appName
+                         message:CRLocalize(@"SELECT_CONTAINER")
+                  preferredStyle:UIAlertControllerStyleActionSheet];
+
+    NSArray<NSString *> *containers =
+        [manager containerIdentifiersOfApplicationWithIdentifier:appID];
+    for (NSString *containerID in containers) {
+        NSString *title = [manager
+            displayNameForContainerWithIdentifier:containerID
+                       ofApplicationWithIdentifier:appID
+                            shouldUseShortVersion:NO];
+        UIAlertAction *action = [UIAlertAction
+            actionWithTitle:title
+                      style:UIAlertActionStyleDefault
+                    handler:^(__unused UIAlertAction *selectedAction) {
+            if ([containerID isEqualToString:active]) {
+                continuation();
+                return;
+            }
+
+            [CraneManager.sharedManager
+                setActiveContainerIdentifier:containerID
+                 forApplicationWithIdentifier:appID
+                usingBiometricsIfNeededWithSuccessHandler:^(BOOL authenticated) {
+                    (void)authenticated;
+                    if (continueAfterSwitch)
+                        continuation();
+                    else
+                        CROpenApplicationAfterContainerSwitch(appID);
+                }];
+        }];
+
+        if ([containerID isEqualToString:active]) {
+            UIImage *checkmark = nil;
+            if ([UIImage respondsToSelector:@selector(systemImageNamed:)])
+                checkmark = [UIImage systemImageNamed:@"checkmark"];
+            else
+                checkmark = [CRIcon(@"SelectedContainerCheckmark")
+                    imageWithRenderingMode:UIImageRenderingModeAlwaysTemplate];
+            if (checkmark)
+                [action setValue:checkmark forKey:@"image"];
+        }
+        [alert addAction:action];
+    }
+
+    [alert addAction:[UIAlertAction
+        actionWithTitle:CRLocalize(@"CANCEL")
+                  style:UIAlertActionStyleCancel
+                handler:nil]];
+
+    UIPopoverPresentationController *popover = alert.popoverPresentationController;
+    if (popover) {
+        popover.sourceView = sourceView;
+        if ([sourceView isKindOfClass:UIView.class])
+            popover.sourceRect = ((UIView *)sourceView).bounds;
+    }
+    [presenter presentViewController:alert animated:YES completion:nil];
+}
+
+static id CRLaunchPickerPresenter(id iconView)
+{
+    SEL selector = NSSelectorFromString(@"_viewControllerForAncestor");
+    return [iconView respondsToSelector:selector]
+        ? ((id (*)(id, SEL))objc_msgSend)(iconView, selector) : nil;
+}
+
+static void CRLaunchFromIconView(id self, SEL _cmd, id iconView)
+{
+    NSString *appID = CRLaunchBundleIdentifierFromIconView(iconView, YES);
+    if (!CRAlwaysAskBeforeLaunch(appID)) {
+        if (gOriginalLaunchFromIconView)
+            gOriginalLaunchFromIconView(self, _cmd, iconView);
+        return;
+    }
+
+    id presenter = CRLaunchPickerPresenter(iconView);
+    if (!presenter) {
+        if (gOriginalLaunchFromIconView)
+            gOriginalLaunchFromIconView(self, _cmd, iconView);
+        return;
+    }
+    CRHandleAppLaunchContainerPicker(presenter, iconView, appID, ^{
+        if (gOriginalLaunchFromIconView)
+            gOriginalLaunchFromIconView(self, _cmd, iconView);
+    }, NO);
+}
+
+static void CRLaunchFromIconViewActions(id self, SEL _cmd,
+                                        id iconView, id actions)
+{
+    NSString *appID = CRLaunchBundleIdentifierFromIconView(iconView, NO);
+    if (!CRAlwaysAskBeforeLaunch(appID)) {
+        if (gOriginalLaunchFromIconViewActions)
+            gOriginalLaunchFromIconViewActions(self, _cmd, iconView, actions);
+        return;
+    }
+
+    id presenter = CRLaunchPickerPresenter(iconView);
+    if (!presenter) {
+        if (gOriginalLaunchFromIconViewActions)
+            gOriginalLaunchFromIconViewActions(self, _cmd, iconView, actions);
+        return;
+    }
+    CRHandleAppLaunchContainerPicker(presenter, iconView, appID, ^{
+        if (gOriginalLaunchFromIconViewActions)
+            gOriginalLaunchFromIconViewActions(self, _cmd, iconView, actions);
+    }, NO);
+}
+
+static void CRLaunchFromIconViewActionsFlags(id self, SEL _cmd,
+                                             id iconView, id actions,
+                                             NSUInteger modifierFlags)
+{
+    NSString *appID = CRLaunchBundleIdentifierFromIconView(iconView, NO);
+    if (!CRAlwaysAskBeforeLaunch(appID)) {
+        if (gOriginalLaunchFromIconViewActionsFlags)
+            gOriginalLaunchFromIconViewActionsFlags(
+                self, _cmd, iconView, actions, modifierFlags);
+        return;
+    }
+
+    id presenter = CRLaunchPickerPresenter(iconView);
+    if (!presenter) {
+        if (gOriginalLaunchFromIconViewActionsFlags)
+            gOriginalLaunchFromIconViewActionsFlags(
+                self, _cmd, iconView, actions, modifierFlags);
+        return;
+    }
+    CRHandleAppLaunchContainerPicker(presenter, iconView, appID, ^{
+        if (gOriginalLaunchFromIconViewActionsFlags)
+            gOriginalLaunchFromIconViewActionsFlags(
+                self, _cmd, iconView, actions, modifierFlags);
+    }, NO);
+}
+
+/* ------------------------------------------------------------------------- */
 /* Choicy integration                                                         */
 /* ------------------------------------------------------------------------- */
 
@@ -677,7 +895,10 @@ static void CRKeychainMigrationSucceeded(CFNotificationCenterRef center, void *o
                                          CFStringRef name, const void *object,
                                          CFDictionaryRef userInfo)
 {
-    hasFinishedLaunching = YES;
+    (void)center; (void)observer; (void)name; (void)object; (void)userInfo;
+    /* Exact CraneSB 0x12B30 behavior. This notification clears the migration
+     * warning; it is unrelated to SpringBoard launch completion. */
+    keychainOutdated = NO;
 }
 
 static void CRInitSpringBoard(void)
@@ -727,7 +948,25 @@ static void CRInitSpringBoard(void)
                         "v@:@@");
     }
 
-    (void)sbIconController;
+    if (sbIconController) {
+        SEL launch = NSSelectorFromString(@"_launchFromIconView:");
+        SEL launchActions =
+            NSSelectorFromString(@"_launchFromIconView:withActions:");
+        SEL launchFlags = NSSelectorFromString(
+            @"_launchFromIconView:withActions:modifierFlags:");
+        if ([sbIconController instancesRespondToSelector:launch])
+            MSHookMessageEx(sbIconController, launch,
+                            (IMP)CRLaunchFromIconView,
+                            (IMP *)&gOriginalLaunchFromIconView);
+        if ([sbIconController instancesRespondToSelector:launchActions])
+            MSHookMessageEx(sbIconController, launchActions,
+                            (IMP)CRLaunchFromIconViewActions,
+                            (IMP *)&gOriginalLaunchFromIconViewActions);
+        if ([sbIconController instancesRespondToSelector:launchFlags])
+            MSHookMessageEx(sbIconController, launchFlags,
+                            (IMP)CRLaunchFromIconViewActionsFlags,
+                            (IMP *)&gOriginalLaunchFromIconViewActionsFlags);
+    }
 
     /* CONFIRMED_STATIC: on CF >= 1665.15 (iOS 13-era+) the original installs the
      * runningboardd error-alert hooks; on older systems it loads the icon
@@ -760,10 +999,72 @@ static void CRInitSpringBoard(void)
     CRInitUIMenuHooks();
 }
 
+static void CRStartHelperIfNeeded(void)
+{
+    /* Original 0x14894 uses NSTask with the jbroot-resolved
+     * /usr/local/bin/cranehelperd_start path, then waits for exit. Resolve the
+     * private-on-iOS class dynamically so the public SDK can still compile. */
+    Class taskClass = NSClassFromString(@"NSTask");
+    SEL setLaunchPath = NSSelectorFromString(@"setLaunchPath:");
+    SEL launch = NSSelectorFromString(@"launch");
+    SEL waitUntilExit = NSSelectorFromString(@"waitUntilExit");
+    NSString *path = CRJailbreakRootPath(CR_HELPERD_START_BIN);
+    id task = taskClass ? [[taskClass alloc] init] : nil;
+    if (!task || !path.length ||
+        ![task respondsToSelector:setLaunchPath] ||
+        ![task respondsToSelector:launch] ||
+        ![task respondsToSelector:waitUntilExit]) {
+        NSLog(@"CraneSB: cranehelperd_start unavailable path=%@", path);
+        return;
+    }
+    ((void (*)(id, SEL, id))objc_msgSend)(task, setLaunchPath, path);
+    ((void (*)(id, SEL))objc_msgSend)(task, launch);
+    ((void (*)(id, SEL))objc_msgSend)(task, waitUntilExit);
+}
+
+static void CRCheckKeychainVersion(void)
+{
+    /* Exact 0x12AD0 state transition. Migration completion 0x12B30 clears it. */
+    if (![CraneManager.sharedManager isKeychainVersionUpToDate])
+        keychainOutdated = YES;
+}
+
 static void CRDidFinishLaunching(CFNotificationCenterRef center, void *observer,
                                  CFStringRef name, const void *object,
                                  CFDictionaryRef userInfo)
 {
+    (void)center; (void)observer; (void)name; (void)object; (void)userInfo;
+    CraneManager *manager = CraneManager.sharedManager;
+
+    /* CraneSB 0x1782C first attempts the recovered starter when the helper is
+     * unreachable, then rechecks before asking for the injection fix-up. */
+    if (![manager cranehelperdConnectionWorks])
+        CRStartHelperIfNeeded();
+
+    if ([manager cranehelperdConnectionWorks]) {
+        id proxy = [manager cranehelperdGlobalAsyncRemoteObjectProxy];
+        SEL fixupSEL = NSSelectorFromString(@"runInjectionFixUpIfNeededAndReply:");
+        if ([proxy respondsToSelector:fixupSEL]) {
+            void (^reply)(BOOL, NSError *) = ^(BOOL success, NSError *error) {
+                /* Exact 0x179C4 semantics: only a failed reply stores the
+                 * error; success does not clear an earlier failure. */
+                if (!success)
+                    CRInjectionFixupError = error;
+            };
+            ((void (*)(id, SEL, id))objc_msgSend)(proxy, fixupSEL, reply);
+        }
+    }
+
+    CFNotificationCenterPostNotification(
+        CFNotificationCenterGetDarwinNotifyCenter(),
+        (__bridge CFStringRef)CR_NOTIFICATION_SB_LOADED,
+        NULL, NULL, YES);
+
+    CRCheckKeychainVersion();
+    dispatch_async(dispatch_get_global_queue(0, 0), ^{
+        CRBadgeStoreInitialize();
+    });
+
     if (kCFCoreFoundationVersionNumber < 1665.15 && CRAppShortcutEnabled())
         CRInitApplicationShortcutLateHooks();
     hasFinishedLaunching = YES;

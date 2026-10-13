@@ -39,6 +39,11 @@
 - (void)verifyCraneInsuranceAndReply:(void (^)(BOOL works, NSString *brokenDaemons, NSError *error, BOOL connectionWorks))reply;
 - (void)verifySupportLoadedIntoProcessNamed:(NSString *)name reply:(void (^)(BOOL loaded))reply;
 - (void)verifyCraneSBLoadedAndReply:(void (^)(BOOL loaded))reply;
+/* CraneSB 0x1782C/0x179C4. The original helper performs a privileged
+ * injection fix-up and replies with (success, NSError). Reconstruction keeps
+ * the selector ABI but fails closed until the original helper operation is
+ * recovered. */
+- (void)runInjectionFixUpIfNeededAndReply:(void (^)(BOOL success, NSError *error))reply;
 /* Recovered CraneSB 0x11CA4 selector; backed by an authenticated,
  * bounded raw-XPC component-health check in this reconstruction. */
 - (void)verifyCraneSupportLoadedIntoDaemon:(NSString *)daemon

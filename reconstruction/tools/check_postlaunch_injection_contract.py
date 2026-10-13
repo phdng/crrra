@@ -15,6 +15,7 @@ from pathlib import Path
 
 root = Path(__file__).resolve().parents[1]
 sb = (root / "sources/cranesb/CRSpringBoard.m").read_text(encoding="utf-8")
+alerts = (root / "sources/cranesb/CRErrorAlerts.m").read_text(encoding="utf-8")
 helper = (root / "sources/cranehelperd/CRHelperd.m").read_text(encoding="utf-8")
 manager = (root / "sources/libcrane/CRManager.m").read_text(encoding="utf-8")
 main = (root / "sources/maindylib/CRMainDylib.m").read_text(encoding="utf-8")
@@ -92,6 +93,61 @@ assert 'CRReportRuntimeInjection(@"CraneSB", nil)' in sb
 assert '"operation", "runtime_report"' in common
 assert 'CRManagerDeliverHelperReply(error' in manager
 assert 'check_postlaunch_injection_contract.py' in workflow
+
+# CraneSB didFinishLaunching 0x1782C ordering and state. The recovered helper
+# fix-up selector is preserved but U-01 forces the reconstruction adapter to
+# fail closed; callback 0x179C4 stores NSError only when success == NO.
+assert 'static BOOL keychainOutdated = NO;' in sb
+assert 'NSError *CRInjectionFixupError = nil;' in sb
+migration_start = sb.index('static void CRKeychainMigrationSucceeded(')
+migration_end = sb.index('static void CRInitSpringBoard(void)', migration_start)
+migration = sb[migration_start:migration_end]
+assert 'keychainOutdated = NO;' in migration
+assert 'hasFinishedLaunching = YES;' not in migration
+finish_start = sb.index('static void CRDidFinishLaunching(CFNotificationCenterRef center',
+                        sb.index('static void CRStartHelperIfNeeded(void)'))
+finish_end = sb.index('/* ------------------------------------------------------------------------- */\n/* crane_initRunningBoardd', finish_start)
+finish = sb[finish_start:finish_end]
+for fragment in (
+    'if (![manager cranehelperdConnectionWorks])',
+    'CRStartHelperIfNeeded();',
+    'if ([manager cranehelperdConnectionWorks])',
+    '[manager cranehelperdGlobalAsyncRemoteObjectProxy]',
+    '@"runInjectionFixUpIfNeededAndReply:"',
+    'if (!success)\n                    CRInjectionFixupError = error;',
+    'CR_NOTIFICATION_SB_LOADED',
+    'CRCheckKeychainVersion();',
+    'dispatch_get_global_queue(0, 0)',
+    'CRBadgeStoreInitialize();',
+    'hasFinishedLaunching = YES;',
+):
+    assert fragment in finish, fragment
+assert finish.index('CRStartHelperIfNeeded();') < finish.index(
+    '@"runInjectionFixUpIfNeededAndReply:"') < finish.index(
+    'CR_NOTIFICATION_SB_LOADED') < finish.index('CRCheckKeychainVersion();') < finish.index(
+    'hasFinishedLaunching = YES;')
+starter = sb[sb.index('static void CRStartHelperIfNeeded(void)'):
+             sb.index('static void CRCheckKeychainVersion(void)')]
+for fragment in (
+    'NSClassFromString(@"NSTask")',
+    'CRJailbreakRootPath(CR_HELPERD_START_BIN)',
+    '@"setLaunchPath:"', '@"launch"', '@"waitUntilExit"',
+):
+    assert fragment in starter, fragment
+check_keychain = sb[sb.index('static void CRCheckKeychainVersion(void)'):finish_start]
+assert 'isKeychainVersionUpToDate' in check_keychain
+assert 'keychainOutdated = YES;' in check_keychain
+
+# Original 0x19E70 appends the stored fix-up error only for the daemon
+# injection-failure branch, before the Choicy notice.
+assert 'extern NSError *CRInjectionFixupError;' in alerts
+daemon_start = alerts.index('void CRPresentDaemonError(')
+daemon_end = alerts.index('void CRPresentMainDylibNotLoadedError', daemon_start)
+daemon = alerts[daemon_start:daemon_end]
+assert 'CRLocalize(@"FIXUP_ERROR_DESCRIPTION")' in daemon
+assert 'CRInjectionFixupError.localizedDescription' in daemon
+assert daemon.index('CRLocalize(@"FIXUP_ERROR_DESCRIPTION")') < daemon.index(
+    'CRAppendChoicyNoticeIfNeeded(message)')
 
 # Independent decision model: valid proofs stop immediately, missing proof
 # with reachable helper retries at most twice, failed XPC goes to its own

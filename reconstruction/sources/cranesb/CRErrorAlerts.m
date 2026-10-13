@@ -25,6 +25,9 @@
 #import "CRPreferences.h"
 #import "CRCommon.h"
 
+/* CraneSB 0x2DDF0, populated by didFinishLaunching fix-up callback 0x179C4. */
+extern NSError *CRInjectionFixupError;
+
 @interface NSObject (CraneErrorAlertRuntime)
 + (id)sharedInstance;
 - (id)alertController;
@@ -564,6 +567,12 @@ void CRPresentDaemonError(id brokenDaemons,
         message = format
             ? [NSString stringWithFormat:format, daemonString ?: @""]
             : daemonString;
+        if (CRInjectionFixupError) {
+            message = [NSString stringWithFormat:@"%@\n\n%@\n%@",
+                message ?: @"",
+                CRLocalize(@"FIXUP_ERROR_DESCRIPTION"),
+                CRInjectionFixupError.localizedDescription ?: @""];
+        }
         message = CRAppendChoicyNoticeIfNeeded(message);
 
         __weak id weakAlert = alert;
