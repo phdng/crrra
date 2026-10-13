@@ -67,7 +67,9 @@ jobs:
         run: python3 reconstruction/tools/check_app_runtime_probe_contract.py
 
       - name: Verify per-app runtime Mach sandbox extension
-        run: python3 reconstruction/tools/check_app_runtime_sandbox_contract.py
+        run: |
+          python3 reconstruction/tools/check_app_runtime_sandbox_contract.py
+          sh -n reconstruction/tools/diagnose_crane_app_mach.sh
 
       - name: Verify app injection and per-process diagnostic coverage
         run: python3 reconstruction/tools/check_main_injection_diagnostics_contract.py

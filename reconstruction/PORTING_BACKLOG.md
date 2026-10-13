@@ -51,6 +51,28 @@ The existing read-only diagnostic remains available for verification.
 
 ## Device incident — Chrome launched into DEFAULT after Helper XPC recovery
 
+**F-19 follow-up Chrome PID 3756, installed app Mach profile but still Code=1003:**
+The device confirms `/Library/libSandy/CraneAppRuntime.plist` is installed
+(198-byte, root:wheel) and Chrome is using the same selected UUID
+`F7555D97-7AE9-4D62-9BF2-9A9E42AE5BBB`, yet app `runtime_report`
+and same-peer diagnostic ping still return Code=1003, while SpringBoard's
+helper lookup succeeds. The supplied excerpt contains NO
+`Crane: app runtime Mach profile ... status=` output; the on-disk profile's
+existence cannot establish a successful libSandy grant or even verify
+which dylib build is installed. Avoid escalating permission breadth,
+bypassing the privileged Mach flag, or fabricating helper registration
+without a confirmed root cause. The diagnostic update now logs
+`APP_RUNTIME_MACH_DIAGNOSTIC_V2` entry, resolved libSandy path,
+`dlopen` error/symbol presence, and precise profile apply status before
+the unchanged runtime report. Added a mobile-safe, read-only
+`diagnose_crane_app_mach.sh` to inspect the installed leading-space
+dylib marker, plist and relevant logs (no root or container modifications).
+`check_app_runtime_sandbox_contract.py` now asserts the markers, safe
+log branches and script nonmutation. F-19 remains unresolved until
+libSandy status/actual app Mach bootstrap access and helper peer lifecycle
+are validated on device. This batch changes NO XPC auth, application
+sandbox permissions, or Chrome user-data paths.
+
 **F-19 app-sandbox Helper Mach lookup fix (Chrome PID 3411, 2026-10-13):**
 Chrome log proves main ` Crane.dylib` loaded, selected nondefault
 `F7555D97-7AE9-4D62-9BF2-9A9E42AE5BBB` is present, and app

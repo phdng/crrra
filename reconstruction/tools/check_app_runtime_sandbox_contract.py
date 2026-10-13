@@ -45,6 +45,11 @@ b = main.index("__attribute__((constructor))", a)
 setup = main[a:b]
 for needle in (
     'CRJailbreakRootPath(CR_LIB_SANDY)',
+    'APP_RUNTIME_MACH_DIAGNOSTIC_V2',
+    'Crane: app runtime Mach profile begin pid=%d marker=%s',
+    'Crane: app runtime Mach profile failed pid=%d reason=no_libSandy_path',
+    'Crane: app runtime Mach profile failed pid=%d reason=dlopen',
+    'Crane: app runtime Mach profile failed pid=%d reason=no_apply_symbol',
     'dlopen(path.fileSystemRepresentation, RTLD_NOW)',
     'dlsym(handle, "libSandy_applyProfile")',
     'applyProfile("CraneAppRuntime")',
@@ -54,7 +59,7 @@ for needle in (
 ):
     assert needle in setup, needle
 assert setup.index('dlopen(') < setup.index('dlsym(') < setup.index('applyProfile(')
-assert setup.index('applyProfile(') < setup.index('dlclose(handle);')
+assert setup.index('int rc = applyProfile("CraneAppRuntime");') < setup.rindex('dlclose(handle);')
 assert 'sandbox_extension_issue_mach(' not in setup
 assert 'task_for_pid(' not in setup
 
@@ -93,6 +98,19 @@ assert '"mach_name": "com.opa334.cranehelperd.xpc",' in verifier
 assert '"FAIL app runtime sandbox: invalid or overbroad permissions"' in verifier
 assert 'include $(THEOS_MAKE_PATH)/aggregate.mk' in master
 assert 'check_app_runtime_sandbox_contract.py' in workflow
+assert 'sh -n reconstruction/tools/diagnose_crane_app_mach.sh' in workflow
+shell = (root / 'tools/diagnose_crane_app_mach.sh').read_text(encoding='utf-8')
+assert shell.startswith('#!/bin/sh')
+for statement in (
+    'APP_RUNTIME_MACH_DIAGNOSTIC_V2',
+    'Crane: app runtime Mach profile',
+    'strings "$image"',
+    'plutil -p "$granted"',
+    'A profile file or binary marker alone does NOT establish',
+):
+    assert statement in shell
+for forbidden in ('launchctl bootstrap ', 'launchctl kickstart ', 'chmod ', 'chown ', 'sandbox_extension_issue_'):
+    assert forbidden not in shell
 
 # Do not mistake a profile-apply failure for registration success.
 def outcome(profile_applied, report_transport, helper_registered):

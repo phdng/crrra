@@ -30,6 +30,53 @@ passed only after observing it on-device. The wrong-protocol and delayed-reply
 cases require a controlled diagnostic client/peer; no such harness is currently
 included in the reconstruction.
 
+## Chrome PID 3756: app Mach profile installed, XPC still invalid
+
+Latest Roothide 15.8.8 trace (Chrome PID 3756) shows the **same selected**
+`F7555D97-7AE9-4D62-9BF2-9A9E42AE5BBB` container and repeated
+`runtime_report` / same-connection `ping` Code=1003. The file
+`/Library/libSandy/CraneAppRuntime.plist` is present and root-owned
+(198-byte on-device plist); **this alone does not prove it was applied**.
+The supplied log omits the `Crane: app runtime Mach profile ... status=N`
+line. Without that result, it is unsafe to conclude that adding broader
+sandbox permissions or changing the Helper XPC ABI will repair the transport.
+The error may mean sandbox/Mach lookup was denied, a wrong bootstrap namespace,
+or a rejected/invalid connection; SpringBoard reaching the helper does not
+distinguish these from Chrome's sandbox.
+
+The main dylib now emits a versioned marker
+`APP_RUNTIME_MACH_DIAGNOSTIC_V2` before attempting libSandy,
+and explicit reasons for no resolved library path, `dlopen` failure,
+missing `libSandy_applyProfile` symbol and profile application status.
+No sandbox permission, Mach service, report identity or data-path changes
+were made in this diagnostic batch. A mobile-shell-only **read-only** script
+`reconstruction/tools/diagnose_crane_app_mach.sh` checks the installed
+leading-space dylib with `strings`, the actual profile with `plutil` and
+provides the exact log filter. Copy it to the device using existing file
+transfer or run manually:
+
+```sh
+strings '/Library/MobileSubstrate/DynamicLibraries/ Crane.dylib' | grep -F 'APP_RUNTIME_MACH_DIAGNOSTIC_V2'
+plutil -p /Library/libSandy/CraneAppRuntime.plist
+oslog | grep -E 'Crane: app runtime Mach profile|Crane: app runtime_report|Crane: helper runtime_report error'
+```
+
+The version marker is available only after **installing a build that contains
+this diagnostic update**; the prior package is expected to lack it. If no
+profile log appeared even on the previous build, first check the full
+`oslog` output for the non-versioned profile status and distinguish a stale
+binary/log filter from actual profile rejection. After installing the
+diagnostic build, `profile begin` proves the current compiled call path
+was entered, `reason=dlopen/no_apply_symbol` diagnoses library linkage,
+`status!=0` means libSandy rejected/failed the grant, while `status=0`
+followed by Code=1003 directs investigation toward sandbox/launchd
+Mach-service namespace and helper peer connection logs. A successful
+profile return is **not** the same as a successful helper attestation.
+
+Avoid further 2-second retry additions, dropping
+`XPC_CONNECTION_MACH_SERVICE_PRIVILEGED`, anonymous helper enrollment or
+altering Chrome's stored profile while this evidence is missing.
+
 ## Chrome PID 3411: sandboxed app cannot reach helper XPC (2026-10-13)
 
 New device evidence after the app runtime probe is definitive at the

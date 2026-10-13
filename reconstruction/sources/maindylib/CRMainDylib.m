@@ -242,20 +242,40 @@ static int CRSandboxContainerPathForPidHook(int pid, char *buffer, size_t size)
  * message ABI is changed by this attempt. */
 static BOOL CRPrepareAppRuntimeMachLookup(void)
 {
+    /* This marker permits a mobile-shell check of the installed binary.
+     * A deployed profile file alone does not prove this code was built. */
+    static const char * const kRuntimeDiagnosticMarker =
+        "APP_RUNTIME_MACH_DIAGNOSTIC_V2";
+    NSLog(@"Crane: app runtime Mach profile begin pid=%d marker=%s",
+          getpid(), kRuntimeDiagnosticMarker);
     NSString *path = CRJailbreakRootPath(CR_LIB_SANDY);
-    void *handle = path.length
-        ? dlopen(path.fileSystemRepresentation, RTLD_NOW) : NULL;
-    if (!handle) {
-        NSLog(@"Crane: app runtime Mach profile unavailable pid=%d libSandy=%@",
-              getpid(), path);
+    if (!path.length) {
+        NSLog(@"Crane: app runtime Mach profile failed pid=%d reason=no_libSandy_path",
+              getpid());
         return NO;
     }
+    dlerror();
+    void *handle = dlopen(path.fileSystemRepresentation, RTLD_NOW);
+    if (!handle) {
+        const char *failure = dlerror();
+        NSLog(@"Crane: app runtime Mach profile failed pid=%d reason=dlopen path=%@ detail=%s",
+              getpid(), path, failure ?: "unknown");
+        return NO;
+    }
+    dlerror();
     int (*applyProfile)(const char *) =
         (int (*)(const char *))dlsym(handle, "libSandy_applyProfile");
-    int rc = applyProfile ? applyProfile("CraneAppRuntime") : -1;
-    dlclose(handle);
+    if (!applyProfile) {
+        const char *failure = dlerror();
+        NSLog(@"Crane: app runtime Mach profile failed pid=%d reason=no_apply_symbol detail=%s",
+              getpid(), failure ?: "unknown");
+        dlclose(handle);
+        return NO;
+    }
+    int rc = applyProfile("CraneAppRuntime");
     NSLog(@"Crane: app runtime Mach profile pid=%d status=%d",
           getpid(), rc);
+    dlclose(handle);
     return rc == 0;
 }
 
