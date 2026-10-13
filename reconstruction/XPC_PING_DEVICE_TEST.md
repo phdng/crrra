@@ -30,6 +30,71 @@ passed only after observing it on-device. The wrong-protocol and delayed-reply
 cases require a controlled diagnostic client/peer; no such harness is currently
 included in the reconstruction.
 
+## Chrome PID 3100: container supplied, runtime proof missing (2026-10-13)
+
+The latest Roothide 15.8.8 device log conclusively shows Chrome accepted
+`CRANE_CONTAINER_IDENTIFIER=1947F19D-7E24-40BF-9E8F-2EA7C70B65B9`.
+The app logged `protection=0 spoof=0` and `hooks=0`, which is **expected**:
+no protection or sandbox-spoof hook is registered when both switches are
+off. `hooks=0` does NOT mean ` Crane.dylib` injection failed. SpringBoard
+still missed app runtime proof for the exact PID on attempts 1/2/3 despite a
+healthy Helper query. This is now an **app-to-Helper runtime attestation /
+live-PID registry** incident, not an environment-propagation incident.
+
+Prior Chrome launch / Filza logs showed a different container
+`007FADC7-01AC-4740-AD98-0099E98A32FC`. These are distinct data locations.
+If Chrome appears reset, the most likely reason is opening a newly selected
+empty container, **not proof of data deletion**. The main dylib's constructor
+calls `CRCreateDirectoryIfNotExists` on a container skeleton then updates
+`HOME`/`CFFIXED_USER_HOME`/`TMPDIR`; it does not delete the earlier
+container. Preserve **both** IDs and the DEFAULT profile; do not wipe, move,
+rename or reinstall Chrome while the registry is unverified. In Filza, browse
+the known app data-container root and inspect the two UUID subdirectories
+under `Library/___Crane_Containers` read-only. The base application's UUID
+can change on reinstall, so do not assume the previously logged base path
+is permanent.
+
+The reconstructed app currently sends `runtime_report` as a one-way raw
+XPC message to `com.opa334.cranehelperd.xpc`. Helper availability from
+SpringBoard does NOT establish that Chrome's app sandbox permits this Mach
+service. A new diagnostic, restricted to a real `Crane` container report,
+sends the existing read-only `ping` on the **same persistent XPC peer**
+immediately after queueing the runtime report. An async ping reply confirms
+that the app's transport is reachable, **not that injection proof was
+registered**. Helper logs report accepted/rejected peer claims, disconnects,
+and whether PID lookup is missing due to no peer, process-name mismatch,
+no Crane report or an empty container claim.
+
+After installing a matching build, close/relaunch Chrome and capture these
+mobile-readable logs (start capture *before* launching):
+
+```sh
+oslog | grep -E 'Crane: app (init|environment ready|runtime_report)|Crane: helper runtime_report error|Crane helper: (accepted peer|runtime_report|runtime peer|PID proof missing|lookup_pid)|CraneSB: post-launch'
+```
+
+Diagnosis:
+
+- `Crane: app runtime_report transport probe error`: app-to-helper IPC
+  cannot complete. Check Roothide sandbox/Mach lookup, installed helper
+  listener and matching bootstrap; do NOT relax peer authentication or fake
+  successful verification.
+- `probe ... alive=1 compatible=1` and `Crane helper: runtime_report
+  accepted ... component=Crane containerProof=1`: Helper received proof.
+  If lookup then misses it, inspect `runtime peer disconnected`,
+  `process_name_mismatch` and exact PIDs; a different PID cannot be
+  trusted as evidence for this launch.
+- `probe ... alive=1 compatible=1` without an accepted runtime report:
+  inspect `runtime_report rejected`, Helper peer process/signing logs and
+  protocol; a read-only ping success does not replace the required report.
+- `PID proof missing ... reason=no_runtime_peer`: no live report exists;
+  `reason=no_crane_report` means another component was present;
+  `reason=empty_container_claim` is an incomplete app claim.
+
+The report/lookup authorization and raw-XPC message formats are unchanged.
+No client-side probe result turns `injection_verified` true, and nothing
+modifies or deletes Chrome's container data. Source contract:
+`check_app_runtime_probe_contract.py`. Real device behavior is pending.
+
 ## Chrome launch reports default container (main dylib not confirmed)
 
 Further device evidence (Chrome PID 2767 on the new package): the main

@@ -63,6 +63,9 @@ jobs:
       - name: Verify bounded post-launch injection proof and diagnostics
         run: python3 reconstruction/tools/check_postlaunch_injection_contract.py
 
+      - name: Verify app runtime report transport probe and data safety
+        run: python3 reconstruction/tools/check_app_runtime_probe_contract.py
+
       - name: Verify app injection and per-process diagnostic coverage
         run: python3 reconstruction/tools/check_main_injection_diagnostics_contract.py
 

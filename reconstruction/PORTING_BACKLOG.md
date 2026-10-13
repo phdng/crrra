@@ -51,6 +51,36 @@ The existing read-only diagnostic remains available for verification.
 
 ## Device incident — Chrome launched into DEFAULT after Helper XPC recovery
 
+**New app-to-Helper attestation incident (Chrome PID 3100, 2026-10-13):**
+After the Roothide SpringBoard launch fallback was deployed, Chrome logged
+`Crane: app init ... container=1947F19D-7E24-40BF-9E8F-2EA7C70B65B9`
+and `app environment ready ... hooks=0`. With `protection=0 spoof=0`,
+`hooks=0` is **normal**; main dylib env consumption has progressed.
+SpringBoard still failed three same-PID Helper lookup attempts despite
+`helper=1`: client and server helper availability are **not equivalent**.
+The app-to-Helper `CRReportRuntimeInjection` is one-way, so an app sandbox
+Mach lookup failure or a disconnected runtime peer can yield no stored
+proof while SpringBoard's own XPC requests succeed. Added an asynchronous
+read-only `ping` after the initial `runtime_report` on the *same* client
+XPC connection, along with sender logs for queued report, transport error
+and compatible response. Helper logs distinguish accepted/rejected
+reports, peer disconnect, no runtime peer, process-name mismatch, no Crane
+report and empty container claim; the existing PID authentication and
+protocol bytes remain unchanged. `check_app_runtime_probe_contract.py`
+verifies ordering and fail-closed semantics in CI. This is diagnostic,
+NOT proof that sandbox Mach lookup is fixed or that registration succeeded.
+
+**Possible apparent Chrome data loss:** earlier selected container was
+`007FADC7-01AC-4740-AD98-0099E98A32FC`, but PID3100 received
+`1947F19D-7E24-40BF-9E8F-2EA7C70B65B9`. Different isolated paths
+present as a fresh browser profile without implying deleted data.
+`CRMainDylib` only creates missing skeleton directories and sets
+environment home; it does not delete the old directory. The user must
+preserve both directories, DEFAULT and Chrome app data while validating.
+Do not automatically migrate/delete/revert storage paths to hide the alert.
+Further edits require exact app-to-Helper IPC/sandbox evidence from the
+mobile-only device log after rebuilt package deployment.
+
 Latest Roothide iOS 15.8.8 Chrome evidence: PID 2767 logs
 `Crane: app dylib loaded bundle=com.google.chrome.ios pid=2767
 containerEnvPresent=0`, so main ` Crane.dylib` injection **works** but

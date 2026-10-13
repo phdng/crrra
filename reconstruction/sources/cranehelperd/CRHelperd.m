@@ -587,10 +587,24 @@ static NSString *CRRuntimeContainerForPid(pid_t pid, NSString *process)
     NSMutableDictionary *registry = CRRuntimeRegistry();
     @synchronized(registry) {
         NSDictionary *entry = registry[@(pid)];
-        if (![entry[@"process"] isEqualToString:process] ||
-            !entry[@"components"][@"Crane"])
+        if (!entry) {
+            NSLog(@"Crane helper: PID proof missing pid=%d reason=no_runtime_peer", pid);
             return nil;
-        return entry[@"components"][@"Crane"][@"container"];
+        }
+        if (![entry[@"process"] isEqualToString:process]) {
+            NSLog(@"Crane helper: PID proof missing pid=%d reason=process_name_mismatch reported=%@ actual=%@",
+                  pid, entry[@"process"], process);
+            return nil;
+        }
+        NSDictionary *claim = entry[@"components"][@"Crane"];
+        if (!claim) {
+            NSLog(@"Crane helper: PID proof missing pid=%d reason=no_crane_report", pid);
+            return nil;
+        }
+        NSString *containerID = claim[@"container"];
+        if (!containerID.length)
+            NSLog(@"Crane helper: PID proof missing pid=%d reason=empty_container_claim", pid);
+        return containerID;
     }
 }
 
@@ -718,8 +732,11 @@ static void CRAcceptHealthPeer(xpc_connection_t peer)
 
     xpc_connection_set_event_handler(peer, ^(xpc_object_t message) {
         if (xpc_get_type(message) == XPC_TYPE_ERROR) {
-            if (registeredOnPeer)
+            if (registeredOnPeer) {
+                NSLog(@"Crane helper: runtime peer disconnected pid=%d process=%@; removing live proof",
+                      peerPid, peerProcess);
                 CRUnregisterRuntime(peerPid, peerToken);
+            }
             xpc_connection_cancel(peer);
             return;
         }
