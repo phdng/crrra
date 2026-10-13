@@ -11,6 +11,7 @@
  */
 
 #import "CRCommon.h"
+#import "CRLocalization.h"
 #import <LocalAuthentication/LocalAuthentication.h>
 #import <xpc/xpc.h>
 #import <unistd.h>
@@ -29,34 +30,19 @@ static NSBundle *CRUIBundle(void)
     static NSBundle *bundle;
     /* Crane 0x6924 retries bundleWithPath: whenever its cached result is nil;
      * dispatch_once would permanently cache a failed first lookup. */
-    if (!bundle)
-        bundle = [NSBundle bundleWithPath:CRJailbreakRootPath(CR_UI_BUNDLE_PATH)];
+    if (!bundle) {
+        NSString *path = CRJailbreakRootPath(CR_UI_BUNDLE_PATH);
+        bundle = [NSBundle bundleWithPath:path];
+        NSLog(@"Crane: localization bundle path=%@ available=%@", path,
+              bundle ? @"YES" : @"NO");
+    }
     return bundle;
 }
 
 NSString *CRLocalize(NSString *key)
 {
-    if (!key)
-        return nil;
-
-    NSString *value = [CRUIBundle() localizedStringForKey:key value:key table:nil];
-
-    /* Upstream falls back to the raw en.lproj table when localizedStringForKey
-     * returns the key unchanged, which happens for keys present only as an
-     * uppercase identifier. */
-    if ([value isEqualToString:key]) {
-        static NSDictionary *english;
-        /* Like 0x6924, repeat the read only if no dictionary was cached. */
-        if (!english) {
-            NSString *path = [CRUIBundle() pathForResource:@"Localizable"
-                                                     ofType:@"strings"
-                                                inDirectory:@"en.lproj"];
-            english = [NSDictionary dictionaryWithContentsOfFile:path];
-        }
-        value = english[key] ?: key;
-    }
-
-    return value;
+    static NSDictionary *english;
+    return CRLocalizedStringFromBundle(CRUIBundle(), key, &english);
 }
 
 /* Crane 0x6BE0 ------------------------------------------------------------ */

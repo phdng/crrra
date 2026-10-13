@@ -11,6 +11,18 @@ Ngày kiểm kê: 2026-10-12. Nhánh quan sát: `chore/reconstruction-build-ci`.
 - Ưu tiên **P0** cho các dependency trọng yếu/isolation, **P1** cho chức năng người dùng, **P2** cho tích hợp.
 - Đây là **backlog triển khai**, không phải tuyên bố binary parity, CI xanh hay chạy ổn trên thiết bị.
 
+## Device regression follow-up — blank Settings and container/Chrome crashes
+
+User reported blank Applications/Active Container labels and crashes on create, rename, set-active and Chrome launch. Supplied log proves the registry active ID was saved but contains no exception/backtrace, so exact on-device crash attribution remains open.
+
+- Roothide builds now select the SDK `jbroot` path resolver via exported `CRANE_ROOTHIDE=1`, preserving existing `/var/mobile` user-data paths. The previous native `/var/LIY` fallback could miss randomly rooted installed resources.
+- Shared `CRLocalization.h` retains valid empty translations, but returns a key/English value rather than nil when the bundle or table cannot be read. Logs the resolved bundle path/availability. Renaming/creation now use existing English-table action keys.
+- Corrected `PSListController indexForIndexPath:` from object to `NSInteger`; ARC must not retain a returned numeric index. Added explicit initial groups to the application list/configuration. Active-row refresh finds its key instead of assuming the first cached specifier.
+- Detail and application observer/action refreshes coalesce onto the main queue after selection callbacks. Replaced reconstructed animated container-row replacement with a complete deferred refresh, avoiding two independent caches during private table animation.
+- Verified native `HCHookFunctions` 0x7360-0x7380 preserves x0/w1 at the libhooker tail branch. Corrected the backend pointer/call to pass table/count, with the public symbol as fallback. Tracked native bytes in `fixtures/main_hook_tailcall.json` for Git-checkout evidence.
+- App initialization now snapshots all `getenv` values before `unsetenv`. Sandbox-path rewriting checks HOME/buffer/size and leaves the original output intact when the full home cannot fit. Added init/home/environment-ready logs.
+- Added `check_ui_runtime_contract.py` and an actual shared-localization Foundation smoke to both CI variants. Local contracts do not establish runtime crash resolution. **Need rootful/roothide native builds, the Preferences/Chrome crash reports and device re-test.**
+
 ## 1. Danh sách triển khai
 
 | ID | Feature | Trạng thái | Đầu việc cụ thể | Bằng chứng / nơi kiểm tra | Priority | Điều kiện nghiệm thu |

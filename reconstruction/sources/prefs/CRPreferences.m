@@ -43,7 +43,7 @@
 - (void)tableView:(UITableView *)tableView didSelectRowAtIndexPath:(NSIndexPath *)indexPath;
 - (NSArray *)loadSpecifiersFromPlistName:(NSString *)name target:(id)target;
 - (id)specifierAtIndex:(NSUInteger)index;
-- (id)indexForIndexPath:(NSIndexPath *)indexPath;
+- (NSInteger)indexForIndexPath:(NSIndexPath *)indexPath;
 - (void)reloadSpecifier:(id)specifier;
 - (void)reloadSpecifiers;
 - (id)readPreferenceValue:(id)specifier;
@@ -191,7 +191,9 @@
         ofApplicationWithIdentifier:appID];
     if ([settings[@"requireBiometricAuthentication"] boolValue]) {
         [tableView deselectRowAtIndexPath:indexPath animated:YES];
-        PSSpecifier *rowSpecifier = [self specifierAtIndex:(NSUInteger)[self indexForIndexPath:indexPath]];
+        NSInteger index = [self indexForIndexPath:indexPath];
+        PSSpecifier *rowSpecifier = index >= 0 && (NSUInteger)index != NSNotFound
+            ? [self specifierAtIndex:(NSUInteger)index] : nil;
         NSString *reason = [NSString stringWithFormat:CRLocalize(@"SET_ACTIVE_CONTAINER_DESCRIPTION"),
             rowSpecifier.name ?: containerID];
         CRRequestAuthentication(reason, ^{
@@ -337,6 +339,8 @@
 @property (nonatomic, assign) unsigned long long cachedSize;
 @property (nonatomic, assign) BOOL sizeCached;
 @property (nonatomic, assign) NSUInteger sizeFetchGeneration;
+@property (nonatomic, assign) BOOL craneReloadScheduled;
+- (void)scheduleContainerConfigurationReload;
 - (void)updateContainerSize;
 - (void)updateSizeGroupSpecifierAndReload:(BOOL)reload;
 @end
@@ -355,20 +359,46 @@
     [CraneManager.sharedManager removeObserver:self];
 }
 
-- (void)didChangeContainerSettingsForContainerWithIdentifier:(NSString *)containerID
-                            onApplicationWithIdentifier:(NSString *)appID
+/* Coalesce observer and action refreshes after the current table selection
+ * completes. Rebuilding private _specifiers inside didSelect/action dispatch
+ * can leave Preferences' section map pointing at the old rows. */
+- (void)scheduleContainerConfigurationReload
 {
-    if (![containerID isEqualToString:self.containerIdentifier] ||
-        ![appID isEqualToString:self.applicationIdentifier]) return;
+    if (!NSThread.isMainThread) {
+        dispatch_async(dispatch_get_main_queue(), ^{
+            [self scheduleContainerConfigurationReload];
+        });
+        return;
+    }
+    if (self.craneReloadScheduled)
+        return;
+    self.craneReloadScheduled = YES;
     dispatch_async(dispatch_get_main_queue(), ^{
+        self.craneReloadScheduled = NO;
         self.sizeCached = NO;
         self.sizeFetchGeneration++;
         self.craneContainerSpecifiers = nil;
+        self.sizeGroupSpecifier = nil;
         @try { [self setValue:nil forKey:@"_specifiers"]; }
         @catch (__unused NSException *exception) {}
         [self reloadSpecifiers];
     });
 }
+
+- (void)didChangeContainerSettingsForContainerWithIdentifier:(NSString *)containerID
+                            onApplicationWithIdentifier:(NSString *)appID
+{
+    if ([containerID isEqualToString:self.containerIdentifier] &&
+        [appID isEqualToString:self.applicationIdentifier])
+        [self scheduleContainerConfigurationReload];
+}
+
+- (void)didChangeSettingsForApplicationWithIdentifier:(NSString *)appID
+{
+    if ([appID isEqualToString:self.applicationIdentifier])
+        [self scheduleContainerConfigurationReload];
+}
+
 - (void)viewDidLoad
 {
     [self specifiers];
@@ -419,11 +449,12 @@
         [group setName:name];
         [rows addObject:group];
         PSSpecifier *active = [PSSpecifier preferenceSpecifierNamed:
-            (isActive ? @"✓ Active Container" : @"Set as Active Container")
+            (isActive ? [NSString stringWithFormat:@"✓ %@", CRLocalize(@"ACTIVE")]
+                      : CRLocalize(@"SET_AS_THE_ACTIVE_CRANE_CONTAINER"))
             target:self set:NULL get:NULL detail:NULL cell:13 edit:0];
         [active setButtonAction:@selector(makeActiveContainer)];
         [rows addObject:active];
-        PSSpecifier *rename = [PSSpecifier preferenceSpecifierNamed:@"Rename Container"
+        PSSpecifier *rename = [PSSpecifier preferenceSpecifierNamed:CRLocalize(@"RENAME")
             target:self set:NULL get:NULL detail:NULL cell:13 edit:0];
         [rename setButtonAction:@selector(renameContainer)];
         [rows addObject:rename];
@@ -815,22 +846,24 @@
 
 - (void)makeActiveContainer
 {
-    if (!self.applicationIdentifier.length || !self.containerIdentifier.length) return;
-    [CraneManager.sharedManager setActiveContainerIdentifier:self.containerIdentifier
+    if (!self.applicationIdentifier.length || !self.containerIdentifier.length)
+        return;
+    CraneManager *manager = CraneManager.sharedManager;
+    if (![self.containerIdentifier isEqualToString:CR_DEFAULT_CONTAINER_IDENTIFIER] &&
+        ![[manager containerIdentifiersOfApplicationWithIdentifier:self.applicationIdentifier]
+            containsObject:self.containerIdentifier])
+        return;
+    [manager setActiveContainerIdentifier:self.containerIdentifier
         forApplicationWithIdentifier:self.applicationIdentifier];
     NSLog(@"CranePrefs: container detail active app=%@ id=%@",
           self.applicationIdentifier, self.containerIdentifier);
-    self.craneContainerSpecifiers = nil;
-    @try { [self setValue:nil forKey:@"_specifiers"]; }
-    @catch (__unused NSException *exception) {}
-    [self specifiers];
-    [self reloadSpecifiers];
+    [self scheduleContainerConfigurationReload];
 }
 
 - (void)renameContainer
 {
     if (!self.applicationIdentifier.length || !self.containerIdentifier.length) return;
-    UIAlertController *alert = [UIAlertController alertControllerWithTitle:@"Rename Container"
+    UIAlertController *alert = [UIAlertController alertControllerWithTitle:CRLocalize(@"RENAME")
         message:nil preferredStyle:UIAlertControllerStyleAlert];
     [alert addTextFieldWithConfigurationHandler:^(UITextField *field) {
         NSDictionary *settings = [CraneManager.sharedManager containerSettingsForContainerWithIdentifier:
@@ -840,7 +873,7 @@
     __weak typeof(self) weakSelf = self;
     [alert addAction:[UIAlertAction actionWithTitle:CRLocalize(@"CANCEL")
         style:UIAlertActionStyleCancel handler:nil]];
-    [alert addAction:[UIAlertAction actionWithTitle:CRLocalize(@"SAVE")
+    [alert addAction:[UIAlertAction actionWithTitle:CRLocalize(@"RENAME")
         style:UIAlertActionStyleDefault handler:^(__unused UIAlertAction *action) {
         typeof(self) strongSelf = weakSelf;
         if (!strongSelf) return;
@@ -850,14 +883,14 @@
         CraneManager *manager = CraneManager.sharedManager;
         NSMutableDictionary *settings = [[manager containerSettingsForContainerWithIdentifier:
             strongSelf.containerIdentifier ofApplicationWithIdentifier:strongSelf.applicationIdentifier] mutableCopy];
+        if (![[manager containerIdentifiersOfApplicationWithIdentifier:strongSelf.applicationIdentifier]
+            containsObject:strongSelf.containerIdentifier] &&
+            ![strongSelf.containerIdentifier isEqualToString:CR_DEFAULT_CONTAINER_IDENTIFIER])
+            return;
         settings[CRCContainer_Name] = name;
         [manager setContainerSettings:settings forContainerWithIdentifier:strongSelf.containerIdentifier
             ofApplicationWithIdentifier:strongSelf.applicationIdentifier];
-        strongSelf.craneContainerSpecifiers = nil;
-        @try { [strongSelf setValue:nil forKey:@"_specifiers"]; }
-        @catch (__unused NSException *exception) {}
-        [strongSelf specifiers];
-        [strongSelf reloadSpecifiers];
+        [strongSelf scheduleContainerConfigurationReload];
     }]];
     [self presentViewController:alert animated:YES completion:nil];
 }
@@ -922,6 +955,8 @@
         [rows sortUsingComparator:^NSComparisonResult(PSSpecifier *a, PSSpecifier *b) {
             return [a.name localizedCaseInsensitiveCompare:b.name];
         }];
+        /* PSListController needs a group before its first visible row. */
+        [rows insertObject:[PSSpecifier emptyGroupSpecifier] atIndex:0];
         self.craneAppSpecifiers = rows;
         @try {
             [self setValue:rows forKey:@"_specifiers"];
@@ -952,6 +987,8 @@
 @property (nonatomic, strong) PSSpecifier *gameCenterSupportEnabledSpecifier;
 @property (nonatomic, strong) NSArray *craneConfigurationSpecifiers;
 @property (nonatomic, assign) BOOL craneDidCompleteFirstLayout;
+@property (nonatomic, assign) BOOL craneReloadScheduled;
+- (void)scheduleConfigurationReload;
 @end
 
 @implementation CRPApplicationConfigurationListController
@@ -961,104 +998,56 @@
     [CraneManager.sharedManager removeObserver:self];
 }
 
-- (void)didChangeSettingsForApplicationWithIdentifier:(NSString *)appID
+- (void)scheduleConfigurationReload
 {
-    if (![appID isEqualToString:self.applicationIdentifier]) return;
-    [self loadApplicationSettings];
+    if (!NSThread.isMainThread) {
+        dispatch_async(dispatch_get_main_queue(), ^{
+            [self scheduleConfigurationReload];
+        });
+        return;
+    }
+    if (self.craneReloadScheduled)
+        return;
+    self.craneReloadScheduled = YES;
     dispatch_async(dispatch_get_main_queue(), ^{
+        self.craneReloadScheduled = NO;
+        [self loadApplicationSettings];
         self.craneConfigurationSpecifiers = nil;
         @try { [self setValue:nil forKey:@"_specifiers"]; }
         @catch (__unused NSException *exception) {}
         [self reloadSpecifiers];
     });
+}
+
+- (void)didChangeSettingsForApplicationWithIdentifier:(NSString *)appID
+{
+    if ([appID isEqualToString:self.applicationIdentifier])
+        [self scheduleConfigurationReload];
 }
 
 - (void)didChangeContainersOfApplicationWithIdentifier:(NSString *)appID
 {
-    if (![appID isEqualToString:self.applicationIdentifier]) return;
-    [self loadApplicationSettings];
-    dispatch_async(dispatch_get_main_queue(), ^{
-        [self reloadContainerSpecifiers];
-        [self reloadActiveContainer];
-    });
+    if ([appID isEqualToString:self.applicationIdentifier])
+        [self scheduleConfigurationReload];
 }
 
-/* CranePrefs 0xA038: replace only the container rows between the group
- * header and Add button rather than resetting every switch on the page. */
+/* Rebuild from the current registry after selection/action dispatch finishes.
+ * Avoid animating replacement rows against our independently rebuilt cache. */
 - (void)reloadContainerSpecifiers
 {
-    NSArray *old = self.craneConfigurationSpecifiers;
-    if (!old.count) return;
-    NSMutableArray *previous = [NSMutableArray new];
-    for (PSSpecifier *row in old) {
-        if ([row propertyForKey:@"containerIdentifier"])
-            [previous addObject:row];
-    }
-    NSMutableArray *updated = [NSMutableArray new];
-    CraneManager *manager = CraneManager.sharedManager;
-    for (NSString *identifier in [manager containerIdentifiersOfApplicationWithIdentifier:self.applicationIdentifier]) {
-        PSSpecifier *row = [PSSpecifier preferenceSpecifierNamed:
-            [manager displayNameForContainerWithIdentifier:identifier
-                ofApplicationWithIdentifier:self.applicationIdentifier shouldUseShortVersion:NO]
-            target:self set:NULL get:NULL detail:CRPContainerConfigurationListController.class cell:2 edit:0];
-        [row setDetailControllerClass:CRPContainerConfigurationListController.class];
-        [row setProperty:self.applicationIdentifier forKey:@"applicationIdentifier"];
-        [row setProperty:identifier forKey:@"containerIdentifier"];
-        [row setProperty:identifier forKey:@"crane_containerIdentifier"];
-        [updated addObject:row];
-    }
-    if (previous.count && [self respondsToSelector:@selector(replaceContiguousSpecifiers:withSpecifiers:animated:)]) {
-        [self replaceContiguousSpecifiers:previous withSpecifiers:updated animated:YES];
-        NSMutableArray *merged = [old mutableCopy];
-        NSUInteger start = [merged indexOfObject:previous.firstObject];
-        if (start != NSNotFound) {
-            [merged removeObjectsInArray:previous];
-            NSIndexSet *positions = [NSIndexSet indexSetWithIndexesInRange:NSMakeRange(start, updated.count)];
-            [merged insertObjects:updated atIndexes:positions];
-            self.craneConfigurationSpecifiers = merged;
-            @try { [self setValue:merged forKey:@"_specifiers"]; }
-            @catch (NSException *exception) { NSLog(@"CranePrefs: container replacement backing failed: %@", exception); }
-        }
-    } else if (!previous.count && updated.count &&
-               [self respondsToSelector:@selector(insertSpecifier:atIndex:animated:)]) {
-        /* With zero existing containers the original replacement range is
-         * empty. Insert new rows immediately before the Add button. */
-        NSUInteger addIndex = NSNotFound;
-        for (NSUInteger i = 0; i < old.count; ++i) {
-            PSSpecifier *candidate = old[i];
-            if ([[candidate propertyForKey:@"crane_addContainer"] boolValue]) {
-                addIndex = i;
-                break;
-            }
-        }
-        if (addIndex != NSNotFound) {
-            NSMutableArray *merged = [old mutableCopy];
-            NSUInteger position = addIndex;
-            for (PSSpecifier *row in updated) {
-                [self insertSpecifier:row atIndex:position animated:YES];
-                [merged insertObject:row atIndex:position++];
-            }
-            self.craneConfigurationSpecifiers = merged;
-            @try { [self setValue:merged forKey:@"_specifiers"]; }
-            @catch (NSException *exception) { NSLog(@"CranePrefs: container insert backing failed: %@", exception); }
-        } else {
-            self.craneConfigurationSpecifiers = nil;
-            @try { [self setValue:nil forKey:@"_specifiers"]; }
-            @catch (__unused NSException *exception) {}
-            [self reloadSpecifiers];
-        }
-    } else if (previous.count || updated.count) {
-        self.craneConfigurationSpecifiers = nil;
-        @try { [self setValue:nil forKey:@"_specifiers"]; }
-        @catch (__unused NSException *exception) {}
-        [self reloadSpecifiers];
-    }
+    [self scheduleConfigurationReload];
 }
 
 /* CranePrefs 0x9D3C: refresh the Active Container specifier's data source. */
 - (void)reloadActiveContainer
 {
-    PSSpecifier *active = self.craneConfigurationSpecifiers.firstObject;
+    PSSpecifier *active = nil;
+    for (PSSpecifier *row in self.craneConfigurationSpecifiers) {
+        if ([[row propertyForKey:@"key"] isEqualToString:CRCContainer_ActiveContainer]) {
+            active = row;
+            break;
+        }
+    }
     if (!active) return;
     [active setTitleDictionary:nil];
     [active setShortTitleDictionary:nil];
@@ -1191,6 +1180,9 @@
         return self.craneConfigurationSpecifiers;
     }
     NSMutableArray *specifiers = [NSMutableArray new];
+
+    /* Our PSListController base needs an explicit initial section. */
+    [specifiers addObject:[PSSpecifier emptyGroupSpecifier]];
 
     /* Active Container */
     PSSpecifier *active = [PSSpecifier preferenceSpecifierNamed:CRLocalize(@"ACTIVE_CONTAINER")
@@ -1347,9 +1339,16 @@
     } @catch (NSException *exception) {
         NSLog(@"CranePrefs: app configuration backing failed: %@", exception);
     }
+    NSString *firstLabel = nil;
+    for (PSSpecifier *row in specifiers) {
+        if (row.name.length) {
+            firstLabel = row.name;
+            break;
+        }
+    }
     NSLog(@"CranePrefs: app configuration %@ specifier count=%lu firstLabel=%@",
           self.applicationIdentifier, (unsigned long)specifiers.count,
-          specifiers.count ? ((PSSpecifier *)specifiers.firstObject).name : @"(none)");
+          firstLabel ?: @"(none)");
     return self.craneConfigurationSpecifiers;
 }
 
@@ -1454,7 +1453,7 @@
     if (!self.applicationIdentifier.length)
         return;
     /* CranePrefs 0x9848/0x9A80: ask for a name before creating. */
-    UIAlertController *alert = [UIAlertController alertControllerWithTitle:CRLocalize(@"ADD_CONTAINER")
+    UIAlertController *alert = [UIAlertController alertControllerWithTitle:CRLocalize(@"NEW_CONTAINER")
         message:nil preferredStyle:UIAlertControllerStyleAlert];
     [alert addTextFieldWithConfigurationHandler:^(UITextField *field) {
         field.placeholder = CRLocalize(@"NEW_CONTAINER_NAME");
@@ -1478,11 +1477,7 @@
         [strongSelf loadApplicationSettings];
         [manager addObserver:strongSelf];
         NSLog(@"CranePrefs: created container app=%@ id=%@", strongSelf.applicationIdentifier, identifier);
-        strongSelf.craneConfigurationSpecifiers = nil;
-        @try { [strongSelf setValue:nil forKey:@"_specifiers"]; }
-        @catch (__unused NSException *exception) {}
-        [strongSelf specifiers];
-        [strongSelf reloadSpecifiers];
+        [strongSelf scheduleConfigurationReload];
     }]];
     [self presentViewController:alert animated:YES completion:nil];
 }

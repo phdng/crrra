@@ -40,6 +40,9 @@ jobs:
       - name: Verify Clang-emitted XPC protocol metadata
         run: python3 reconstruction/tools/check_xpc_protocol_metadata_contract.py
 
+      - name: Verify Settings labels and app startup safety
+        run: python3 reconstruction/tools/check_ui_runtime_contract.py
+
       - name: Verify daemon safety contracts
         run: python3 reconstruction/tools/check_daemon_contract.py
 
@@ -138,6 +141,15 @@ jobs:
             -framework Foundation \
             -o xpc_protocol_metadata_smoke
           ./xpc_protocol_metadata_smoke 2>&1 | tee xpc_protocol_metadata_smoke.log
+
+      - name: Smoke-test shared localization fallback
+        working-directory: reconstruction
+        run: |
+          set -euo pipefail
+          clang -fobjc-arc -fblocks -Wall -Wextra -Werror \
+            -I sources/common tools/localization_smoke.m \
+            -framework Foundation -o localization_smoke
+          ./localization_smoke 2>&1 | tee localization_smoke.log
 
       - name: Smoke-test dynamic Choicy container editor
         working-directory: reconstruction
@@ -246,6 +258,7 @@ jobs:
             reconstruction/linkage.txt
             reconstruction/xpc_protocol_metadata_smoke.log
             reconstruction/choicy_editor_smoke.log
+            reconstruction/localization_smoke.log
 
       - name: Upload package
         if: success()

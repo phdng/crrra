@@ -22,6 +22,7 @@ export THEOS_PACKAGE_BASE_VERSION = 6.0
 # different package namespace, and AltList/Choicy/Activator are optional
 # integrations (not hard-linked into the Roothide CranePrefs build).
 ifeq ($(THEOS_PACKAGE_SCHEME),roothide)
+export ADDITIONAL_CFLAGS += -DCRANE_ROOTHIDE=1
 THEOS_PACKAGE_DEPENDS = mobilesubstrate, firmware
 else
 THEOS_PACKAGE_DEPENDS = mobilesubstrate, ellekit, libhooker, firmware, \

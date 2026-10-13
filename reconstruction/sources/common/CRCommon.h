@@ -10,6 +10,12 @@
 #import <dlfcn.h>
 #import <string.h>
 #import <unistd.h>
+#ifndef CRANE_ROOTHIDE
+#define CRANE_ROOTHIDE 0
+#endif
+#if CRANE_ROOTHIDE
+#import <roothide.h>
+#endif
 
 #import "CRPaths.h"
 #import "CRManager.h"
@@ -44,6 +50,15 @@ static inline NSString *CRJailbreakRootPath(NSString *path)
     if (!path)
         return nil;
 
+#if CRANE_ROOTHIDE
+    /* Roothide installs resources under a randomized root. Its Theos SDK
+     * provides the supported resolver; the native /var/LIY fallback cannot
+     * locate this layout. Keep mobile user data at its existing location. */
+    if ([path isEqualToString:@"/var/mobile"] ||
+        [path hasPrefix:@"/var/mobile/"])
+        return path;
+    return jbroot(path);
+#else
     static CRLibrootJbrootPathFn jbrootPath;
     static void *librootHandle;
     static dispatch_once_t once;
@@ -76,6 +91,7 @@ static inline NSString *CRJailbreakRootPath(NSString *path)
     }
 
     return resolved ? [NSString stringWithUTF8String:resolved] : nil;
+#endif
 }
 
 /* Presence check for an optional tweak. Upstream calls this

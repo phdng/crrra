@@ -1,10 +1,10 @@
 /*
  * " Crane.dylib" — the per-app container redirection library.
  *
- * FAITHFUL RECONSTRUCTION. Every function in this file corresponds 1:1 to a
- * function recovered from Crane.dylib_export_for_ai, and the control flow is
- * transcribed from the decompiled pseudocode without adding behaviour.
- * Where the upstream code is unsafe the unsafe form is kept and flagged.
+ * Recovered functions map to Crane.dylib_export_for_ai. The hook backend ABI
+ * is verified from ARM64 instructions. Environment snapshots and bounded
+ * sandbox pathname writes are explicit safety deviations from the original;
+ * device behavior still requires validation.
  *
  *   InitFunc_0 (0x65D0)                  -> CRInitFunc
  *   sandbox_container_path_for_pid_hook  -> CRSandboxContainerPathForPidHook
@@ -183,7 +183,7 @@ static void CRInitProtection(struct CRHookEntry *table, unsigned *count)
  * falls back to MSHookFunction using the first three words of each 32-byte
  * hook-table record. Reproduced so the dylib works on both Substrate and
  * ElleKit installs. */
-typedef void (*CRLHHookFunctionsFn)(void);
+typedef int (*CRLHHookFunctionsFn)(const struct CRHookEntry *table, int count);
 
 static int CRHookFunctions(struct CRHookEntry *table, int count)
 {
@@ -191,11 +191,14 @@ static int CRHookFunctions(struct CRHookEntry *table, int count)
     static dispatch_once_t once;
     dispatch_once(&once, ^{
         lhHookFunctions = (CRLHHookFunctionsFn)dlsym(RTLD_DEFAULT, "__LHHookFunctions");
+        if (!lhHookFunctions)
+            lhHookFunctions = (CRLHHookFunctionsFn)dlsym(RTLD_DEFAULT, "LHHookFunctions");
     });
 
     if (lhHookFunctions) {
-        lhHookFunctions();
-        return 0;
+        /* Native 0x7380 tail-branches with x0=table and w1=count intact.
+         * The decompiler's empty argument list is not the call ABI. */
+        return lhHookFunctions(table, count);
     }
 
     for (int i = 0; i < count; ++i) {
@@ -220,7 +223,9 @@ static int CRSandboxContainerPathForPidHook(int pid, char *buffer, size_t size)
      * forwarded unchanged. */
     if (pid == getpid()) {
         const char *home = getenv(CR_ENV_HOME.UTF8String);
-        strncpy(buffer, home, size);
+        /* Do not crash on absent HOME or return a partial C pathname. */
+        if (buffer && size && home && strlen(home) < size)
+            strlcpy(buffer, home, size);
     }
 
     return rc;
@@ -240,18 +245,25 @@ static void CRInitFunc(void)
     const char *spoof = getenv(CR_ENV_SPOOF_SANDBOX_LOOKUPS.UTF8String);
 
     if (identifier) {
-        unsetenv(CR_ENV_CONTAINER_IDENTIFIER.UTF8String);
+        /* getenv storage is borrowed; snapshot before mutating environ. */
         _crActiveContainerIdentifier = [[NSString alloc] initWithUTF8String:identifier];
     }
 
     int protectContainers = 0;
     if (protect) {
-        unsetenv(CR_ENV_PROTECT_CONTAINERS.UTF8String);
         protectContainers = (strcmp(protect, CR_ENV_PROTECT_VALUE) == 0);
     }
 
+    /* Snapshot every borrowed value before the first unsetenv, including
+     * whether the spoof flag exists. Native 0x65D0 reads pointers afterwards. */
+    BOOL spoofLookups = spoof != NULL;
+    if (identifier)
+        unsetenv(CR_ENV_CONTAINER_IDENTIFIER.UTF8String);
+    if (protect)
+        unsetenv(CR_ENV_PROTECT_CONTAINERS.UTF8String);
+
     unsigned count = 0;
-    if (spoof) {
+    if (spoofLookups) {
         _crHookTable[count].original = (void *)&sandbox_container_path_for_pid;
         _crHookTable[count].hook = (void *)CRSandboxContainerPathForPidHook;
         _crHookTable[count].originalStorage = (void *)&org_sandbox_container_path_for_pid;
@@ -260,6 +272,11 @@ static void CRInitFunc(void)
         unsetenv(CR_ENV_SPOOF_SANDBOX_LOOKUPS.UTF8String);
     }
 
+    if (_crActiveContainerIdentifier || protectContainers || spoofLookups)
+        NSLog(@"Crane: app init bundle=%@ container=%@ protection=%d spoof=%d",
+              CRSafeGetBundleIdentifier(), _crActiveContainerIdentifier,
+              protectContainers, (int)spoofLookups);
+
     if (_crActiveContainerIdentifier) {
         /* 2. Materialise the container skeleton. The exact list is recovered
          *    from Crane 0x65D0. Library/SplashBoard is included because the
@@ -267,6 +284,7 @@ static void CRInitFunc(void)
         NSString *home = NSHomeDirectory();
         NSString *container = CRContainerPathForContainer(_crActiveContainerIdentifier, home);
         NSString *tmp = [container stringByAppendingPathComponent:@"tmp"];
+        NSLog(@"Crane: redirect home base=%@ target=%@", home, container);
 
         CRCreateDirectoryIfNotExists(container);
         CRCreateDirectoryIfNotExists(tmp);
@@ -287,6 +305,10 @@ static void CRInitFunc(void)
 
     if (count >= 1)
         CRHookFunctions(_crHookTable, (int)count);
+
+    if (_crActiveContainerIdentifier || protectContainers || spoofLookups)
+        NSLog(@"Crane: app environment ready container=%@ hooks=%u",
+              _crActiveContainerIdentifier, count);
 
     /* Runtime proof for SpringBoard's post-launch injection check. The helper
      * binds this container claim to our kernel-reported XPC PID. */

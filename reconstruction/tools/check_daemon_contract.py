@@ -22,7 +22,8 @@ assert '#define CR_PREFS_DOMAIN @"com.opa334.craneprefs"' in prefs
 ui_start = common.index('static NSBundle *CRUIBundle(void)')
 ui_end = common.index('NSString *CRLocalize(', ui_start)
 ui_body = common[ui_start:ui_end]
-assert 'bundleWithPath:CRJailbreakRootPath(CR_UI_BUNDLE_PATH)' in ui_body
+assert 'CRJailbreakRootPath(CR_UI_BUNDLE_PATH)' in ui_body
+assert '[NSBundle bundleWithPath:path]' in ui_body
 assert 'if (!bundle)' in ui_body
 assert 'dispatch_once(&' not in ui_body
 assert 'CRPRootListController' not in ui_body
@@ -39,9 +40,12 @@ assert 'QOS_CLASS_DEFAULT' not in auth_body
 # equals the input key; an empty translated value must be preserved.
 localize_start = common.index('NSString *CRLocalize(NSString *key)')
 localize_end = common.index('/* Crane 0x6BE0', localize_start)
-localize_body = common[localize_start:localize_end]
-assert 'if ([value isEqualToString:key])' in localize_body
-assert 'if (!english)' in localize_body
+localize_body = (root / "common" / "CRLocalization.h").read_text(encoding="utf-8")
+assert 'CRLocalizedStringFromBundle(CRUIBundle(), key, &english)' in common[localize_start:localize_end]
+assert 'if (!value || [value isEqualToString:key])' in localize_body
+assert 'return value ?: key;' in localize_body
+assert 'if (path.length)' in localize_body
+assert 'if (!*englishCache && bundle)' in localize_body
 assert 'dispatch_once(&' not in localize_body
 assert '!value.length ||' not in localize_body
 # CraneSupport 0x60C8 checks loaded dyld image paths, not dlopen presence,

@@ -358,6 +358,26 @@ available, so `tests/ui_comparison.md` records metrics as NOT_TESTED. The only
 UI facts recovered are the icon set (8 PNGs, byte-identical, and used verbatim),
 the localization tables (204 keys), and the specifier order from `Root.plist`.
 
+### Device-reported blank Settings and app crashes
+
+Source repairs now use the Roothide SDK resolver for installed resource paths,
+return a usable localization fallback when resources are absent, and correct
+the scalar `indexForIndexPath:` signature. Settings lists have explicit first
+groups; container updates coalesce on the main queue after selection dispatch.
+This deferred full refresh deliberately replaces the reconstruction's
+animated row/cache replacement.
+
+The main dylib's libhooker call now passes the table and count retained by the
+original ARM64 tail branch at 0x7380. Borrowed environment values are captured
+before `unsetenv`, and sandbox HOME rewriting refuses nil or oversized paths.
+The last two are safety deviations from the recovered source. New startup logs
+help distinguish environment preparation from later app crashes.
+
+The supplied device log contains registry writes but no exception/backtrace.
+**Exact crash causes and device resolution remain unverified.** A shared-code
+localization smoke is added to native CI; Windows source checks alone do not
+validate Settings or Chrome.
+
 ## 6. Lifecycle and timing
 
 ### D-21 — `dispatch_once` behaviour for the `Apps Shortcuts Enabled` block

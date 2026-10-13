@@ -1,0 +1,7 @@
+{
+  "provenance": "Original Crane.dylib exported ARM64 memory; HCHookFunctions 0x7360 tail branch preserves x0=hook table,w1=count. Native export is ignored by Git.",
+  "function": "HCHookFunctions",
+  "start": "0x7360",
+  "tail_branch": "0x7380",
+  "bytes": "f44fbea9fd7b01a9fd4300911f2003d5429f0058820000b4fd7b41a9f44fc2a840001fd6"
+}
