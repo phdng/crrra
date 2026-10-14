@@ -548,6 +548,40 @@ CraneSupport libSandy/raw-XPC registration path. `inspect=0` remains
 inconclusive because the kernel can deny cross-process region-path
 inspection even to the helper.
 
+**2026-10-14 01:18 definitive mapped-image result:** helper returned
+`inspect=1 support=0 flags=0 plain=0` for **all seven targets**, including
+`containermanagerd` PID 363 plus the six previously verified fresh PIDs.
+Therefore `CraneSupport.dylib` and both minimal probe tweaks are genuinely
+**not mapped** in these daemon processes. The failure is before every
+constructor, hook, libSandy profile call and runtime-report XPC operation.
+Do not debug securityd private symbols or helper authentication until this
+loader/filter issue is resolved. CraneSB from the same reconstruction package
+*is* mapped in SpringBoard, and the user reports original Crane/other tweaks
+working under the same Dopamine2-roothide environment, so this is not evidence
+that all tweak injection is globally disabled.
+
+The mapper has now been extended to report the surrounding injection stack
+without changing insurance: exact `systemhook.dylib`, TweakLoader/TweakInject,
+ElleKit's `libinjector.dylib`/`libellekit.dylib`, Substrate compatibility,
+a bounded sample/count of other mapped tweak dylibs, and a bounded sample/count
+of file-backed images originating from the randomized jailbreak tree. RootHide
+can randomize the systemhook filename, so `jb=<count> jbSample=...` is the
+fallback signal when the exact `systemhook` leaf is unavailable. The next
+summary format is:
+
+```text
+process[pid=N inspect=1 systemhook=... loader=... injector=... ellekit=...
+ substrate=... jb=N jbSample=... other=N sample=...
+ support=0 flags=0 plain=0]
+```
+
+Interpretation: `injector=1` or meaningful `other>0` while all three Crane
+fields remain zero strongly localizes the problem to the reconstruction's
+tweak filter/package/load eligibility. If no loader/injector/other tweak image
+is observable but jailbreak images are present, inspect Dopamine's per-process
+TweakLoader path. This remains diagnostic-only; none of these fields can make
+`works=1`.
+
 After building/installing this revision and rebooting userspace once, capture:
 
 ```sh

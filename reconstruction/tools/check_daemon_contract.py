@@ -150,6 +150,23 @@ assert 'CRSupportMappedImageSummary(runningSupport)' in peer_code
 assert 'xpc_dictionary_set_string(reply, "support_image_map"' in peer_code
 assert 'CraneManager: helper support image map %@' in manager
 assert 'xpc_dictionary_get_string(response, "support_image_map")' in manager
+for marker in (
+    '"systemhook.dylib"',
+    '"TweakLoader.dylib"',
+    '"TweakInject.dylib"',
+    '"libinjector.dylib"',
+    '"libellekit.dylib"',
+    '"libsubstrate.dylib"',
+    '"CydiaSubstrate"',
+    '@"/TweakInject/"',
+    '@"/MobileSubstrate/DynamicLibraries/"',
+    '@"/.jbroot-"',
+):
+    assert marker in helper, marker
+assert 'NSMutableSet<NSString *> *otherTweaks' in helper
+assert 'NSMutableSet<NSString *> *jailbreakImages' in helper
+assert 'systemhook=%d loader=%d injector=%d ellekit=%d substrate=%d' in helper
+assert 'jb=%lu jbSample=%@ other=%lu sample=%@' in helper
 for process in ('cfprefsd', 'containermanagerd', 'securityd', 'pkd', 'lsd', 'accountsd', 'apsd'):
     assert f'@"{process}"' in helper, process
 assert 'CRRuntimeHasComponentInProcess(@"CraneSupport", process)' in peer_code

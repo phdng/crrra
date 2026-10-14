@@ -591,6 +591,13 @@ static NSString *CRSupportMappedImageSummary(NSArray<NSString *> *processes)
         BOOL support = NO;
         BOOL flags = NO;
         BOOL plain = NO;
+        BOOL systemhook = NO;
+        BOOL tweakLoader = NO;
+        BOOL injector = NO;
+        BOOL ellekit = NO;
+        BOOL substrate = NO;
+        NSMutableSet<NSString *> *otherTweaks = [NSMutableSet new];
+        NSMutableSet<NSString *> *jailbreakImages = [NSMutableSet new];
         uint64_t address = 0;
 
         if (pid > 0) {
@@ -615,9 +622,45 @@ static NSString *CRSupportMappedImageSummary(NSArray<NSString *> *processes)
                         flags = YES;
                     else if (strcmp(leaf, "CraneSupportProbePlain.dylib") == 0)
                         plain = YES;
+
+                    if (strcmp(leaf, "systemhook.dylib") == 0)
+                        systemhook = YES;
+                    if (strcmp(leaf, "TweakLoader.dylib") == 0 ||
+                        strcmp(leaf, "TweakInject.dylib") == 0)
+                        tweakLoader = YES;
+                    if (strcmp(leaf, "libinjector.dylib") == 0)
+                        injector = YES;
+                    if (strcmp(leaf, "libellekit.dylib") == 0)
+                        ellekit = YES;
+                    if (strcmp(leaf, "libsubstrate.dylib") == 0 ||
+                        strcmp(leaf, "CydiaSubstrate") == 0)
+                        substrate = YES;
+
+                    NSString *imagePath = [NSString stringWithUTF8String:path];
+                    BOOL tweakDirectory =
+                        [imagePath containsString:@"/TweakInject/"] ||
+                        [imagePath containsString:
+                            @"/MobileSubstrate/DynamicLibraries/"];
+                    NSString *leafName = [NSString stringWithUTF8String:leaf];
+                    if (tweakDirectory &&
+                        strcmp(leaf, "CraneSupport.dylib") != 0 &&
+                        strcmp(leaf, "CraneSupportProbeFlags.dylib") != 0 &&
+                        strcmp(leaf, "CraneSupportProbePlain.dylib") != 0 &&
+                        leafName.length) {
+                        [otherTweaks addObject:leafName];
+                    }
+
+                    /* RootHide randomizes the jailbreak root and may also
+                     * randomize systemhook's filename. Track file-backed
+                     * images originating from the jailbreak tree without
+                     * assuming the systemhook leaf name. */
+                    BOOL jailbreakPath =
+                        [imagePath containsString:@"/.jbroot-"] ||
+                        [imagePath containsString:@"/var/jb/"] ||
+                        [imagePath containsString:@"/basebin/"];
+                    if (jailbreakPath && leafName.length)
+                        [jailbreakImages addObject:leafName];
                 }
-                if (support && flags && plain)
-                    break;
                 if (UINT64_MAX - info.pri_address < info.pri_size)
                     break;
                 uint64_t next = info.pri_address + info.pri_size;
@@ -628,9 +671,26 @@ static NSString *CRSupportMappedImageSummary(NSArray<NSString *> *processes)
         }
 
         BOOL inspect = sawRegion && sawPath;
+        NSArray<NSString *> *sortedTweaks =
+            [[otherTweaks allObjects] sortedArrayUsingSelector:
+                @selector(compare:)];
+        NSString *sample = sortedTweaks.count
+            ? [[sortedTweaks subarrayWithRange:
+                NSMakeRange(0, MIN((NSUInteger)3, sortedTweaks.count))]
+                componentsJoinedByString:@"+"] : @"-";
+        NSArray<NSString *> *sortedJB =
+            [[jailbreakImages allObjects] sortedArrayUsingSelector:
+                @selector(compare:)];
+        NSString *jbSample = sortedJB.count
+            ? [[sortedJB subarrayWithRange:
+                NSMakeRange(0, MIN((NSUInteger)4, sortedJB.count))]
+                componentsJoinedByString:@"+"] : @"-";
         [parts addObject:[NSString stringWithFormat:
-            @"%@[pid=%d inspect=%d support=%d flags=%d plain=%d]",
-            process, pid, inspect, support, flags, plain]];
+            @"%@[pid=%d inspect=%d systemhook=%d loader=%d injector=%d ellekit=%d substrate=%d jb=%lu jbSample=%@ other=%lu sample=%@ support=%d flags=%d plain=%d]",
+            process, pid, inspect, systemhook, tweakLoader, injector, ellekit,
+            substrate, (unsigned long)jailbreakImages.count, jbSample,
+            (unsigned long)otherTweaks.count, sample,
+            support, flags, plain]];
     }
     return [parts componentsJoinedByString:@"; "];
 }
