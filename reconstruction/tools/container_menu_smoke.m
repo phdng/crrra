@@ -27,8 +27,24 @@ int main(void)
             assert(CRPrefBoolValue(key, @YES));
         }
 
-        assert(CRManagerSettingsIncludingDefault(nil).count == 0);
-        assert(CRManagerSettingsIncludingDefault(@{}).count == 0);
+        /* Original libcrane 0x937C projects a DEFAULT container when an
+         * application has no saved settings. The old empty-dictionary smoke
+         * expectations predated the recovered native registry contract. */
+        NSDictionary *nativeDefault = @{
+            CRAppSetting_Containers: @[@{
+                CRCContainer_Name: @"",
+                CRCContainer_Identifier: CR_DEFAULT_CONTAINER_IDENTIFIER
+            }],
+            CRCContainer_ActiveContainer: CR_DEFAULT_CONTAINER_IDENTIFIER
+        };
+        NSDictionary *fromNil = CRManagerSettingsIncludingDefault(nil);
+        NSDictionary *fromEmpty = CRManagerSettingsIncludingDefault(@{});
+        assert([fromNil isEqual:nativeDefault]);
+        assert([fromEmpty isEqual:nativeDefault]);
+        assert([Identifiers(fromNil) isEqual:@[CR_DEFAULT_CONTAINER_IDENTIFIER]]);
+        assert([fromNil[CRCContainer_ActiveContainer]
+            isEqual:CR_DEFAULT_CONTAINER_IDENTIFIER]);
+        assert([CRManagerSettingsIncludingDefault(fromNil) isEqual:fromNil]);
         NSDictionary *custom = @{CRCContainer_Identifier: @"C1", CRCContainer_Name: @"First"};
         NSDictionary *legacy = @{CRCContainer_ActiveContainer: @"C1",
             CRAppSetting_Containers: @[custom], @"other": @"preserved"};

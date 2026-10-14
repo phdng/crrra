@@ -103,6 +103,21 @@ assert "self.lastError = error;" in manager
 add = section(ui, "- (void)addButtonPressed", "@end")
 assert add.index("if (!identifier.length)") < add.index('NSLog(@"CranePrefs: created container')
 assert "tools/container_menu_smoke.m" in workflow
+smoke = (root / "tools/container_menu_smoke.m").read_text(encoding="utf-8")
+# CI executes this Objective-C smoke on macOS. Keep its expectations aligned
+# with the recovered libcrane 0x937C empty-settings DEFAULT projection.
+assert "CRManagerSettingsIncludingDefault(nil).count == 0" not in smoke
+assert "CRManagerSettingsIncludingDefault(@{}).count == 0" not in smoke
+for fragment in (
+    "NSDictionary *nativeDefault = @{",
+    "CRCContainer_Name: @\"\",",
+    "CRCContainer_Identifier: CR_DEFAULT_CONTAINER_IDENTIFIER",
+    "CRCContainer_ActiveContainer: CR_DEFAULT_CONTAINER_IDENTIFIER",
+    "assert([fromNil isEqual:nativeDefault]);",
+    "assert([fromEmpty isEqual:nativeDefault]);",
+    "assert([CRManagerSettingsIncludingDefault(fromNil) isEqual:fromNil]);",
+):
+    assert fragment in smoke, fragment
 
 # Always Ask Before Launch is a per-app setting in original 0x1F008, not a
 # global CFPreferences gate. CraneSB 0x17A14 installs three SBIconController
