@@ -38,6 +38,11 @@ case "${1:-}" in
         printf '%s\n' 'Crane: starting the installed helper build.'
         "$launchctl" kickstart -k "$service"
         "$launchctl" print "$service"
+        # Tweak dylibs are not hot-injected into system daemons that were
+        # already running before this package was installed. Only the helper
+        # is restarted above. Do not kill/restart protected iOS daemons from
+        # postinst; leave userspace reboot as an explicit user action.
+        printf '%s\n' 'Crane: Reboot Userspace after installation to load updated CraneSupport daemon tweaks; Respring alone is not sufficient.'
         ;;
 esac
 exit 0

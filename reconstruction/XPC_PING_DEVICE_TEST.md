@@ -459,6 +459,52 @@ container launch; inspect:
 oslog | grep -E 'CraneSB: support probe (ping|reply|listener)|CraneManager: helper insurance'
 ```
 
+**2026-10-13 22:12:29 new-device observation:** SpringBoard PID 2119 emitted
+two `CraneSB: support probe ping status=0` lines and two helper-insurance
+lines (`works=0 connection=1 broken=` all seven targets, `error=(null)`).
+There were **no** `CraneSB: support probe reply` messages in this sample.
+The new SpringBoard PID, compared with 21:55 PID 1862, proves SpringBoard
+restarted, **not** that target daemons restarted after the latest *live
+notification* probe package was installed. Check installed dylib timestamps
+and current daemon births read-only **before** interpreting this negative:
+
+```sh
+for n in CraneSB CraneSupportProbeFlags CraneSupportProbePlain; do
+  ls -l "$(jbroot "/Library/MobileSubstrate/DynamicLibraries/$n.dylib")"
+done
+ps -A -o pid,lstart,comm | grep -E 'cfprefsd|containermanagerd|securityd|pkd|lsd|accountsd|apsd'
+```
+
+**2026-10-13 22:12 read-only device check (definitive stale-process
+sample):** the device shows `CraneSupportProbeFlags.dylib` and
+`CraneSupportProbePlain.dylib` installed at **22:09** (each 166208 bytes)
+and `CraneSB.dylib` installed at **22:11** (509520 bytes), all under
+the current root `.jbroot-F98DDB12689CCD84`. The actual six observed
+system daemons started at **20:30:57–20:31:30**, all *before* either
+live diagnostic probe was installed. SpringBoard subsequently started
+with the new `CraneSB` and posted ping at **22:12**, but those daemons
+were never recreated to execute the new probe constructor. That is a
+sufficient explanation for **no live-probe replies in this sample**;
+it does **not** explain all earlier `CraneSupport` 0/7 failures.
+User confirms **original Crane and other tweaks work** on Dopamine 2
+roothide, so do not attribute the reconstruction problem to a global
+injector outage. The reconstruction `postinst` only kickstarts
+`cranehelperd`; it deliberately does not restart protected system
+daemons. The installer now explicitly prints a reminder to **Reboot
+Userspace** after install rather than silently leaving a mixed-version
+runtime; it never reboots or terminates anything automatically.
+
+If target daemon births precede the new probe dylib timestamps, the live
+probe constructor was not exercised in those existing processes; a
+**post-install userspace reboot** (not merely Respring) is necessary for
+a valid test. Conversely, if daemons are fresh, `ping status=0` alone
+does **not** prove their notification receivers registered or received
+anything; a missing reply remains ambiguous between missing injection
+and sandboxed/undelivered Darwin notifications. The diagnostic
+SpringBoard listeners log only on registration **failure**, so absence
+of a `listener failed` line is not an explicit registration-success log.
+Never bypass helper insurance due to a diagnostic ping or lack of reply.
+
 **Classification:** a `plain` reply but no `flags1` replies points
 toward `Flags=1` filtering; both variants responding from a daemon
 with missing CraneSupport health points away from global daemon tweak
