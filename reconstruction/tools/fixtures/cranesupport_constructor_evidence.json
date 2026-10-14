@@ -1,0 +1,20 @@
+{
+  "architecture": "arm64",
+  "source": "CraneSupport.dylib_export_for_ai/decompile",
+  "constructor": {
+    "address": "0x6C5C",
+    "filename": "6C5C.c",
+    "sha256": "950ad5bfcbb7e8080ff42908736979a59f78414c7b4756394c30fbfabf1b6dd1",
+    "unsandbox_handler_selector": "\"_setXPCUnsandboxHandler:\"",
+    "first_daemon_dispatch": "initCfprefsd();",
+    "last_daemon_dispatch": "initLsd();",
+    "absent_runtime_report": "CRReportRuntimeInjection"
+  },
+  "profile_callback": {
+    "address": "0x6E44",
+    "filename": "6E44.c",
+    "sha256": "ddf959ebd76815106e0a64d0f9cb1c4abe211d6e601c3f11fa1982fd69dfce11",
+    "success_cache_guard": "if ( byte_22D18 )",
+    "profile_apply": "libSandy_applyProfile(\"CraneSupport\") == 0"
+  }
+}

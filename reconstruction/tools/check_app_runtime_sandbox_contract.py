@@ -99,17 +99,68 @@ for name in ("CraneRB.plist", "CraneSupport.plist"):
         "com.apple.security.exception.mach-lookup.global-name",
     }, name
 
-# Verify the reconstructed init order against the actual IDA decompilation,
-# not merely hand-copied comments. The original installs the handler first,
-# dispatches daemon hooks second, and has no startup runtime-report RPC.
-original_support = root.parent / "Library/MobileSubstrate/DynamicLibraries/CraneSupport.dylib_export_for_ai/decompile"
-original_ctor = (original_support / "6C5C.c").read_text(encoding="utf-8")
-original_profile_callback = (original_support / "6E44.c").read_text(encoding="utf-8")
-assert original_ctor.index('"_setXPCUnsandboxHandler:"') < original_ctor.index('initCfprefsd();')
-assert original_ctor.index('initCfprefsd();') < original_ctor.index('initLsd();')
-assert 'CRReportRuntimeInjection' not in original_ctor
-assert 'libSandy_applyProfile("CraneSupport") == 0' in original_profile_callback
-assert 'if ( byte_22D18 )' in original_profile_callback
+# The complete IDA export lives under Library/, which is ignored by Git and
+# absent on GitHub Actions. Keep small, reviewable evidence in the tracked
+# fixture; cross-check its markers AND source-file hashes when native exports
+# are available on the developer workstation (same model as F-07/Choicy).
+import hashlib
+import json
+import os
+
+evidence = json.loads(
+    (root / "tools/fixtures/cranesupport_constructor_evidence.json")
+    .read_text(encoding="utf-8")
+)
+assert evidence["architecture"] == "arm64"
+assert evidence["source"] == "CraneSupport.dylib_export_for_ai/decompile"
+ctor_evidence = evidence["constructor"]
+profile_evidence = evidence["profile_callback"]
+assert ctor_evidence["address"] == "0x6C5C"
+assert ctor_evidence["filename"] == "6C5C.c"
+assert ctor_evidence["unsandbox_handler_selector"] == '"_setXPCUnsandboxHandler:"'
+assert ctor_evidence["first_daemon_dispatch"] == "initCfprefsd();"
+assert ctor_evidence["last_daemon_dispatch"] == "initLsd();"
+assert ctor_evidence["absent_runtime_report"] == "CRReportRuntimeInjection"
+assert profile_evidence["address"] == "0x6E44"
+assert profile_evidence["filename"] == "6E44.c"
+assert profile_evidence["success_cache_guard"] == "if ( byte_22D18 )"
+assert profile_evidence["profile_apply"] == 'libSandy_applyProfile("CraneSupport") == 0'
+for record in (ctor_evidence, profile_evidence):
+    assert len(record["sha256"]) == 64
+    assert all(char in "0123456789abcdef" for char in record["sha256"])
+
+original_support = (
+    root.parent
+    / "Library/MobileSubstrate/DynamicLibraries"
+    / evidence["source"]
+)
+original_ctor_path = original_support / ctor_evidence["filename"]
+original_profile_path = original_support / profile_evidence["filename"]
+skip_native = os.environ.get("CRANE_SUPPORT_SKIP_NATIVE_EXPORT") == "1"
+require_native = os.environ.get("CRANE_SUPPORT_REQUIRE_NATIVE_EXPORT") == "1"
+assert not (skip_native and require_native)
+native_available = (
+    original_ctor_path.is_file() and original_profile_path.is_file()
+)
+if require_native:
+    assert native_available, "Original CraneSupport IDA exports were required but missing"
+if native_available and not skip_native:
+    for record in (ctor_evidence, profile_evidence):
+        source_path = original_support / record["filename"]
+        assert hashlib.sha256(source_path.read_bytes()).hexdigest() == record["sha256"], (
+            f"Original IDA evidence changed: {source_path}"
+        )
+    original_ctor = original_ctor_path.read_text(encoding="utf-8")
+    original_profile_callback = original_profile_path.read_text(encoding="utf-8")
+    assert original_ctor.index(ctor_evidence["unsandbox_handler_selector"]) < (
+        original_ctor.index(ctor_evidence["first_daemon_dispatch"])
+    ) < original_ctor.index(ctor_evidence["last_daemon_dispatch"])
+    assert ctor_evidence["absent_runtime_report"] not in original_ctor
+    assert profile_evidence["success_cache_guard"] in original_profile_callback
+    assert profile_evidence["profile_apply"] in original_profile_callback
+    print("CraneSupport original constructor evidence: fixture + local IDA cross-check PASS")
+else:
+    print("CraneSupport original constructor evidence: tracked fixture PASS (local IDA unavailable/skipped)")
 # Original CraneSupport 0x6C5C installs a global _setXPCUnsandboxHandler:
 # block whose invoke target 0x6E44 applies libSandy profile "CraneSupport"
 # and caches only success. The reconstruction runtime_report bypasses the

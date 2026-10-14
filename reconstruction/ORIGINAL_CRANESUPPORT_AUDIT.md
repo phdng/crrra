@@ -43,8 +43,16 @@ This prevents a pre-hook registration being mistaken for initialized daemon
 support. Insurance still blocks any non-default launch without accepted
 per-daemon evidence. No actual user data/container migration or deletion.
 
-Added source contract assertions using actual original IDA `6C5C.c` and
-`6E44.c` exports to prevent future order regressions.
+Added source contract assertions for the original IDA `6C5C.c` and
+`6E44.c` exports to prevent future order regressions. The full IDA files
+live in `Library/`, which is intentionally Git-ignored; CI instead uses
+the tracked `reconstruction/tools/fixtures/cranesupport_constructor_evidence.json`
+fixture (source markers, addresses and SHA-256 for both files). Local runs
+with the original files present verify both hashes and the exact exported
+call ordering. CI sets `CRANE_SUPPORT_SKIP_NATIVE_EXPORT=1` to verify the
+fixture plus reconstruction source without assuming ignored original files
+exist in the GitHub checkout. This avoids the earlier CI FileNotFoundError
+while retaining a real native evidence cross-check.
 
 ## What is *not* proved
 
