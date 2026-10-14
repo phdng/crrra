@@ -92,6 +92,18 @@ int main(void)
             CR_DEFAULT_CONTAINER_IDENTIFIER));
         assert(!CRGameCenterAccountIdentifierExists(validGames, @"unknown"));
         assert(!CRGameCenterAccountIdentifierExists(validGames, nil));
+        assert([CRGameCenterResolvedActiveAccount(validGames, nil)
+            isEqual:CR_DEFAULT_CONTAINER_IDENTIFIER]);
+        assert([CRGameCenterResolvedActiveAccount(validGames, @"A1")
+            isEqual:@"A1"]);
+        assert([CRGameCenterResolvedActiveAccount(validGames, @"B2")
+            isEqual:@"B2"]);
+        assert([CRGameCenterResolvedActiveAccount(validGames, @"stale")
+            isEqual:CR_DEFAULT_CONTAINER_IDENTIFIER]);
+        assert([CRGameCenterResolvedActiveAccount(@[], @"A1")
+            isEqual:CR_DEFAULT_CONTAINER_IDENTIFIER]);
+        assert([CRGameCenterResolvedActiveAccount(validGames, @42)
+            isEqual:CR_DEFAULT_CONTAINER_IDENTIFIER]);
 
         NSFileManager *fm = NSFileManager.defaultManager;
         NSString *root = [NSTemporaryDirectory() stringByAppendingPathComponent:

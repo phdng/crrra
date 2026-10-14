@@ -70,4 +70,72 @@ for address, fragments in {
         for fragment in fragments:
             assert fragment in original, (address, fragment)
 
-print("Crane G-07 Game Center original account schema contracts: PASS (runtime unverified)")
+# Additional original libcrane IMPs recovered directly from Mach-O classlist
+# and targeted ARM64 disassembly (workstation-only binary, tracked metadata).
+import json
+evidence = json.loads((root.parent / "analysis/objc_classes.json").read_text(encoding="utf-8"))
+methods = {
+    method["sel"]: method["imp"]
+    for method in evidence["libcrane.dylib"]["CraneManager"]["instance_methods"]
+}
+for selector, imp in {
+    "gameCenter_enabledApplicationIdentifiers": "0x9800",
+    "gameCenter_reloadExceptApplicationWithIdentifier:": "0x99BC",
+    "gameCenter_activeAccount": "0x9AE4",
+    "gameCenter_setActiveAccount:": "0x9BC0",
+    "gameCenter_setActiveAccount:andDontKillApplication:": "0x9BD0",
+}.items():
+    assert methods[selector].upper() == imp.upper(), selector
+
+assert "- (NSArray<NSString *> *)gameCenter_enabledApplicationIdentifiers;" in header
+enable_start = manager.index("- (NSArray<NSString *> *)gameCenter_enabledApplicationIdentifiers\n{")
+active_start = manager.index("- (NSString *)gameCenter_activeAccount", enable_start)
+enable = manager[enable_start:active_start]
+for fragment in (
+    "CFPreferencesCopyKeyList(",
+    'NSString *prefix = @"appSettings_";',
+    "[key hasPrefix:prefix]",
+    "[self preferenceValueForKey:key]",
+    "CRAppSetting_GameCenterSupportEnabled",
+    "substringFromIndex:prefix.length",
+):
+    assert fragment in enable, fragment
+assert "applicationSettingsForApplicationWithIdentifier:" not in enable
+assert "setPreferenceValue:" not in enable
+
+active_end = manager.index("- (NSArray<NSDictionary *> *)gameCenter_availableAccounts", active_start)
+active = manager[active_start:active_end]
+assert 'preferenceValueForKey:@"activeGameCenterAccount"' in active
+assert "CRGameCenterResolvedActiveAccount(" in active
+assert "[self gameCenter_setActiveAccount:account andDontKillApplication:nil];" in active
+assert "[self gameCenter_activeAccount] isEqualToString:resolved" in active
+assert '[self setPreferenceValue:resolved forKey:@"activeGameCenterAccount"]' in active
+assert "[self gameCenter_reloadExceptApplicationWithIdentifier:appID]" in active
+assert active.index("isEqualToString:resolved") < active.index("setPreferenceValue:resolved")
+assert active.index("setPreferenceValue:resolved") < active.index(
+    "gameCenter_reloadExceptApplicationWithIdentifier:appID")
+
+reload_start = manager.index(
+    "- (void)gameCenter_reloadExceptApplicationWithIdentifier:(NSString *)appID"
+)
+reload_end = manager.index("/* ---- keychain", reload_start)
+reload = manager[reload_start:reload_end]
+assert "if (![appID isKindOfClass:NSString.class] || !appID.length)" in reload
+assert "[self reloadGameDaemons];" in reload
+assert "[self gameCenter_enabledApplicationIdentifiers]" in reload
+assert "if (![enabledApp isEqualToString:appID])" in reload
+assert "[self reloadApplicationWithIdentifier:enabledApp];" in reload
+assert reload.index("!appID.length") < reload.index("[self reloadGameDaemons]")
+assert reload.index("[self reloadGameDaemons]") < reload.index(
+    "[self reloadApplicationWithIdentifier:enabledApp]")
+assert "CRGameCenterResolvedActiveAccount(" in schema
+assert "CRGameCenterAccountIdentifierExists(accounts, stored)" in schema
+assert "CRGameCenterResolvedActiveAccount(validGames, nil)" in smoke
+assert "CRGameCenterResolvedActiveAccount(validGames, @42)" in smoke
+
+accountsd = (root / "sources/support/CRAccountsd.m").read_text(encoding="utf-8")
+assert "[manager gameCenter_enabledApplicationIdentifiers]" in accountsd
+assert "[manager gameCenter_activeAccount]" in accountsd
+assert "@interface CraneManager (CraneAccountsdPrivate)" not in accountsd
+
+print("Crane G-07 native account schema + active switching contracts: PASS (device unverified)")

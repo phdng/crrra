@@ -29,10 +29,6 @@ extern void *MSFindSymbol(void *image, const char *name);
 - (NSString *)activeContainerIdentifierForPid:(pid_t)pid;
 @end
 
-@interface CraneManager (CraneAccountsdPrivate)
-- (NSArray *)gameCenter_enabledApplicationIdentifiers;
-@end
-
 @interface NSObject (CraneAccountsdRuntime)
 - (NSString *)name;
 - (NSString *)bundleID;

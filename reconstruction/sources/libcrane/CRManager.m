@@ -2510,9 +2510,60 @@ usingBiometricsIfNeededWithSuccessHandler:(void (^)(BOOL authenticated))handler
 
 /* ---- Game Center (INFERRED; see U-06 for the data model) ---------------- */
 
-- (void)gameCenter_setActiveAccount:(NSString *)account {}
-- (void)gameCenter_setActiveAccount:(NSString *)account andDontKillApplication:(NSString *)appID {}
-- (NSString *)gameCenter_activeAccount { return nil; }
+/* Original libcrane 0x9800 iterates appSettings_* records and selects the
+ * bundle identifiers whose gameCenterSupportEnabled flag is true. Read native
+ * preference keys directly: helper application discovery can omit an app
+ * whose settings remain after uninstall, and reading must not cause a legacy
+ * copy-forward write from the accountsd process. */
+- (NSArray<NSString *> *)gameCenter_enabledApplicationIdentifiers
+{
+    NSArray *nativeKeys = CFBridgingRelease(CFPreferencesCopyKeyList(
+        (__bridge CFStringRef)CR_PREFS_DOMAIN,
+        kCFPreferencesCurrentUser, kCFPreferencesAnyHost));
+    NSMutableSet<NSString *> *enabled = [NSMutableSet new];
+    NSString *prefix = @"appSettings_";
+    for (id key in nativeKeys) {
+        if (![key isKindOfClass:NSString.class] ||
+            ![key hasPrefix:prefix] || [key length] <= prefix.length)
+            continue;
+        id settings = [self preferenceValueForKey:key];
+        if (![settings isKindOfClass:NSDictionary.class] ||
+            ![settings[CRAppSetting_GameCenterSupportEnabled] boolValue])
+            continue;
+        NSString *appID = [key substringFromIndex:prefix.length];
+        if (appID.length)
+            [enabled addObject:appID];
+    }
+    return [[enabled allObjects] sortedArrayUsingSelector:@selector(compare:)];
+}
+
+/* Original libcrane 0x9AE4 reads activeGameCenterAccount, then validates it
+ * against the known account identifiers. Missing or stale IDs select DEFAULT,
+ * never an orphaned account database. */
+- (NSString *)gameCenter_activeAccount
+{
+    id stored = [self preferenceValueForKey:@"activeGameCenterAccount"];
+    return CRGameCenterResolvedActiveAccount(
+        [self gameCenter_availableAccounts], stored);
+}
+
+- (void)gameCenter_setActiveAccount:(NSString *)account
+{
+    [self gameCenter_setActiveAccount:account andDontKillApplication:nil];
+}
+
+/* Original 0x9BD0 changes the preference only if the effective account
+ * differs; 0x9BC0 forwards here with a nil exemption. */
+- (void)gameCenter_setActiveAccount:(NSString *)account
+            andDontKillApplication:(NSString *)appID
+{
+    NSString *resolved = CRGameCenterResolvedActiveAccount(
+        [self gameCenter_availableAccounts], account);
+    if ([[self gameCenter_activeAccount] isEqualToString:resolved])
+        return;
+    [self setPreferenceValue:resolved forKey:@"activeGameCenterAccount"];
+    [self gameCenter_reloadExceptApplicationWithIdentifier:appID];
+}
 - (NSArray<NSDictionary *> *)gameCenter_availableAccounts
 {
     /* Native CranePrefs 0x14D00/0x15448 uses {identifier, name} dictionaries,
@@ -2536,7 +2587,20 @@ usingBiometricsIfNeededWithSuccessHandler:(void (^)(BOOL authenticated))handler
     return CRGameCenterAccountIdentifierExists(
         [self gameCenter_availableAccounts], account);
 }
-- (void)gameCenter_reloadExceptApplicationWithIdentifier:(NSString *)appID {}
+/* Original 0x99BC exits when the exempt bundle ID is nil/empty.
+ * Otherwise reload gamed and every configured Game Center application
+ * except the currently launching one (0x9A8C). Never send arbitrary
+ * caller-provided process names to the privileged daemon. */
+- (void)gameCenter_reloadExceptApplicationWithIdentifier:(NSString *)appID
+{
+    if (![appID isKindOfClass:NSString.class] || !appID.length)
+        return;
+    [self reloadGameDaemons];
+    for (NSString *enabledApp in [self gameCenter_enabledApplicationIdentifiers]) {
+        if (![enabledApp isEqualToString:appID])
+            [self reloadApplicationWithIdentifier:enabledApp];
+    }
+}
 
 /* ---- keychain ----------------------------------------------------------- */
 

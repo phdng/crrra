@@ -58,4 +58,14 @@ static inline BOOL CRGameCenterAccountIdentifierExists(NSArray<NSDictionary *> *
     return NO;
 }
 
+/* Original libcrane 0x9AE4 returns DEFAULT for missing or unregistered
+ * active account IDs; the preferences getter must not expose a stale ID to
+ * gamed/accountsd after the account list changes. */
+static inline NSString *CRGameCenterResolvedActiveAccount(NSArray<NSDictionary *> *accounts,
+                                                           id stored)
+{
+    return CRGameCenterAccountIdentifierExists(accounts, stored)
+        ? (NSString *)stored : @"DEFAULT";
+}
+
 #endif /* CR_GAME_CENTER_ACCOUNTS_H */

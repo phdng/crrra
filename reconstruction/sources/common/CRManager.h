@@ -188,6 +188,7 @@ usingBiometricsIfNeededWithSuccessHandler:(void (^)(BOOL authenticated))handler;
 - (BOOL)isDylibLoaded;                                                   /* [API] */
 
 /* ---- Game Center -------------------------------------------------------- */
+- (NSArray<NSString *> *)gameCenter_enabledApplicationIdentifiers;       /* [API] libcrane 0x9800 */
 - (void)gameCenter_setActiveAccount:(NSString *)account;                 /* [API] */
 - (void)gameCenter_setActiveAccount:(NSString *)account
          andDontKillApplication:(NSString *)appID;                        /* [API] */
