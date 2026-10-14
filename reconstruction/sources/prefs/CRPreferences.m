@@ -27,6 +27,7 @@
 #import "CRManager.h"
 #import "CRPaths.h"
 #import "CRPreferences.h"
+#import "CRGameCenterAccounts.h"
 #import "CRCommon.h"
 #import "CRChoicyEditor.h"
 
@@ -607,6 +608,33 @@
             self.choicyOverwriteToggleSpecifier = nil;
             self.choicyConfigurationPreviewSpecifier = nil;
         }
+        /* Native CranePrefs 0x11734 shows this group only when both
+         * separateSystemAccountsEnabled and gameCenterSupportEnabled are
+         * enabled for the application. Its list uses matching name/ID data
+         * sources from 0x1312C / 0x13310 and writes only this container. */
+        if ([appSettings[CRAppSetting_SeparateSystemAccountsEnabled] boolValue] &&
+            [appSettings[CRAppSetting_GameCenterSupportEnabled] boolValue]) {
+            PSSpecifier *gameGroup = [PSSpecifier emptyGroupSpecifier];
+            [gameGroup setName:CRLocalize(@"GAME_CENTER_SECTION_HEADER")];
+            [gameGroup setProperty:CRLocalize(@"GAME_CENTER_SECTION_FOOTER")
+                            forKey:@"footerText"];
+            [rows addObject:gameGroup];
+
+            PSSpecifier *account = [PSSpecifier preferenceSpecifierNamed:
+                CRLocalize(@"GAME_CENTER_ACCOUNT") target:self
+                set:@selector(setAssociatedGameCenterAccount:specifier:)
+                get:@selector(readAssociatedGameCenterAccount:)
+                detail:[PSListItemsController class] cell:2 edit:0];
+            [account setProperty:CRCContainer_AssociatedGameCenterAccount
+                         forKey:@"key"];
+            [account setDetailControllerClass:[PSListItemsController class]];
+            [account setProperty:@"availableGameCenterAccountIdentifiers"
+                         forKey:@"valuesDataSource"];
+            [account setProperty:@"availableGameCenterAccountNames"
+                         forKey:@"titlesDataSource"];
+            [rows addObject:account];
+        }
+
         /* Native CranePrefs 0x11520 displays size in a footer, initially
          * '(...)' and then NSByteCountFormatter once the async callback fires. */
         PSSpecifier *sizeGroup = [PSSpecifier emptyGroupSpecifier];
@@ -819,6 +847,87 @@
         containerSettingsForContainerWithIdentifier:self.containerIdentifier
                           ofApplicationWithIdentifier:self.applicationIdentifier];
     return settings[key];
+}
+
+/* CranePrefs 0x1312C and 0x13310 expose matching titles and identifiers.
+ * DEFAULT is a choice, not an element persisted in the account registry. */
+- (NSArray<NSString *> *)availableGameCenterAccountNames
+{
+    NSMutableArray<NSString *> *names = [NSMutableArray arrayWithObject:
+        CRLocalize(@"SYSTEM_DEFAULT")];
+    for (NSDictionary *account in [CraneManager.sharedManager gameCenter_availableAccounts])
+        [names addObject:account[@"name"]];
+    return [names copy];
+}
+
+- (NSArray<NSString *> *)availableGameCenterAccountIdentifiers
+{
+    NSMutableArray<NSString *> *identifiers = [NSMutableArray arrayWithObject:
+        CR_DEFAULT_CONTAINER_IDENTIFIER];
+    for (NSDictionary *account in [CraneManager.sharedManager gameCenter_availableAccounts])
+        [identifiers addObject:account[@"identifier"]];
+    return [identifiers copy];
+}
+
+/* CranePrefs 0x140E8 falls back to DEFAULT when a saved account was removed.
+ * Read-only normalization: the stale preference remains until the user makes
+ * a new choice; no account database is touched. */
+- (NSString *)readAssociatedGameCenterAccount:(PSSpecifier *)specifier
+{
+    if (![[specifier propertyForKey:@"key"]
+            isEqualToString:CRCContainer_AssociatedGameCenterAccount])
+        return CR_DEFAULT_CONTAINER_IDENTIFIER;
+    id stored = [self readPreferenceValue:specifier];
+    return CRGameCenterResolvedActiveAccount(
+        [CraneManager.sharedManager gameCenter_availableAccounts], stored);
+}
+
+/* Original CranePrefs 0xF3D0 calls reloadExcept(nil) only if this container
+ * is active. The recovered libcrane 0x99BC treats nil exemption as a no-op,
+ * so keep this exact call rather than killing gamed unconditionally. */
+- (void)reloadGameCenterIfThisContainerIsActive
+{
+    CraneManager *manager = CraneManager.sharedManager;
+    if ([[manager activeContainerIdentifierForApplicationWithIdentifier:
+            self.applicationIdentifier] isEqualToString:self.containerIdentifier])
+        [manager gameCenter_reloadExceptApplicationWithIdentifier:nil];
+}
+
+/* CranePrefs 0x14038 persists only changes, then calls F3D0. Validate the
+ * chosen ID against today's account list and existing container to avoid
+ * adding a deleted account or an orphaned container during a stale UI tap. */
+- (void)setAssociatedGameCenterAccount:(id)value
+                            specifier:(PSSpecifier *)specifier
+{
+    if (![[specifier propertyForKey:@"key"]
+            isEqualToString:CRCContainer_AssociatedGameCenterAccount] ||
+        !self.applicationIdentifier.length || !self.containerIdentifier.length ||
+        ![value isKindOfClass:NSString.class])
+        return;
+    CraneManager *manager = CraneManager.sharedManager;
+    NSDictionary *appSettings =
+        [manager applicationSettingsForApplicationWithIdentifier:
+            self.applicationIdentifier];
+    if (![appSettings[CRAppSetting_SeparateSystemAccountsEnabled] boolValue] ||
+        ![appSettings[CRAppSetting_GameCenterSupportEnabled] boolValue] ||
+        ![[manager containerIdentifiersOfApplicationWithIdentifier:
+            self.applicationIdentifier] containsObject:self.containerIdentifier] ||
+        !CRGameCenterAccountIdentifierExists(
+            [manager gameCenter_availableAccounts], value))
+        return;
+    if ([[self readAssociatedGameCenterAccount:specifier] isEqualToString:value])
+        return;
+    NSMutableDictionary *settings = [[manager
+        containerSettingsForContainerWithIdentifier:self.containerIdentifier
+                          ofApplicationWithIdentifier:self.applicationIdentifier]
+        mutableCopy];
+    if (!settings.count)
+        return;
+    settings[CRCContainer_AssociatedGameCenterAccount] = value;
+    [manager setContainerSettings:settings
+         forContainerWithIdentifier:self.containerIdentifier
+          ofApplicationWithIdentifier:self.applicationIdentifier];
+    [self reloadGameCenterIfThisContainerIsActive];
 }
 
 - (NSString *)previewStringForChoicyConfiguration:(PSSpecifier *)specifier
