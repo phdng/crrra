@@ -618,6 +618,8 @@ the complete verify/fix-up surface including
 
 Reconstruction now implements the recovered normal live fix-up path through a fixed-purpose authenticated helper request. It never accepts a caller-selected PID or dylib path; it reads the installed CraneSupport filter, skips non-running/already-loaded targets, invokes a bounded injector backend, and verifies the fixed CraneSupport image is mapped. Do not require Userspace Reboot as a normal installation or upgrade step. Bare remains diagnostic only.
 
+The insurance reply also carries reconstruction-only **last fix-up state** so a live `oslog` session started after SpringBoard boot can still diagnose the startup attempt. Look for `CraneManager: helper injection fixup state attempted=... success=... process=... backend=... errorCode=... error=... backends=...`. `attempted=0` means the current helper has not received a fix-up request since it started; `attempted=1 success=0` identifies the last failing target/backend/error; `success=1` with later `support=0` means mapping/runtime state regressed after the verified fix-up and must be investigated separately. The `backends=` field reports fixed candidate availability as `name=exists/executable` and is diagnostic only; it never affects insurance success.
+
 The mapper has now been extended to report the surrounding injection stack
 without changing insurance: exact `systemhook.dylib`, TweakLoader/TweakInject,
 ElleKit's `libinjector.dylib`/`libellekit.dylib`, Substrate compatibility,

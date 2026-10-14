@@ -74,9 +74,15 @@ fixup_raw = raw[
 assert 'xpc_dictionary_get_int64(message, "pid")' not in fixup_raw
 assert 'xpc_dictionary_get_string(message, "path")' not in fixup_raw
 assert 'xpc_dictionary_get_string(message, "dylib")' not in fixup_raw
+assert 'CRBeginInjectionFixupAttempt();' in fixup_raw
+assert 'CRFinishInjectionFixupAttempt(success, fixError);' in fixup_raw
 assert '@"/Library/MobileSubstrate/DynamicLibraries/CraneSupport.dylib"' in helper
 assert 'CRSupportFixupTargets(' in helper
 assert 'CRPidMapsImageLeaf(pid, @"CraneSupport.dylib"' in helper
+assert 'CRSupportInjectionBackendInventory(void)' in helper
+assert 'CRLastInjectionFixupSnapshot(void)' in helper
+assert 'fixup_backend_inventory' in helper
+assert 'fixup_error_description' in helper
 
 # Independent model: unsupported is None, whereas a genuinely empty dump
 # would be {} and a genuine vendor-ID read would be a nonempty string.

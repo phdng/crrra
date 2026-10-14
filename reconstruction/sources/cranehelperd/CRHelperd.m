@@ -583,6 +583,60 @@ static NSString *const CRSupportDylibVirtualPath =
     @"/Library/MobileSubstrate/DynamicLibraries/CraneSupport.dylib";
 static NSString *const CRInjectionErrorDomain = @"cranehelperdErrorDomain";
 
+static BOOL gLastInjectionFixupAttempted = NO;
+static BOOL gLastInjectionFixupSuccess = NO;
+static NSError *gLastInjectionFixupError = nil;
+static NSString *gLastInjectionFixupProcess = nil;
+static NSString *gLastInjectionFixupBackend = nil;
+static NSTimeInterval gLastInjectionFixupTime = 0;
+
+static void CRBeginInjectionFixupAttempt(void)
+{
+    @synchronized(CRInjectionErrorDomain) {
+        gLastInjectionFixupAttempted = YES;
+        gLastInjectionFixupSuccess = NO;
+        gLastInjectionFixupError = nil;
+        gLastInjectionFixupProcess = nil;
+        gLastInjectionFixupBackend = nil;
+        gLastInjectionFixupTime = [NSDate timeIntervalSinceReferenceDate];
+    }
+}
+
+static void CRSetInjectionFixupContext(NSString *process, NSString *backend)
+{
+    @synchronized(CRInjectionErrorDomain) {
+        gLastInjectionFixupProcess = [process copy];
+        gLastInjectionFixupBackend = [backend copy];
+    }
+}
+
+static void CRFinishInjectionFixupAttempt(BOOL success, NSError *error)
+{
+    @synchronized(CRInjectionErrorDomain) {
+        gLastInjectionFixupSuccess = success;
+        gLastInjectionFixupError = error;
+        gLastInjectionFixupTime = [NSDate timeIntervalSinceReferenceDate];
+    }
+}
+
+static NSDictionary *CRLastInjectionFixupSnapshot(void)
+{
+    @synchronized(CRInjectionErrorDomain) {
+        NSMutableDictionary *snapshot = [@{
+            @"attempted": @(gLastInjectionFixupAttempted),
+            @"success": @(gLastInjectionFixupSuccess),
+            @"time": @(gLastInjectionFixupTime),
+        } mutableCopy];
+        if (gLastInjectionFixupProcess.length)
+            snapshot[@"process"] = gLastInjectionFixupProcess;
+        if (gLastInjectionFixupBackend.length)
+            snapshot[@"backend"] = gLastInjectionFixupBackend;
+        if (gLastInjectionFixupError)
+            snapshot[@"error"] = gLastInjectionFixupError;
+        return [snapshot copy];
+    }
+}
+
 typedef NS_ENUM(NSInteger, CRInjectionErrorCode) {
     CRInjectionDylibFileNotFound = 1001,
     CRInjectionBinaryNotFound = 1002,
@@ -730,6 +784,43 @@ static NSString *CRFindSupportInjectionBinary(void)
         }
     }
     return nil;
+}
+
+static NSString *CRSupportInjectionBackendInventory(void)
+{
+#if CRANE_ROOTHIDE
+    NSArray<NSString *> *candidates = @[
+        @"/basebin/opainject",
+        @"/usr/bin/opainject",
+        @"/usr/local/bin/opainject",
+        @"/usr/libexec/libhooker/libsyringe",
+        @"/usr/bin/cynject",
+        @"/usr/bin/cynject.old",
+    ];
+#else
+    NSArray<NSString *> *candidates = @[
+        @"/usr/libexec/libhooker/libsyringe",
+        @"/usr/bin/cynject",
+        @"/usr/bin/cynject.old",
+        @"/basebin/opainject",
+        @"/usr/bin/opainject",
+        @"/usr/local/bin/opainject",
+    ];
+#endif
+
+    NSFileManager *fm = NSFileManager.defaultManager;
+    NSMutableArray<NSString *> *parts = [NSMutableArray new];
+    for (NSString *virtualPath in candidates) {
+        NSString *path = CRJailbreakRootPath(virtualPath);
+        BOOL directory = NO;
+        BOOL exists = path.length &&
+            [fm fileExistsAtPath:path isDirectory:&directory] &&
+            !directory;
+        BOOL executable = exists && [fm isExecutableFileAtPath:path];
+        [parts addObject:[NSString stringWithFormat:@"%@=%d/%d",
+            virtualPath, exists, executable]];
+    }
+    return [parts componentsJoinedByString:@","];
 }
 
 static BOOL CRRunInjectionTool(NSString *toolPath, pid_t targetPid,
@@ -884,6 +975,7 @@ static BOOL CRFixupCraneSupportInPid(pid_t pid, NSString *process,
         return NO;
     }
 
+    CRSetInjectionFixupContext(process, toolPath.lastPathComponent);
     NSLog(@"Crane helper: injection fixup process=%@ pid=%d tool=%@ dylib=%@",
           process, pid, toolPath.lastPathComponent, dylibPath);
     @try {
@@ -1377,8 +1469,12 @@ static NSString *CRHandleHealthRequest(xpc_connection_t peer,
             CRIsAuthenticatedCraneSBPeer(peerProcess, peerSigningID) &&
             [peerProcess isEqualToString:@"SpringBoard"];
         NSError *fixError = nil;
+        if (authorized)
+            CRBeginInjectionFixupAttempt();
         BOOL success = authorized &&
             CRRunCraneSupportInjectionFixup(&fixError);
+        if (authorized)
+            CRFinishInjectionFixupAttempt(success, fixError);
         NSLog(@"Crane helper: injection_fixup caller=%@ authorized=%d success=%d error=%@",
               peerProcess, authorized, success, fixError);
         xpc_dictionary_set_bool(reply, "authorized", authorized);
@@ -1423,10 +1519,17 @@ static NSString *CRHandleHealthRequest(xpc_connection_t peer,
         if (injectionVerified && !supportComplete && runningSupport.count > 0)
             supportImageMap = CRSupportMappedImageSummary(runningSupport);
 
-        NSLog(@"Crane helper: insurance caller=%@ authorized=%d preflight=%d supportInspect=%d running=%lu supportComplete=%d broken=%@ images=%@",
+        NSDictionary *fixupState = CRLastInjectionFixupSnapshot();
+        NSError *lastFixupError = fixupState[@"error"];
+        NSString *backendInventory = CRSupportInjectionBackendInventory();
+        NSLog(@"Crane helper: insurance caller=%@ authorized=%d preflight=%d supportInspect=%d running=%lu supportComplete=%d broken=%@ images=%@ fixupAttempted=%d fixupSuccess=%d fixupProcess=%@ fixupBackend=%@ fixupError=%@ backends=%@",
               peerProcess, injectionVerified, preflight,
               supportInspectionAvailable, (unsigned long)runningSupport.count,
-              supportComplete, brokenSupportString, supportImageMap);
+              supportComplete, brokenSupportString, supportImageMap,
+              [fixupState[@"attempted"] boolValue],
+              [fixupState[@"success"] boolValue],
+              fixupState[@"process"], fixupState[@"backend"],
+              lastFixupError, backendInventory);
 
         xpc_dictionary_set_bool(reply, "preflight_ok", preflight);
         xpc_dictionary_set_bool(reply, "injection_verified", injectionVerified);
@@ -1441,6 +1544,26 @@ static NSString *CRHandleHealthRequest(xpc_connection_t peer,
         if (supportImageMap.length)
             xpc_dictionary_set_string(reply, "support_image_map",
                                       supportImageMap.UTF8String);
+        xpc_dictionary_set_bool(reply, "fixup_attempted",
+                                [fixupState[@"attempted"] boolValue]);
+        xpc_dictionary_set_bool(reply, "fixup_success",
+                                [fixupState[@"success"] boolValue]);
+        if ([fixupState[@"process"] length])
+            xpc_dictionary_set_string(reply, "fixup_process",
+                                      [fixupState[@"process"] UTF8String]);
+        if ([fixupState[@"backend"] length])
+            xpc_dictionary_set_string(reply, "fixup_backend",
+                                      [fixupState[@"backend"] UTF8String]);
+        if (lastFixupError) {
+            xpc_dictionary_set_int64(reply, "fixup_error_code",
+                                     (int64_t)lastFixupError.code);
+            if (lastFixupError.localizedDescription.length)
+                xpc_dictionary_set_string(reply, "fixup_error_description",
+                                          lastFixupError.localizedDescription.UTF8String);
+        }
+        if (backendInventory.length)
+            xpc_dictionary_set_string(reply, "fixup_backend_inventory",
+                                      backendInventory.UTF8String);
         xpc_dictionary_set_bool(reply, "works",
             preflight && injectionVerified && supportComplete);
         xpc_dictionary_set_bool(reply, "main_dylib_installed", installed);

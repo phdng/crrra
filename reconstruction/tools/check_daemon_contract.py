@@ -150,6 +150,13 @@ assert 'CRSupportMappedImageSummary(runningSupport)' in peer_code
 assert 'xpc_dictionary_set_string(reply, "support_image_map"' in peer_code
 assert 'CraneManager: helper support image map %@' in manager
 assert 'xpc_dictionary_get_string(response, "support_image_map")' in manager
+assert 'xpc_dictionary_set_bool(reply, "fixup_attempted"' in peer_code
+assert 'xpc_dictionary_set_bool(reply, "fixup_success"' in peer_code
+assert 'xpc_dictionary_set_string(reply, "fixup_backend_inventory"' in peer_code
+assert 'xpc_dictionary_get_bool(response, "fixup_attempted")' in manager
+assert 'xpc_dictionary_get_bool(response, "fixup_success")' in manager
+assert 'xpc_dictionary_get_string(response, "fixup_backend_inventory")' in manager
+assert 'CraneManager: helper injection fixup state attempted=%d success=%d' in manager
 for marker in (
     '"systemhook.dylib"',
     '"TweakLoader.dylib"',
@@ -189,6 +196,7 @@ works_expression = insurance_body[works_start:works_end]
 assert 'preflight && injectionVerified && supportComplete' in works_expression
 assert 'supportImageMap' not in works_expression
 assert 'support_image_map' not in works_expression
+assert 'fixup' not in works_expression
 assert 'Crane helper: insurance caller=%@ authorized=%d preflight=%d supportInspect=%d running=%lu supportComplete=%d broken=%@' in peer_code
 assert 'xpc_dictionary_set_bool(reply, "injection_verified", injectionVerified)' in peer_code
 assert 'xpc_dictionary_set_bool(reply, "preflight_ok", preflight)' in peer_code
