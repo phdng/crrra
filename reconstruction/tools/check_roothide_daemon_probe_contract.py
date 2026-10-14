@@ -1,11 +1,12 @@
 """Roothide-only CraneSupport daemon injection probe contract.
 
 The production CraneSupport constructor never runs on the iOS 15.8.8 device.
-Two temporary plain-C libraries share the exact seven daemon Executables list:
-one preserves the recovered Flags=1 and one omits Flags. They must remain
-roothide-only and must not link Crane libraries/frameworks. Device outcomes:
+Two temporary Theos tweaks share the exact seven daemon Executables list: one
+preserves the recovered Flags=1 and one omits Flags. They deliberately use the
+same tweak pipeline as CraneSupport while keeping their constructor bodies free
+of Crane/Foundation/keychain logic. Device outcomes:
 
-- neither probe loads -> Bootstrap/daemon injector or platform support
+- neither probe loads -> Dopamine/roothide daemon injection path or platform
 - plain loads, flags1 does not -> Flags=1 loader semantics
 - both probes load, CraneSupport does not -> CraneSupport Mach-O/load dependency
 """
@@ -39,9 +40,12 @@ assert "SUBPROJECTS += sources/supportprobe" in master
 assert master.index("ifeq ($(THEOS_PACKAGE_SCHEME),roothide)") < master.index(
     "SUBPROJECTS += sources/supportprobe"
 )
+assert "TWEAK_NAME = CraneSupportProbeFlags CraneSupportProbePlain" in probe_mk
+assert "include $(THEOS_MAKE_PATH)/tweak.mk" in probe_mk
+assert "include $(THEOS_MAKE_PATH)/library.mk" not in probe_mk
 for name in ("CraneSupportProbeFlags", "CraneSupportProbePlain"):
     assert name in probe_mk
-    assert f"{name}_INSTALL_PATH = /Library/MobileSubstrate/DynamicLibraries" in probe_mk
+    assert f"{name}_LIBRARIES = substrate" in probe_mk
     assert f"CraneSupportProbe: variant=" in (flags_source + plain_source)
     assert f"pkg/Library/MobileSubstrate/DynamicLibraries/{name}.dylib" in workflow
 
@@ -53,7 +57,8 @@ for source, variant in ((flags_source, "flags1"), (plain_source, "plain")):
     assert "os_log(OS_LOG_DEFAULT," in source
     assert f"variant={variant} constructor" in source
 
-for forbidden in ("_FRAMEWORKS", "_LIBRARIES"):
+assert "_FRAMEWORKS" not in probe_mk
+for forbidden in ("libcrane", "bsm.0", "Foundation", "CoreFoundation", "Security"):
     assert forbidden not in probe_mk
 
 print("Crane roothide daemon injection probe contracts: PASS (device diagnostic pending)")

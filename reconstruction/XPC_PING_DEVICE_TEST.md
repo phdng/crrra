@@ -287,10 +287,13 @@ injection/load/report failure, not securityd-specific keychain symbol failure.
 Do not port `patchfindSecurityd` from this result.
 
 The roothide diagnostic package now also includes two temporary constructor-only
-probe dylibs with the same seven `Executables`: `CraneSupportProbeFlags` keeps
-the recovered `Flags=1`, while `CraneSupportProbePlain` omits `Flags`. Neither
-probe links Foundation, libcrane, libbsm or Substrate; both only emit an
-`os_log` line. **After installing this diagnostic build, perform a userspace
+probe tweaks with the same seven `Executables`: `CraneSupportProbeFlags` keeps
+the recovered `Flags=1`, while `CraneSupportProbePlain` omits `Flags`. Both use
+Theos `tweak.mk` and link only Substrate so they traverse the same tweak-loader
+pipeline as CraneSupport, while their source bodies still avoid Foundation,
+libcrane, libbsm and Crane logic. This replaces the first `library.mk` probe
+revision, whose absence was not sufficient to prove a Dopamine2-roothide
+injection failure. **After installing this diagnostic build, perform a userspace
 reboot from the jailbreak/bootstrap UI before testing. A normal Respring is not
 enough**, because this reconstruction's package `postinst` only kickstarts
 `cranehelperd`, and the unrecovered privileged `reloadDaemons:` backend is not
@@ -303,8 +306,9 @@ oslog | grep -E 'CraneSupportProbe:|CraneSupport: (constructor process=|init pro
 ```
 
 Interpret the first fresh post-reboot run as follows: neither probe constructor
-appears => daemon injector/platform path did not inject even a dependency-free
-dylib; `plain` appears but `flags1` does not => investigate `Flags=1` loader
+appears => Dopamine2-roothide daemon injector/platform path did not inject even
+the minimal tweak-pipeline probes; `plain` appears but `flags1` does not =>
+investigate `Flags=1` loader
 semantics; both probes appear but `CraneSupport` constructor does not =>
 CraneSupport Mach-O/load dependency is the fault and CI `linkage.txt` is the
 next evidence; CraneSupport constructor appears but health remains zero =>

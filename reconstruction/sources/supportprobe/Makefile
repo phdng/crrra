@@ -1,22 +1,21 @@
 TARGET := iphone:clang:latest:11.0
 ARCHS = arm64 arm64e
 
-# Roothide-only diagnostic libraries. These are intentionally plain dylibs,
-# not Substrate-linked tweak targets: each has only libSystem/roothide scheme
-# load commands plus a matching MobileSubstrate filter plist. Their sole
-# purpose is to distinguish daemon-injector/filter failure from CraneSupport
-# Mach-O dependency/load failure on devices where CraneSupport never reaches
-# its constructor.
+# Roothide-only daemon-injection probes. Build these through Theos' tweak
+# pipeline (not library.mk): Dopamine/roothide tweak loaders are entitled to
+# treat staged tweak dylibs differently from arbitrary libraries. The probe
+# bodies remain constructor-only so any difference from CraneSupport is limited
+# to its real dependencies/hooks rather than application logic.
 include $(THEOS)/makefiles/common.mk
 
-LIBRARY_NAME = CraneSupportProbeFlags CraneSupportProbePlain
+TWEAK_NAME = CraneSupportProbeFlags CraneSupportProbePlain
 
-CraneSupportProbeFlags_INSTALL_PATH = /Library/MobileSubstrate/DynamicLibraries
 CraneSupportProbeFlags_FILES = CRSupportProbeFlags.c
 CraneSupportProbeFlags_CFLAGS = -fvisibility=hidden
+CraneSupportProbeFlags_LIBRARIES = substrate
 
-CraneSupportProbePlain_INSTALL_PATH = /Library/MobileSubstrate/DynamicLibraries
 CraneSupportProbePlain_FILES = CRSupportProbePlain.c
 CraneSupportProbePlain_CFLAGS = -fvisibility=hidden
+CraneSupportProbePlain_LIBRARIES = substrate
 
-include $(THEOS_MAKE_PATH)/library.mk
+include $(THEOS_MAKE_PATH)/tweak.mk
