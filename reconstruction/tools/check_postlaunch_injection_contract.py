@@ -100,8 +100,9 @@ assert 'CRManagerDeliverHelperReply(error' in manager
 assert 'check_postlaunch_injection_contract.py' in workflow
 
 # CraneSB didFinishLaunching 0x1782C ordering and state. The recovered helper
-# fix-up selector is preserved but U-01 forces the reconstruction adapter to
-# fail closed; callback 0x179C4 stores NSError only when success == NO.
+# fix-up selector is preserved and the reconstruction waits for helper
+# readiness off the main thread before sending it; callback 0x179C4 stores
+# NSError only when success == NO.
 assert 'static BOOL keychainOutdated = NO;' in sb
 assert 'NSError *CRInjectionFixupError = nil;' in sb
 migration_start = sb.index('static void CRKeychainMigrationSucceeded(')
@@ -116,10 +117,7 @@ finish = sb[finish_start:finish_end]
 for fragment in (
     'if (![manager cranehelperdConnectionWorks])',
     'CRStartHelperIfNeeded();',
-    'if ([manager cranehelperdConnectionWorks])',
-    '[manager cranehelperdGlobalAsyncRemoteObjectProxy]',
-    '@"runInjectionFixUpIfNeededAndReply:"',
-    'if (!success)\n                    CRInjectionFixupError = error;',
+    'CRRequestInjectionFixupWhenHelperReady(manager);',
     'CR_NOTIFICATION_SB_LOADED',
     'CRCheckKeychainVersion();',
     'dispatch_get_global_queue(0, 0)',
@@ -128,9 +126,27 @@ for fragment in (
 ):
     assert fragment in finish, fragment
 assert finish.index('CRStartHelperIfNeeded();') < finish.index(
-    '@"runInjectionFixUpIfNeededAndReply:"') < finish.index(
+    'CRRequestInjectionFixupWhenHelperReady(manager);') < finish.index(
     'CR_NOTIFICATION_SB_LOADED') < finish.index('CRCheckKeychainVersion();') < finish.index(
     'hasFinishedLaunching = YES;')
+
+retry_start = sb.index('static void CRRequestInjectionFixupWhenHelperReady(')
+retry_end = sb.index('static void CRCheckKeychainVersion(void)', retry_start)
+retry = sb[retry_start:retry_end]
+for fragment in (
+    'dispatch_get_global_queue(QOS_CLASS_UTILITY, 0)',
+    'const NSUInteger maxAttempts = 8;',
+    '[manager cranehelperdConnectionWorks]',
+    '[manager cranehelperdGlobalAsyncRemoteObjectProxy]',
+    '@"runInjectionFixUpIfNeededAndReply:"',
+    'if (!success)\n                                CRInjectionFixupError = error;',
+    'usleep(250000);',
+    'inFlight = NO;',
+):
+    assert fragment in retry, fragment
+assert 'CRStartHelperIfNeeded();' not in retry
+assert retry.index('[manager cranehelperdConnectionWorks]') < retry.index(
+    '@"runInjectionFixUpIfNeededAndReply:"')
 starter = sb[sb.index('static void CRStartHelperIfNeeded(void)'):
              sb.index('static void CRCheckKeychainVersion(void)')]
 for fragment in (

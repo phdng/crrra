@@ -35,6 +35,7 @@
 
 #if CRANE_ROOTHIDE
 #include <notify.h>
+#include <unistd.h>
 #include "../supportprobe/CRSupportProbeProtocol.h"
 #endif
 
@@ -1078,6 +1079,81 @@ static void CRStartHelperIfNeeded(void)
     ((void (*)(id, SEL))objc_msgSend)(task, waitUntilExit);
 }
 
+static void CRRequestInjectionFixupWhenHelperReady(CraneManager *manager)
+{
+    if (!manager)
+        return;
+
+    static NSObject *lock;
+    static BOOL inFlight;
+    static dispatch_once_t once;
+    dispatch_once(&once, ^{ lock = [NSObject new]; });
+    @synchronized(lock) {
+        if (inFlight)
+            return;
+        inFlight = YES;
+    }
+
+    /* cranehelperdConnectionWorks is deliberately cache-only on SpringBoard's
+     * main thread. The old reconstruction called it twice synchronously around
+     * CRStartHelperIfNeeded, so a cold helper could remain "probeInFlight" and
+     * the recovered 0x1782C fix-up was skipped forever. Probe from a worker,
+     * where CraneManager performs the bounded synchronous health request. */
+    dispatch_async(dispatch_get_global_queue(QOS_CLASS_UTILITY, 0), ^{
+        const NSUInteger maxAttempts = 8;
+        for (NSUInteger attempt = 1; attempt <= maxAttempts; ++attempt) {
+            if ([manager cranehelperdConnectionWorks]) {
+                id proxy = [manager cranehelperdGlobalAsyncRemoteObjectProxy];
+                SEL fixupSEL =
+                    NSSelectorFromString(@"runInjectionFixUpIfNeededAndReply:");
+                if ([proxy respondsToSelector:fixupSEL]) {
+                    NSLog(@"CraneSB: requesting helper injection fixup attempt=%lu",
+                          (unsigned long)attempt);
+                    void (^reply)(BOOL, NSError *) =
+                        ^(BOOL success, NSError *error) {
+                            if (!success)
+                                CRInjectionFixupError = error;
+                            NSLog(@"CraneSB: helper injection fixup reply success=%d error=%@",
+                                  success, error);
+                            @synchronized(lock) {
+                                inFlight = NO;
+                            }
+                        };
+                    ((void (*)(id, SEL, id))objc_msgSend)(
+                        proxy, fixupSEL, reply);
+                    return;
+                }
+
+                NSError *error = [NSError errorWithDomain:
+                    @"com.opa334.crane.helper.fixup"
+                    code:1 userInfo:@{NSLocalizedDescriptionKey:
+                        @"Crane helper proxy does not expose injection fix-up"}];
+                CRInjectionFixupError = error;
+                NSLog(@"CraneSB: helper injection fixup unavailable error=%@",
+                      error);
+                @synchronized(lock) {
+                    inFlight = NO;
+                }
+                return;
+            }
+
+            if (attempt < maxAttempts)
+                usleep(250000);
+        }
+
+        NSError *error = [NSError errorWithDomain:
+            @"com.opa334.crane.helper.fixup"
+            code:2 userInfo:@{NSLocalizedDescriptionKey:
+                @"Crane helper did not become ready for injection fix-up"}];
+        CRInjectionFixupError = error;
+        NSLog(@"CraneSB: helper injection fixup readiness failed error=%@",
+              error);
+        @synchronized(lock) {
+            inFlight = NO;
+        }
+    });
+}
+
 static void CRCheckKeychainVersion(void)
 {
     /* Exact 0x12AD0 state transition. Migration completion 0x12B30 clears it. */
@@ -1097,19 +1173,11 @@ static void CRDidFinishLaunching(CFNotificationCenterRef center, void *observer,
     if (![manager cranehelperdConnectionWorks])
         CRStartHelperIfNeeded();
 
-    if ([manager cranehelperdConnectionWorks]) {
-        id proxy = [manager cranehelperdGlobalAsyncRemoteObjectProxy];
-        SEL fixupSEL = NSSelectorFromString(@"runInjectionFixUpIfNeededAndReply:");
-        if ([proxy respondsToSelector:fixupSEL]) {
-            void (^reply)(BOOL, NSError *) = ^(BOOL success, NSError *error) {
-                /* Exact 0x179C4 semantics: only a failed reply stores the
-                 * error; success does not clear an earlier failure. */
-                if (!success)
-                    CRInjectionFixupError = error;
-            };
-            ((void (*)(id, SEL, id))objc_msgSend)(proxy, fixupSEL, reply);
-        }
-    }
+    /* Do not immediately re-read the main-thread helper cache here. A cold
+     * helper startup races that cache by construction. The worker retry below
+     * preserves the original fix-up ordering intent while waiting for the
+     * newly started Mach service to become genuinely reachable. */
+    CRRequestInjectionFixupWhenHelperReady(manager);
 
     CFNotificationCenterPostNotification(
         CFNotificationCenterGetDarwinNotifyCenter(),
