@@ -118,4 +118,21 @@ assert '@"delete_keychain_items"' in manager
 assert "CRHelperInvalidRequest = 1011" in diag
 assert "CRHelperOperationFailed = 1012" in diag
 
+# Keep the raw-XPC keychain error helper defined before any call to it.
+# A missing definition previously passed source contracts but failed the
+# macOS Theos/Clang build with -Wimplicit-function-declaration.
+error_helper = helper.index("static void CRSetReplyError(")
+request_handler = helper.index("static NSString *CRHandleHealthRequest(")
+assert error_helper < request_handler
+error_body = helper[error_helper:request_handler]
+for field in (
+    'xpc_dictionary_set_string(reply, "error_domain",',
+    '"com.opa334.crane.helper.transport"',
+    'xpc_dictionary_set_int64(reply, "error_code", (int64_t)code)',
+    'xpc_dictionary_set_string(reply, "error_description",',
+):
+    assert field in error_body, field
+assert helper.count("CRSetReplyError(reply, CRHelperInvalidRequest,") == 2
+assert helper.count("CRSetReplyError(reply, CRHelperOperationFailed,") == 2
+
 print("Crane helper keychain move/delete contracts: PASS (device unverified)")

@@ -2137,6 +2137,21 @@ static NSString *CRRuntimeContainerForPid(pid_t pid, NSString *process)
     }
 }
 
+/* Error replies use the same fields as the existing injection_fixup
+ * transport. This is local to the helper, not a new privileged operation. */
+static void CRSetReplyError(xpc_object_t reply,
+                            CRHelperTransportErrorCode code,
+                            NSString *description)
+{
+    if (!reply || xpc_get_type(reply) != XPC_TYPE_DICTIONARY)
+        return;
+    xpc_dictionary_set_string(reply, "error_domain",
+                              "com.opa334.crane.helper.transport");
+    xpc_dictionary_set_int64(reply, "error_code", (int64_t)code);
+    xpc_dictionary_set_string(reply, "error_description",
+        (description ?: @"Helper operation failed").UTF8String);
+}
+
 /* The two Mach listeners share a deliberately small raw-XPC surface:
  * health, runtime attestation, caller-authorized PID inspection, and one
  * fixed-purpose SpringBoard-only CraneSupport live fix-up. */
