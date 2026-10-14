@@ -130,6 +130,9 @@ jobs:
       - name: Verify Preferences Game Center settings
         run: python3 reconstruction/tools/check_prefs_settings_contract.py
 
+      - name: Verify original Game Center account registry schema
+        run: python3 reconstruction/tools/check_gamecenter_account_schema_contract.py
+
       - name: Verify optional Choicy integration (tracked native evidence)
         run: CRANE_CHOICY_SKIP_NATIVE_EXPORT=1 python3 reconstruction/tools/check_choicy_integration_contract.py
 

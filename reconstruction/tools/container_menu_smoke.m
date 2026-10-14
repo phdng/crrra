@@ -4,6 +4,7 @@
 #import <assert.h>
 #import "CRContainerScaffold.h"
 #import "CRContainerRegistry.h"
+#import "CRGameCenterAccounts.h"
 
 static NSArray *Identifiers(NSDictionary *settings)
 {
@@ -66,6 +67,31 @@ int main(void)
         assert(!(Identifiers(defaultOnly).count > 1));
         NSDictionary *malformed = @{CRAppSetting_Containers: @[custom, custom, NSNull.null]};
         assert(Identifiers(CRManagerSettingsIncludingDefault(malformed)).count == 2);
+
+        /* Native CranePrefs Game Center list is {identifier,name}, not
+         * an array of identifiers. Reject partial writes to avoid deleting
+         * unrelated account entries when input is malformed. */
+        NSDictionary *gameA = @{@"identifier": @"A1", @"name": @"First"};
+        NSDictionary *gameB = @{@"identifier": @"B2", @"name": @"Second"};
+        NSArray *validGames = @[gameA, gameB];
+        assert([CRGameCenterValidatedAccounts(nil) isEqual:@[]]);
+        assert([CRGameCenterValidatedAccounts(validGames) isEqual:validGames]);
+        assert(CRGameCenterAccountsAreValidForWrite(@[]));
+        assert(CRGameCenterAccountsAreValidForWrite(validGames));
+        assert(!CRGameCenterAccountsAreValidForWrite(nil));
+        assert(!CRGameCenterAccountsAreValidForWrite(@[@"A1", gameB]));
+        assert(!CRGameCenterAccountsAreValidForWrite(@[gameA, gameA]));
+        assert(!CRGameCenterAccountsAreValidForWrite(
+            @[@{@"identifier": CR_DEFAULT_CONTAINER_IDENTIFIER, @"name": @"Fake"}]));
+        assert(!CRGameCenterAccountsAreValidForWrite(@[@{@"identifier": @"A1"}]));
+        assert([CRGameCenterValidatedAccounts(@[gameA, NSNull.null, gameA, gameB])
+            isEqual:validGames]);
+        assert(CRGameCenterAccountIdentifierExists(validGames, @"A1"));
+        assert(CRGameCenterAccountIdentifierExists(validGames, @"B2"));
+        assert(CRGameCenterAccountIdentifierExists(validGames,
+            CR_DEFAULT_CONTAINER_IDENTIFIER));
+        assert(!CRGameCenterAccountIdentifierExists(validGames, @"unknown"));
+        assert(!CRGameCenterAccountIdentifierExists(validGames, nil));
 
         NSFileManager *fm = NSFileManager.defaultManager;
         NSString *root = [NSTemporaryDirectory() stringByAppendingPathComponent:

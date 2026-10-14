@@ -192,8 +192,8 @@ usingBiometricsIfNeededWithSuccessHandler:(void (^)(BOOL authenticated))handler;
 - (void)gameCenter_setActiveAccount:(NSString *)account
          andDontKillApplication:(NSString *)appID;                        /* [API] */
 - (NSString *)gameCenter_activeAccount;                                  /* [API] */
-- (NSArray<NSString *> *)gameCenter_availableAccounts;                   /* [API] */
-- (void)gameCenter_setAvailableAccounts:(NSArray<NSString *> *)accounts;  /* [API] */
+- (NSArray<NSDictionary *> *)gameCenter_availableAccounts;                 /* [API] CranePrefs original {identifier,name} */
+- (void)gameCenter_setAvailableAccounts:(NSArray<NSDictionary *> *)accounts; /* [API] */
 - (BOOL)gameCenter_isAccountAvailable:(NSString *)account;                /* [API] */
 - (void)gameCenter_reloadExceptApplicationWithIdentifier:(NSString *)appID; /* [API] */
 

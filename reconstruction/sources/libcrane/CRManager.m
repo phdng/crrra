@@ -36,6 +36,7 @@
 #import "CRCommon.h"
 #import "CRContainerScaffold.h"
 #import "CRContainerRegistry.h"
+#import "CRGameCenterAccounts.h"
 #import "CRXPCDiagnostics.h"
 #import "CRXPCProtocols.h"
 
@@ -2512,18 +2513,28 @@ usingBiometricsIfNeededWithSuccessHandler:(void (^)(BOOL authenticated))handler
 - (void)gameCenter_setActiveAccount:(NSString *)account {}
 - (void)gameCenter_setActiveAccount:(NSString *)account andDontKillApplication:(NSString *)appID {}
 - (NSString *)gameCenter_activeAccount { return nil; }
-- (NSArray<NSString *> *)gameCenter_availableAccounts
+- (NSArray<NSDictionary *> *)gameCenter_availableAccounts
 {
-    id v = [self preferenceValueForKey:@"crane_gameCenter.availableAccounts"];
-    return [v isKindOfClass:NSArray.class] ? v : @[];
+    /* Native CranePrefs 0x14D00/0x15448 uses {identifier, name} dictionaries,
+     * not the string array the old reconstruction expected. Reads are
+     * deliberately non-destructive when preferences contain malformed data. */
+    id stored = [self preferenceValueForKey:@"crane_gameCenter.availableAccounts"];
+    return CRGameCenterValidatedAccounts(stored);
 }
-- (void)gameCenter_setAvailableAccounts:(NSArray<NSString *> *)accounts
+- (void)gameCenter_setAvailableAccounts:(NSArray<NSDictionary *> *)accounts
 {
-    [self setPreferenceValue:accounts forKey:@"crane_gameCenter.availableAccounts"];
+    /* An invalid entry must never cause account deletion through filtering. */
+    if (!CRGameCenterAccountsAreValidForWrite(accounts)) {
+        NSLog(@"CraneManager: rejected malformed Game Center account list");
+        return;
+    }
+    [self setPreferenceValue:[accounts copy]
+                     forKey:@"crane_gameCenter.availableAccounts"];
 }
 - (BOOL)gameCenter_isAccountAvailable:(NSString *)account
 {
-    return [[self gameCenter_availableAccounts] containsObject:account];
+    return CRGameCenterAccountIdentifierExists(
+        [self gameCenter_availableAccounts], account);
 }
 - (void)gameCenter_reloadExceptApplicationWithIdentifier:(NSString *)appID {}
 
