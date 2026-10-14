@@ -28,6 +28,7 @@
 #import <CoreFoundation/CoreFoundation.h>
 #import <limits.h>
 #import <objc/message.h>
+#import <objc/runtime.h>
 
 #import "CRManager.h"
 #import "CRPaths.h"
@@ -36,6 +37,7 @@
 #import "CRContainerScaffold.h"
 #import "CRContainerRegistry.h"
 #import "CRXPCDiagnostics.h"
+#import "CRXPCProtocols.h"
 
 /* The native launch gate classifies transport errors through getLastError. */
 @interface CraneManager (CRHelperTransportDiagnostics)
@@ -234,10 +236,233 @@ static void CRManagerVerifyRuntimeComponent(NSString *component,
 }
 
 /* ------------------------------------------------------------------------- */
+typedef void (^CRManagerControlRequestBuilder)(xpc_object_t request);
+
+/* Fixed-purpose privileged operations use the same authenticated raw-XPC
+ * transport as health/fix-up, but keep synchronous proxy semantics because
+ * original callers use cranehelperdGlobalSyncRemoteObjectProxy. */
+static BOOL CRManagerSendSynchronousControlRequest(
+    NSString *operation,
+    CRManagerControlRequestBuilder configure,
+    NSTimeInterval timeout,
+    NSError **outError)
+{
+    if (outError)
+        *outError = nil;
+    if (!operation.length) {
+        if (outError) {
+            *outError = CRHelperTransportError(CRHelperUnexpectedReply,
+                @"control", @"Missing helper operation");
+        }
+        return NO;
+    }
+
+    xpc_connection_t connection = CRManagerCreateHelperConnection();
+    if (!connection) {
+        if (outError) {
+            *outError = CRHelperTransportError(CRHelperConnectionCreationFailed,
+                operation, @"Unable to create XPC connection");
+        }
+        return NO;
+    }
+
+    NSObject *lock = [NSObject new];
+    dispatch_semaphore_t done = dispatch_semaphore_create(0);
+    __block BOOL finished = NO;
+    __block BOOL operationSuccess = NO;
+    __block NSError *resultError = nil;
+
+    void (^finish)(BOOL, NSError *) = ^(BOOL success, NSError *error) {
+        @synchronized(lock) {
+            if (finished)
+                return;
+            finished = YES;
+            operationSuccess = success;
+            resultError = error;
+        }
+        dispatch_semaphore_signal(done);
+    };
+
+    xpc_connection_set_event_handler(connection, ^(xpc_object_t event) {
+        if (xpc_get_type(event) == XPC_TYPE_ERROR)
+            finish(NO, CRHelperXPCEventError(event, operation));
+    });
+    xpc_connection_resume(connection);
+
+    xpc_object_t request = xpc_dictionary_create(NULL, NULL, 0);
+    if (!request) {
+        resultError = CRHelperTransportError(CRHelperRequestAllocationFailed,
+            operation, @"Unable to allocate XPC request");
+        xpc_connection_cancel(connection);
+        if (outError)
+            *outError = resultError;
+        return NO;
+    }
+    xpc_dictionary_set_string(request, "operation", operation.UTF8String);
+    xpc_dictionary_set_string(request, "protocol", CR_HELPERD_PING_PROTOCOL_V1);
+    if (configure)
+        configure(request);
+
+    xpc_connection_send_message_with_reply(
+        connection, request,
+        dispatch_get_global_queue(QOS_CLASS_UTILITY, 0),
+        ^(xpc_object_t response) {
+            NSError *error = nil;
+            BOOL valid = CRHelperValidateHealthReply(response, operation, &error);
+            BOOL authorized = valid &&
+                xpc_dictionary_get_bool(response, "authorized");
+            BOOL success = authorized &&
+                xpc_dictionary_get_bool(response, "success");
+            if (valid && !authorized) {
+                error = CRHelperTransportError(CRHelperUnauthorizedPeer,
+                    operation, @"Helper rejected caller identity");
+            } else if (valid && authorized && !success) {
+                const char *descriptionCString =
+                    xpc_dictionary_get_string(response, "error_description");
+                NSString *description = descriptionCString
+                    ? [NSString stringWithUTF8String:descriptionCString]
+                    : @"Privileged helper operation failed";
+                error = CRHelperTransportError(CRHelperUnexpectedReply,
+                    operation, description);
+            }
+            finish(success, error);
+        });
+
+    int64_t timeoutNanos = (int64_t)(MAX(timeout, 0.1) * NSEC_PER_SEC);
+    long waitResult = dispatch_semaphore_wait(
+        done, dispatch_time(DISPATCH_TIME_NOW, timeoutNanos));
+    if (waitResult != 0) {
+        finish(NO, CRHelperTransportError(CRHelperReplyTimedOut,
+            operation, @"No helper reply before timeout"));
+    }
+
+    BOOL result;
+    NSError *error;
+    @synchronized(lock) {
+        result = operationSuccess && resultError == nil;
+        error = resultError;
+    }
+    xpc_connection_cancel(connection);
+    if (outError)
+        *outError = error;
+    return result;
+}
+
+typedef id (^CRManagerQueryReplyParser)(xpc_object_t response);
+
+static id CRManagerSendSynchronousQueryRequest(
+    NSString *operation,
+    CRManagerControlRequestBuilder configure,
+    CRManagerQueryReplyParser parser,
+    NSTimeInterval timeout,
+    NSError **outError)
+{
+    if (outError)
+        *outError = nil;
+    if (!operation.length || !parser) {
+        if (outError) {
+            *outError = CRHelperTransportError(CRHelperUnexpectedReply,
+                @"query", @"Missing helper query contract");
+        }
+        return nil;
+    }
+
+    xpc_connection_t connection = CRManagerCreateHelperConnection();
+    if (!connection) {
+        if (outError) {
+            *outError = CRHelperTransportError(CRHelperConnectionCreationFailed,
+                operation, @"Unable to create XPC connection");
+        }
+        return nil;
+    }
+
+    NSObject *lock = [NSObject new];
+    dispatch_semaphore_t done = dispatch_semaphore_create(0);
+    __block BOOL finished = NO;
+    __block id result = nil;
+    __block NSError *resultError = nil;
+
+    void (^finish)(id, NSError *) = ^(id value, NSError *error) {
+        @synchronized(lock) {
+            if (finished)
+                return;
+            finished = YES;
+            result = value;
+            resultError = error;
+        }
+        dispatch_semaphore_signal(done);
+    };
+
+    xpc_connection_set_event_handler(connection, ^(xpc_object_t event) {
+        if (xpc_get_type(event) == XPC_TYPE_ERROR)
+            finish(nil, CRHelperXPCEventError(event, operation));
+    });
+    xpc_connection_resume(connection);
+
+    xpc_object_t request = xpc_dictionary_create(NULL, NULL, 0);
+    if (!request) {
+        resultError = CRHelperTransportError(CRHelperRequestAllocationFailed,
+            operation, @"Unable to allocate XPC request");
+        xpc_connection_cancel(connection);
+        if (outError)
+            *outError = resultError;
+        return nil;
+    }
+    xpc_dictionary_set_string(request, "operation", operation.UTF8String);
+    xpc_dictionary_set_string(request, "protocol", CR_HELPERD_PING_PROTOCOL_V1);
+    if (configure)
+        configure(request);
+
+    xpc_connection_send_message_with_reply(
+        connection, request,
+        dispatch_get_global_queue(QOS_CLASS_UTILITY, 0),
+        ^(xpc_object_t response) {
+            NSError *error = nil;
+            BOOL valid = CRHelperValidateHealthReply(response, operation, &error);
+            BOOL authorized = valid &&
+                xpc_dictionary_get_bool(response, "authorized");
+            BOOL success = authorized &&
+                xpc_dictionary_get_bool(response, "success");
+            if (valid && !authorized) {
+                error = CRHelperTransportError(CRHelperUnauthorizedPeer,
+                    operation, @"Helper rejected caller identity");
+            } else if (valid && authorized && !success) {
+                const char *descriptionCString =
+                    xpc_dictionary_get_string(response, "error_description");
+                NSString *description = descriptionCString
+                    ? [NSString stringWithUTF8String:descriptionCString]
+                    : @"Helper query failed";
+                error = CRHelperTransportError(CRHelperUnexpectedReply,
+                    operation, description);
+            }
+            finish(valid && authorized && success ? parser(response) : nil, error);
+        });
+
+    int64_t timeoutNanos = (int64_t)(MAX(timeout, 0.1) * NSEC_PER_SEC);
+    long waitResult = dispatch_semaphore_wait(
+        done, dispatch_time(DISPATCH_TIME_NOW, timeoutNanos));
+    if (waitResult != 0) {
+        finish(nil, CRHelperTransportError(CRHelperReplyTimedOut,
+            operation, @"No helper reply before timeout"));
+    }
+
+    id finalResult;
+    NSError *error;
+    @synchronized(lock) {
+        finalResult = result;
+        error = resultError;
+    }
+    xpc_connection_cancel(connection);
+    if (outError)
+        *outError = error;
+    return finalResult;
+}
+
 /* CraneManager                                                               */
 /* ------------------------------------------------------------------------- */
 
-/* Read-only insurance adapter. No privileged XPC selectors are exposed. */
+/* Authenticated helper adapter. Health queries remain read-only; only the
+ * fixed-purpose original reload selectors are exposed as privileged controls. */
 @interface CRInsuranceHealthProxy : NSObject
 - (void)verifyCraneInsuranceAndReply:(void (^)(BOOL, NSArray<NSString *> *, NSError *))reply;
 - (void)verifySupportLoadedIntoProcessNamed:(NSString *)name
@@ -248,6 +473,23 @@ static void CRManagerVerifyRuntimeComponent(NSString *component,
                                       reply:(void (^)(BOOL))reply;
 - (void)fetchActiveContainerIDForProcessWithPid:(pid_t)pid
                                            reply:(void (^)(NSString *, BOOL))reply;
+- (void)reloadApplication:(NSString *)appID;
+- (void)reloadDaemons:(NSArray<NSString *> *)daemons;
+- (void)moveKeychainItemsFromContainerWithIdentifier:(NSString *)sourceContainer
+                           toContainerWithIdentifier:(NSString *)destinationContainer
+                        forApplicationWithIdentifier:(NSString *)appID
+                                              reply:(void (^)(BOOL success))reply;
+- (void)deleteKeychainItemsForContainerWithIdentifier:(NSString *)containerID
+                             forApplicationIdentifier:(NSString *)appID;
+- (void)getDisplayNameOfApplicationWithIdentifier:(NSString *)appID
+                                             reply:(void (^)(NSString *))reply;
+- (void)getIdentifiersOfAllSupportedApplicationsAndReply:(void (^)(NSArray<NSString *> *))reply;
+- (void)checkIsApplicationWithIdentifier:(NSString *)appID
+                     supportedByCraneAndReply:(void (^)(BOOL))reply;
+- (void)readDeviceVendorIdentifierFromApplicationWithIdentifier:(NSString *)appID
+                                                          reply:(void (^)(NSString *))reply;
+- (void)writeDeviceVendorIdentifier:(NSString *)identifier
+          toApplicationWithIdentifier:(NSString *)appID;
 @end
 @implementation CRInsuranceHealthProxy
 - (void)verifyCraneInsuranceAndReply:(void (^)(BOOL, NSArray<NSString *> *, NSError *))reply
@@ -533,6 +775,238 @@ static void CRManagerVerifyRuntimeComponent(NSString *component,
 {
     CRManagerLookupActiveContainerForPid(pid, reply);
 }
+
+- (void)reloadApplication:(NSString *)appID
+{
+    if (!appID.length)
+        return;
+    NSError *error = nil;
+    BOOL success = CRManagerSendSynchronousControlRequest(
+        @"reload_application",
+        ^(xpc_object_t request) {
+            xpc_dictionary_set_string(
+                request, "application_id", appID.UTF8String);
+        },
+        3.0,
+        &error);
+    CRManagerRecordHelperTransportError(error);
+    NSLog(@"CraneManager: helper reload application=%@ success=%d error=%@",
+          appID, success, error);
+}
+
+- (void)reloadDaemons:(NSArray<NSString *> *)daemons
+{
+    NSArray<NSString *> *requested =
+        [daemons isKindOfClass:NSArray.class] ? daemons : @[];
+    NSError *error = nil;
+    BOOL success = CRManagerSendSynchronousControlRequest(
+        @"reload_daemons",
+        ^(xpc_object_t request) {
+            xpc_object_t values = xpc_array_create(NULL, 0);
+            for (id value in requested) {
+                if (![value isKindOfClass:NSString.class] || ![value length])
+                    continue;
+                xpc_object_t item =
+                    xpc_string_create([(NSString *)value UTF8String]);
+                if (item)
+                    xpc_array_append_value(values, item);
+            }
+            xpc_dictionary_set_value(request, "daemons", values);
+        },
+        5.0,
+        &error);
+    CRManagerRecordHelperTransportError(error);
+    NSLog(@"CraneManager: helper reload daemons=%@ success=%d error=%@",
+          requested, success, error);
+}
+
+- (void)moveKeychainItemsFromContainerWithIdentifier:(NSString *)sourceContainer
+                           toContainerWithIdentifier:(NSString *)destinationContainer
+                        forApplicationWithIdentifier:(NSString *)appID
+                                              reply:(void (^)(BOOL success))reply
+{
+    if (!sourceContainer.length || !destinationContainer.length || !appID.length) {
+        if (reply)
+            reply(NO);
+        return;
+    }
+
+    NSError *error = nil;
+    BOOL success = CRManagerSendSynchronousControlRequest(
+        @"move_keychain_items",
+        ^(xpc_object_t request) {
+            xpc_dictionary_set_string(
+                request, "application_id", appID.UTF8String);
+            xpc_dictionary_set_string(
+                request, "source_container_id", sourceContainer.UTF8String);
+            xpc_dictionary_set_string(
+                request, "destination_container_id",
+                destinationContainer.UTF8String);
+        },
+        5.0,
+        &error);
+    CRManagerRecordHelperTransportError(error);
+    NSLog(@"CraneManager: helper move keychain app=%@ source=%@ destination=%@ success=%d error=%@",
+          appID, sourceContainer, destinationContainer, success, error);
+    if (reply)
+        reply(success);
+}
+
+- (void)deleteKeychainItemsForContainerWithIdentifier:(NSString *)containerID
+                             forApplicationIdentifier:(NSString *)appID
+{
+    if (!containerID.length || !appID.length)
+        return;
+
+    NSError *error = nil;
+    BOOL success = CRManagerSendSynchronousControlRequest(
+        @"delete_keychain_items",
+        ^(xpc_object_t request) {
+            xpc_dictionary_set_string(
+                request, "application_id", appID.UTF8String);
+            xpc_dictionary_set_string(
+                request, "container_id", containerID.UTF8String);
+        },
+        5.0,
+        &error);
+    CRManagerRecordHelperTransportError(error);
+    NSLog(@"CraneManager: helper delete keychain app=%@ container=%@ success=%d error=%@",
+          appID, containerID, success, error);
+}
+
+- (void)getDisplayNameOfApplicationWithIdentifier:(NSString *)appID
+                                             reply:(void (^)(NSString *))reply
+{
+    if (!reply)
+        return;
+    if (!appID.length) {
+        reply(nil);
+        return;
+    }
+    NSError *error = nil;
+    NSString *name = CRManagerSendSynchronousQueryRequest(
+        @"get_application_display_name",
+        ^(xpc_object_t request) {
+            xpc_dictionary_set_string(
+                request, "application_id", appID.UTF8String);
+        },
+        ^id(xpc_object_t response) {
+            const char *value =
+                xpc_dictionary_get_string(response, "display_name");
+            return value ? [NSString stringWithUTF8String:value] : nil;
+        },
+        3.0,
+        &error);
+    CRManagerRecordHelperTransportError(error);
+    reply([name isKindOfClass:NSString.class] ? name : nil);
+}
+
+- (void)getIdentifiersOfAllSupportedApplicationsAndReply:
+    (void (^)(NSArray<NSString *> *))reply
+{
+    if (!reply)
+        return;
+    NSError *error = nil;
+    NSArray *identifiers = CRManagerSendSynchronousQueryRequest(
+        @"get_supported_application_ids",
+        nil,
+        ^id(xpc_object_t response) {
+            xpc_object_t values =
+                xpc_dictionary_get_value(response, "application_ids");
+            if (!values || xpc_get_type(values) != XPC_TYPE_ARRAY)
+                return nil;
+            NSMutableArray<NSString *> *result = [NSMutableArray new];
+            xpc_array_apply(values, ^bool(size_t index, xpc_object_t value) {
+                (void)index;
+                if (xpc_get_type(value) != XPC_TYPE_STRING)
+                    return true;
+                const char *string = xpc_string_get_string_ptr(value);
+                NSString *identifier = string
+                    ? [NSString stringWithUTF8String:string] : nil;
+                if (identifier.length)
+                    [result addObject:identifier];
+                return true;
+            });
+            return [result copy];
+        },
+        4.0,
+        &error);
+    CRManagerRecordHelperTransportError(error);
+    reply([identifiers isKindOfClass:NSArray.class] ? identifiers : nil);
+}
+
+- (void)checkIsApplicationWithIdentifier:(NSString *)appID
+                     supportedByCraneAndReply:(void (^)(BOOL))reply
+{
+    if (!reply)
+        return;
+    if (!appID.length) {
+        reply(NO);
+        return;
+    }
+    NSError *error = nil;
+    NSNumber *supported = CRManagerSendSynchronousQueryRequest(
+        @"check_application_supported",
+        ^(xpc_object_t request) {
+            xpc_dictionary_set_string(
+                request, "application_id", appID.UTF8String);
+        },
+        ^id(xpc_object_t response) {
+            return @(xpc_dictionary_get_bool(response, "supported"));
+        },
+        3.0,
+        &error);
+    CRManagerRecordHelperTransportError(error);
+    reply([supported isKindOfClass:NSNumber.class] && supported.boolValue);
+}
+
+- (void)readDeviceVendorIdentifierFromApplicationWithIdentifier:(NSString *)appID
+                                                          reply:(void (^)(NSString *))reply
+{
+    if (!reply)
+        return;
+    if (!appID.length) {
+        reply(nil);
+        return;
+    }
+    NSError *error = nil;
+    NSString *identifier = CRManagerSendSynchronousQueryRequest(
+        @"read_device_vendor_identifier",
+        ^(xpc_object_t request) {
+            xpc_dictionary_set_string(
+                request, "application_id", appID.UTF8String);
+        },
+        ^id(xpc_object_t response) {
+            const char *value =
+                xpc_dictionary_get_string(response, "identifier");
+            return value ? [NSString stringWithUTF8String:value] : nil;
+        },
+        4.0,
+        &error);
+    CRManagerRecordHelperTransportError(error);
+    reply([identifier isKindOfClass:NSString.class] ? identifier : nil);
+}
+
+- (void)writeDeviceVendorIdentifier:(NSString *)identifier
+          toApplicationWithIdentifier:(NSString *)appID
+{
+    if (!appID.length || !identifier.length)
+        return;
+    NSError *error = nil;
+    BOOL success = CRManagerSendSynchronousControlRequest(
+        @"write_device_vendor_identifier",
+        ^(xpc_object_t request) {
+            xpc_dictionary_set_string(
+                request, "application_id", appID.UTF8String);
+            xpc_dictionary_set_string(
+                request, "identifier", identifier.UTF8String);
+        },
+        4.0,
+        &error);
+    CRManagerRecordHelperTransportError(error);
+    NSLog(@"CraneManager: helper write vendor-id app=%@ success=%d error=%@",
+          appID, success, error);
+}
 @end
 
 /* U-04 safety gate: reconstructed libcrane cannot yet resolve the original
@@ -652,12 +1126,47 @@ static BOOL CRManagerSafeManagedPath(NSString *appID, NSString *containerID,
 /* [INFERRED] The original keeps the registry in cfprefsd-backed preferences.
  * This build keeps it in memory and persists to a plist, which is the smallest
  * thing that makes the documented container paths work. */
-@property (nonatomic, strong) NSMutableDictionary *applications;
+@property (nonatomic, strong) NSMutableDictionary *applications; /* legacy migration snapshot */
+@property (nonatomic, strong) NSXPCConnection *userNotificationsServerXpcConnection;
+@property (nonatomic, assign) Class userNotificationsServerClass;
+@property (nonatomic, assign) BOOL isRunningInSpringBoard;
 @property (atomic, strong) id lastError;
 @property (nonatomic, strong) id unsandboxHandler;
 @property (nonatomic, strong) NSHashTable *observers;
 @property (nonatomic, strong) dispatch_queue_t queue;
+- (void)_handleDaemonReloadingForContainerIdentifier:(NSString *)containerID
+                              ofApplicationWithIdentifier:(NSString *)appID;
+- (void)_removeAccountsDatabaseIfExistsForIdentifier:(NSString *)identifier;
+- (void)_deleteUserLibraryPreferencesForContainerWithIdentifier:(NSString *)containerID
+                                           applicationIdentifier:(NSString *)appID;
 @end
+static Protocol *CRUserNotificationsExtendedProtocol(void)
+{
+    Protocol *base = objc_getProtocol("UNUserNotificationServerProtocol");
+    Protocol *additions = @protocol(UNUserNotificationProtocolCraneAdditions);
+    if (!base || !additions)
+        return nil;
+
+    Protocol *extended =
+        objc_getProtocol("UNUserNotificationServerProtocolPlusCraneAdditions");
+    if (extended)
+        return extended;
+
+    @synchronized([CraneManager class]) {
+        extended = objc_getProtocol(
+            "UNUserNotificationServerProtocolPlusCraneAdditions");
+        if (!extended) {
+            extended = objc_allocateProtocol(
+                "UNUserNotificationServerProtocolPlusCraneAdditions");
+            if (extended) {
+                protocol_addProtocol(extended, additions);
+                protocol_addProtocol(extended, base);
+                objc_registerProtocol(extended);
+            }
+        }
+    }
+    return extended;
+}
 
 @implementation CraneManager
 
@@ -674,12 +1183,14 @@ static BOOL CRManagerSafeManagedPath(NSString *appID, NSString *containerID,
 - (instancetype)init
 {
     if ((self = [super init])) {
+        _isRunningInSpringBoard = [[[NSBundle mainBundle] bundleIdentifier]
+            isEqualToString:@"com.apple.springboard"];
         /* Persist app switches across Preferences restarts in a dedicated
          * preference domain, rather than the process-only registry. */
         NSDictionary *saved = CFBridgingRelease(CFPreferencesCopyAppValue(
             CFSTR("applications"), CFSTR("com.opa334.cranereconstruction.apps")));
         _applications = [saved isKindOfClass:NSDictionary.class] ? [saved mutableCopy] : [NSMutableDictionary new];
-        NSLog(@"CraneManager: registry loaded app count=%lu", (unsigned long)_applications.count);
+        NSLog(@"CraneManager: legacy registry candidates=%lu", (unsigned long)_applications.count);
         _observers = [NSHashTable weakObjectsHashTable];
         _queue = dispatch_queue_create("com.opa334.crane.manager", DISPATCH_QUEUE_SERIAL);
     }
@@ -737,27 +1248,47 @@ static BOOL CRManagerSafeManagedPath(NSString *appID, NSString *containerID,
 
 /* ---- registry ----------------------------------------------------------- */
 
-/* [INFERRED] Upstream exposes `isApplicationSupportedByCrane:` and the
- * settings UI filters a section on `crane_isSupported == YES`. Nothing in the
- * available evidence says which applications qualify, so this build treats any
- * application that has a registered container as supported and everything else
- * as unsupported except for the Crane application itself. */
+/* Original cranehelperd 0x100005EA8 delegates this to helper 0x10000CC68.
+ * Query the recovered LaunchServices predicate instead of using registry
+ * membership as a proxy for whether an installed application is supported. */
 - (BOOL)isApplicationSupportedByCrane:(NSString *)appID
 {
-    if (!appID)
+    if (!appID.length)
         return NO;
-    return [self applicationSettingsForApplicationWithIdentifier:appID].count > 0;
+    id<CRHelperServiceProtocol> proxy =
+        (id<CRHelperServiceProtocol>)[self cranehelperdGlobalSyncRemoteObjectProxy];
+    if (![proxy respondsToSelector:
+        @selector(checkIsApplicationWithIdentifier:supportedByCraneAndReply:)])
+        return NO;
+    __block BOOL replied = NO;
+    __block BOOL supported = NO;
+    [proxy checkIsApplicationWithIdentifier:appID
+        supportedByCraneAndReply:^(BOOL value) {
+            supported = value;
+            replied = YES;
+        }];
+    return replied && supported;
 }
 
 - (NSArray<NSString *> *)identifiersOfAllSupportedApplications
 {
-    return [self.applications.allKeys copy];
+    id<CRHelperServiceProtocol> proxy =
+        (id<CRHelperServiceProtocol>)[self cranehelperdGlobalSyncRemoteObjectProxy];
+    if (![proxy respondsToSelector:
+        @selector(getIdentifiersOfAllSupportedApplicationsAndReply:)])
+        return @[];
+    __block NSArray<NSString *> *identifiers = nil;
+    [proxy getIdentifiersOfAllSupportedApplicationsAndReply:
+        ^(NSArray<NSString *> *value) {
+            identifiers = [value copy];
+        }];
+    return [identifiers isKindOfClass:NSArray.class] ? identifiers : @[];
 }
 
 - (NSArray<NSString *> *)identfiersOfApplicationsThatHaveNonDefaultContainers
 {
     NSMutableArray *result = [NSMutableArray new];
-    for (NSString *appID in [self.applications.allKeys copy]) {
+    for (NSString *appID in [self identifiersOfAllSupportedApplications]) {
         NSArray *containers = [self applicationSettingsForApplicationWithIdentifier:appID]
             [CRAppSetting_Containers];
         for (NSDictionary *container in containers) {
@@ -771,45 +1302,51 @@ static BOOL CRManagerSafeManagedPath(NSString *appID, NSString *containerID,
     return result;
 }
 
+static NSString *CRApplicationSettingsPreferenceKey(NSString *appID)
+{
+    return appID.length ? [@"appSettings_" stringByAppendingString:appID] : nil;
+}
+
 - (NSDictionary *)applicationSettingsForApplicationWithIdentifier:(NSString *)appID
 {
-    if (!appID)
-        return @{};
-    /* SpringBoard and Preferences are separate processes. Refresh the shared
-     * registry on reads so Active Container selection is not stuck at the
-     * snapshot loaded by -init. */
-    @synchronized(self) {
-        /* Fetch changes written by Preferences before the menu support gate. */
-        CFPreferencesAppSynchronize(CFSTR("com.opa334.cranereconstruction.apps"));
-        NSDictionary *saved = CFBridgingRelease(CFPreferencesCopyAppValue(
-            CFSTR("applications"), CFSTR("com.opa334.cranereconstruction.apps")));
-        if ([saved isKindOfClass:NSDictionary.class])
-            self.applications = [saved mutableCopy];
-        return CRManagerSettingsIncludingDefault(self.applications[appID]);
+    if (!appID.length)
+        return nil;
+
+    NSString *key = CRApplicationSettingsPreferenceKey(appID);
+    id stored = [self preferenceValueForKey:key];
+
+    /* Compatibility bridge only: older reconstruction builds used an
+     * aggregate domain. The recovered original schema is appSettings_<bundleID>
+     * in com.opa334.craneprefs. Copy legacy data forward once and never delete
+     * the legacy source here. */
+    if (![stored isKindOfClass:NSDictionary.class]) {
+        NSDictionary *legacy = nil;
+        @synchronized(self) {
+            legacy = [self.applications[appID] copy];
+        }
+        if ([legacy isKindOfClass:NSDictionary.class] && legacy.count) {
+            NSDictionary *normalized = CRManagerSettingsIncludingDefault(legacy);
+            [self setPreferenceValue:normalized forKey:key];
+            stored = normalized;
+            NSLog(@"CraneManager: migrated legacy app settings app=%@ key=%@",
+                  appID, key);
+        }
     }
+
+    return CRManagerSettingsIncludingDefault(stored);
 }
 
 - (void)setApplicationSettings:(NSDictionary *)settings
   forApplicationWithIdentifier:(NSString *)appID
 {
-    if (!appID)
+    if (!appID.length || ![settings isKindOfClass:NSDictionary.class])
         return;
     settings = CRManagerSettingsIncludingDefault(settings);
     NSArray *previousContainers = [[self applicationSettingsForApplicationWithIdentifier:appID][CRAppSetting_Containers] valueForKey:CRCContainer_Identifier];
     NSArray *newContainers = [settings[CRAppSetting_Containers] valueForKey:CRCContainer_Identifier];
     BOOL containerListChanged = ![(previousContainers ?: @[]) isEqual:(newContainers ?: @[])];
-    @synchronized(self) {
-        if (settings.count)
-            self.applications[appID] = [settings mutableCopy];
-        else
-            [self.applications removeObjectForKey:appID];
-        CFPreferencesSetAppValue(CFSTR("applications"),
-            (__bridge CFPropertyListRef)self.applications,
-            CFSTR("com.opa334.cranereconstruction.apps"));
-        BOOL synced = CFPreferencesAppSynchronize(CFSTR("com.opa334.cranereconstruction.apps"));
-        NSLog(@"CraneManager: registry write app=%@ sync=%@", appID,
-              synced ? @"YES" : @"NO");
-    }
+    [self setPreferenceValue:settings
+                     forKey:CRApplicationSettingsPreferenceKey(appID)];
     /* CranePrefs 0x7BD4 / 0x7CC8 receive manager notifications.
      * Snapshot the weak observer set and notify outside the registry lock. */
     NSArray *observers = nil;
@@ -1011,30 +1548,75 @@ usingBiometricsIfNeededWithSuccessHandler:(void (^)(BOOL authenticated))handler
     return base ? CRContainerPathForContainer(containerID, base) : nil;
 }
 
-/* Conservatively reject duplicate identifiers registered to another app
- * while the reconstruction registry is still a single shared CFPreferences
- * document. This is stricter than necessarily required for per-app homes. */
+/* Conservatively reject duplicate identifiers registered to another app.
+ * The native registry now lives under appSettings_<bundleID>; the aggregate
+ * reconstruction domain is read only as a migration/source-of-app-IDs bridge.
+ * Include currently supported applications so collision checks do not silently
+ * stop working after an app has already been migrated out of the legacy map. */
 - (BOOL)cr_containerIdentifierShared:(NSString *)identifier
                        withOtherThan:(NSString *)appID
 {
-    NSDictionary *apps = CFBridgingRelease(CFPreferencesCopyAppValue(
-        CFSTR("applications"), CFSTR("com.opa334.cranereconstruction.apps")));
-    if (apps && ![apps isKindOfClass:[NSDictionary class]])
+    if (!identifier.length)
         return YES;
-    if (!apps)
-        apps = [self.applications copy];
-    for (id otherID in apps) {
-        if ([otherID isEqual:appID])
+
+    NSDictionary *legacyApps = CFBridgingRelease(CFPreferencesCopyAppValue(
+        CFSTR("applications"), CFSTR("com.opa334.cranereconstruction.apps")));
+    if (legacyApps && ![legacyApps isKindOfClass:[NSDictionary class]])
+        return YES;
+
+    NSMutableSet<NSString *> *candidateAppIDs = [NSMutableSet new];
+
+    /* Native settings can outlive installation/support discovery. Inspect
+     * every appSettings_<bundleID> key so cross-app collisions cannot be
+     * missed merely because a helper listing is temporarily incomplete. */
+    NSArray *nativeKeys = CFBridgingRelease(CFPreferencesCopyKeyList(
+        (__bridge CFStringRef)CR_PREFS_DOMAIN,
+        kCFPreferencesCurrentUser, kCFPreferencesAnyHost));
+    for (id key in nativeKeys) {
+        if (![key isKindOfClass:[NSString class]] ||
+            ![key hasPrefix:@"appSettings_"])
             continue;
-        id settings = apps[otherID];
+        NSString *otherID = [key substringFromIndex:[@"appSettings_" length]];
+        if (otherID.length)
+            [candidateAppIDs addObject:otherID];
+    }
+    NSArray *supported = [self identifiersOfAllSupportedApplications];
+    if ([supported isKindOfClass:[NSArray class]])
+        [candidateAppIDs addObjectsFromArray:supported];
+    if ([legacyApps isKindOfClass:[NSDictionary class]])
+        [candidateAppIDs addObjectsFromArray:legacyApps.allKeys];
+    @synchronized(self) {
+        [candidateAppIDs addObjectsFromArray:self.applications.allKeys];
+    }
+
+    for (id otherID in candidateAppIDs) {
+        if (![otherID isKindOfClass:[NSString class]] ||
+            [otherID isEqual:appID])
+            continue;
+        /* A read-only collision check must not migrate an unrelated app.
+         * Reject corrupt saved entries rather than assuming no collision. */
+        id settings = [self preferenceValueForKey:
+            CRApplicationSettingsPreferenceKey(otherID)];
+        if (!settings) {
+            settings = [legacyApps isKindOfClass:[NSDictionary class]]
+                ? legacyApps[otherID] : nil;
+            if (!settings) {
+                @synchronized(self) {
+                    settings = self.applications[otherID];
+                }
+            }
+        }
+        if (!settings)
+            continue;
         if (![settings isKindOfClass:[NSDictionary class]])
-            continue;
+            return YES;
         id containers = settings[CRAppSetting_Containers];
-        if (![containers isKindOfClass:[NSArray class]])
-            continue;
+        if (containers && ![containers isKindOfClass:[NSArray class]])
+            return YES;
         for (id entry in containers) {
-            if ([entry isKindOfClass:[NSDictionary class]] &&
-                [entry[CRCContainer_Identifier] isEqual:identifier])
+            if (![entry isKindOfClass:[NSDictionary class]])
+                return YES;
+            if ([entry[CRCContainer_Identifier] isEqual:identifier])
                 return YES;
         }
     }
@@ -1136,39 +1718,128 @@ usingBiometricsIfNeededWithSuccessHandler:(void (^)(BOOL authenticated))handler
                            ofApplicationWithIdentifier:appID];
 }
 
+- (void)_handleDaemonReloadingForContainerIdentifier:(NSString *)containerID
+                              ofApplicationWithIdentifier:(NSString *)appID
+{
+    /* Original libcrane 0xA9B8: this special-case exists only for App Store
+     * account separation, and only when the affected container is active. */
+    if (![appID isEqualToString:@"com.apple.AppStore"])
+        return;
+    NSDictionary *settings =
+        [self applicationSettingsForApplicationWithIdentifier:appID];
+    if (![settings[CRAppSetting_SeparateSystemAccountsEnabled] boolValue])
+        return;
+    NSString *active =
+        [self activeContainerIdentifierForApplicationWithIdentifier:appID];
+    if ([containerID isEqualToString:active])
+        [self reloadAppstoreDaemons];
+}
+
+- (void)_removeAccountsDatabaseIfExistsForIdentifier:(NSString *)identifier
+{
+    /* Original libcrane 0xAB00 removes the three SQLite sidecars belonging
+     * to /var/mobile/Library/Accounts/Crane/<container>.*. */
+    if (!CRManagerSafePathComponent(identifier))
+        return;
+    NSFileManager *fm = NSFileManager.defaultManager;
+    for (NSString *extension in @[@"sqlite", @"sqlite-shm", @"sqlite-wal"]) {
+        NSString *path = [NSString stringWithFormat:
+            @"/var/mobile/Library/Accounts/Crane/%@.%@", identifier, extension];
+        if (![fm fileExistsAtPath:path])
+            continue;
+        NSError *error = nil;
+        if (![fm removeItemAtPath:path error:&error])
+            NSLog(@"CraneManager: account database cleanup failed %@: %@", path, error);
+    }
+}
+
+- (void)_deleteUserLibraryPreferencesForContainerWithIdentifier:(NSString *)containerID
+                                           applicationIdentifier:(NSString *)appID
+{
+    /* Original libcrane 0xBF98:
+     *   DEFAULT -> <bundle>.plist
+     *   custom  -> <bundle>.c_r_a_n_e.<container>.plist */
+    if (!CRManagerSafePathComponent(appID) ||
+        (containerID &&
+         ![containerID isEqualToString:CR_DEFAULT_CONTAINER_IDENTIFIER] &&
+         !CRManagerSafePathComponent(containerID)))
+        return;
+
+    NSString *filename = nil;
+    if (!containerID ||
+        [containerID isEqualToString:CR_DEFAULT_CONTAINER_IDENTIFIER]) {
+        filename = [NSString stringWithFormat:@"%@.plist", appID];
+    } else {
+        filename = [NSString stringWithFormat:@"%@.c_r_a_n_e.%@.plist",
+                    appID, containerID];
+    }
+    NSURL *directory =
+        [NSURL fileURLWithPath:@"/var/mobile/Library/Preferences" isDirectory:YES];
+    NSURL *url = [directory URLByAppendingPathComponent:filename];
+    if (![url checkResourceIsReachableAndReturnError:NULL])
+        return;
+    NSError *error = nil;
+    if (![NSFileManager.defaultManager removeItemAtURL:url error:&error])
+        NSLog(@"CraneManager: preference cleanup failed %@: %@", url.path, error);
+}
+
 - (void)deleteContentOfContainerWithIdentifier:(NSString *)containerID
                       forApplicationWithIdentifier:(NSString *)appID
 {
-    NSString *path = [self containerDirectoryForContainerWithIdentifier:containerID
-                                           ofApplicationWithIdentifier:appID];
-    if (![self cr_canModifyStoredContainer:containerID
-                              application:appID path:path]) {
-        NSLog(@"CraneManager: refusing unsafe/active delete app=%@ id=%@",
+    /* Original libcrane 0xC74C and CranePrefs 0x86A8 separate content cleanup
+     * from registry mutation. CranePrefs removes the entry from Containers only
+     * after this method returns, so do not modify app settings here. */
+    if (!CRManagerSafePathComponent(appID) ||
+        !CRManagerSafePathComponent(containerID) ||
+        [containerID isEqualToString:CR_DEFAULT_CONTAINER_IDENTIFIER] ||
+        ![[self containerIdentifiersOfApplicationWithIdentifier:appID]
+            containsObject:containerID] ||
+        [self cr_containerIdentifierShared:containerID withOtherThan:appID]) {
+        NSLog(@"CraneManager: refusing unsafe/unregistered delete app=%@ id=%@",
               appID, containerID);
         return;
     }
+
+    [self reloadApplicationWithIdentifier:appID ifContainerIsActive:containerID];
+
+    NSDictionary<NSString *, NSString *> *paths =
+        [self pathsAssociatedToContainerWithIdentifier:containerID
+                           ofApplicationWithIdentifier:appID];
     NSFileManager *fm = NSFileManager.defaultManager;
-    NSError *error = nil;
-    if ([fm fileExistsAtPath:path] &&
-        ![fm removeItemAtPath:path error:&error]) {
-        /* A failed filesystem operation MUST NOT erase the registry. */
-        NSLog(@"CraneManager: deletion failed %@: %@", path, error);
-        return;
+    for (NSString *path in paths.allValues) {
+        if (![path isKindOfClass:NSString.class] || !path.length)
+            continue;
+        if ([fm destinationOfSymbolicLinkAtPath:path error:NULL]) {
+            NSLog(@"CraneManager: refusing symlink during container delete %@", path);
+            continue;
+        }
+        if (![fm fileExistsAtPath:path])
+            continue;
+        NSError *error = nil;
+        if (![fm removeItemAtPath:path error:&error])
+            NSLog(@"CraneManager: container path cleanup failed %@: %@", path, error);
     }
-    NSMutableDictionary *app = [[self applicationSettingsForApplicationWithIdentifier:appID]
-                                mutableCopy];
-    NSMutableArray *containers = [app[CRAppSetting_Containers] mutableCopy];
-    if (!containers)
-        return;
-    NSIndexSet *matches = [containers indexesOfObjectsPassingTest:
-        ^BOOL(id item, NSUInteger idx, BOOL *stop) {
-        (void)idx; (void)stop;
-        return [item isKindOfClass:[NSDictionary class]] &&
-            [item[CRCContainer_Identifier] isEqual:containerID];
+
+    [self runSafeXPCBlock:^{
+        id<CRHelperServiceProtocol> proxy =
+            (id<CRHelperServiceProtocol>)[self cranehelperdGlobalSyncRemoteObjectProxy];
+        if ([proxy respondsToSelector:
+                @selector(deleteKeychainItemsForContainerWithIdentifier:
+                          forApplicationIdentifier:)]) {
+            [proxy deleteKeychainItemsForContainerWithIdentifier:containerID
+                                        forApplicationIdentifier:appID];
+        }
     }];
-    [containers removeObjectsAtIndexes:matches];
-    app[CRAppSetting_Containers] = containers;
-    [self setApplicationSettings:app forApplicationWithIdentifier:appID];
+
+    [self _removeAccountsDatabaseIfExistsForIdentifier:containerID];
+    [self unregisterFromNotificationsIfNeededForContainerIdentifier:containerID
+                                        ofApplicationWithIdentifier:appID];
+    [self resetBadgeOfContainerWithIdentifier:containerID
+                  ofApplicationWithIdentifier:appID];
+    [self _deleteUserLibraryPreferencesForContainerWithIdentifier:containerID
+                                             applicationIdentifier:appID];
+    [self _handleDaemonReloadingForContainerIdentifier:containerID
+                                ofApplicationWithIdentifier:appID];
 }
 
 - (void)wipeContainerWithIdentifier:(NSString *)containerID
@@ -1250,12 +1921,104 @@ usingBiometricsIfNeededWithSuccessHandler:(void (^)(BOOL authenticated))handler
         [fm copyItemAtPath:src toPath:dst error:&error];
 }
 
-- (NSArray<NSString *> *)pathsAssociatedToContainerWithIdentifier:(NSString *)containerID
+- (void)enumerate:(void (^)(NSInteger type, NSString *identifier,
+                                           NSString *path, BOOL *stop))block
+ pathsAssociatedToContainerWithIdentifier:(NSString *)containerID
+              ofApplicationWithIdentifier:(NSString *)appID
+{
+    if (!block || !CRManagerSafePathComponent(containerID) ||
+        !CRManagerSafePathComponent(appID))
+        return;
+
+    Class proxyClass = NSClassFromString(@"LSApplicationProxy");
+    SEL lookupSEL = NSSelectorFromString(@"applicationProxyForIdentifier:");
+    if (!proxyClass || ![proxyClass respondsToSelector:lookupSEL])
+        return;
+
+    @try {
+        id proxy = ((id (*)(id, SEL, id))objc_msgSend)(
+            proxyClass, lookupSEL, appID);
+        if (!proxy)
+            return;
+
+        BOOL stop = NO;
+        SEL dataSEL = NSSelectorFromString(@"dataContainerURL");
+        if ([proxy respondsToSelector:dataSEL]) {
+            id url = ((id (*)(id, SEL))objc_msgSend)(proxy, dataSEL);
+            NSString *base = [url respondsToSelector:@selector(path)]
+                ? ((id (*)(id, SEL))objc_msgSend)(url, @selector(path)) : nil;
+            NSString *path = CRContainerPathForContainer(containerID, base);
+            if (path.length)
+                block(0, appID, path, &stop);
+        }
+        if (stop)
+            return;
+
+        /* Original 0xE09C enumerates LSApplicationProxy.groupContainerURLs as
+         * identifier -> NSURL and emits type 1. */
+        SEL groupsSEL = NSSelectorFromString(@"groupContainerURLs");
+        id groups = [proxy respondsToSelector:groupsSEL]
+            ? ((id (*)(id, SEL))objc_msgSend)(proxy, groupsSEL) : nil;
+        if ([groups isKindOfClass:NSDictionary.class]) {
+            [(NSDictionary *)groups enumerateKeysAndObjectsUsingBlock:
+                ^(id identifier, id url, BOOL *dictionaryStop) {
+                    (void)dictionaryStop;
+                    if (stop || ![identifier isKindOfClass:NSString.class])
+                        return;
+                    NSString *base = [url respondsToSelector:@selector(path)]
+                        ? ((id (*)(id, SEL))objc_msgSend)(url, @selector(path)) : nil;
+                    NSString *path = CRContainerPathForContainer(containerID, base);
+                    if (path.length)
+                        block(1, identifier, path, &stop);
+                }];
+        }
+        if (stop)
+            return;
+
+        /* Original 0xE09C then emits PlugInKit data containers as type 2. */
+        SEL pluginsSEL = NSSelectorFromString(@"plugInKitPlugins");
+        id plugins = [proxy respondsToSelector:pluginsSEL]
+            ? ((id (*)(id, SEL))objc_msgSend)(proxy, pluginsSEL) : nil;
+        if ([plugins isKindOfClass:NSArray.class]) {
+            for (id plugin in (NSArray *)plugins) {
+                if (stop)
+                    break;
+                SEL pluginIDSEL = NSSelectorFromString(@"pluginIdentifier");
+                SEL pluginDataSEL = NSSelectorFromString(@"dataContainerURL");
+                NSString *identifier = [plugin respondsToSelector:pluginIDSEL]
+                    ? ((id (*)(id, SEL))objc_msgSend)(plugin, pluginIDSEL) : nil;
+                id url = [plugin respondsToSelector:pluginDataSEL]
+                    ? ((id (*)(id, SEL))objc_msgSend)(plugin, pluginDataSEL) : nil;
+                NSString *base = [url respondsToSelector:@selector(path)]
+                    ? ((id (*)(id, SEL))objc_msgSend)(url, @selector(path)) : nil;
+                NSString *path = CRContainerPathForContainer(containerID, base);
+                if (identifier.length && path.length)
+                    block(2, identifier, path, &stop);
+            }
+        }
+    } @catch (NSException *exception) {
+        NSLog(@"CraneManager: associated path enumeration failed app=%@ id=%@: %@",
+              appID, containerID, exception);
+    }
+}
+
+- (NSDictionary<NSString *, NSString *> *)pathsAssociatedToContainerWithIdentifier:(NSString *)containerID
                                       ofApplicationWithIdentifier:(NSString *)appID
 {
-    NSString *root = [self containerDirectoryForContainerWithIdentifier:containerID
-                                          ofApplicationWithIdentifier:appID];
-    return root ? @[root] : @[];
+    if (!CRManagerSafePathComponent(containerID) ||
+        !CRManagerSafePathComponent(appID))
+        return nil;
+
+    NSMutableDictionary<NSString *, NSString *> *paths = [NSMutableDictionary new];
+    [self enumerate:^(NSInteger type, NSString *identifier, NSString *path,
+                      BOOL *stop) {
+        (void)type;
+        (void)stop;
+        if (identifier.length && path.length)
+            paths[identifier] = path;
+    } pathsAssociatedToContainerWithIdentifier:containerID
+                    ofApplicationWithIdentifier:appID];
+    return [paths copy];
 }
 
 /* CranePrefs 0x113A4/0x1148C expects an asynchronous size completion.
@@ -1347,7 +2110,19 @@ usingBiometricsIfNeededWithSuccessHandler:(void (^)(BOOL authenticated))handler
 
 - (NSString *)displayNameForApplicationWithIdentifier:(NSString *)appID
 {
-    return appID.lastPathComponent ?: appID;
+    if (!appID.length)
+        return appID;
+    id<CRHelperServiceProtocol> proxy =
+        (id<CRHelperServiceProtocol>)[self cranehelperdGlobalSyncRemoteObjectProxy];
+    if (![proxy respondsToSelector:
+        @selector(getDisplayNameOfApplicationWithIdentifier:reply:)])
+        return appID;
+    __block NSString *displayName = nil;
+    [proxy getDisplayNameOfApplicationWithIdentifier:appID
+        reply:^(NSString *value) {
+            displayName = [value copy];
+        }];
+    return displayName.length ? displayName : appID;
 }
 
 /* Inferred: the selector/arguments are confirmed in CraneSB 0xE730 and
@@ -1384,8 +2159,19 @@ usingBiometricsIfNeededWithSuccessHandler:(void (^)(BOOL authenticated))handler
 
 - (BOOL)applicationHasDeviceIdentifier:(NSString *)appID
 {
-    return [self preferenceValueForKey:
-            [NSString stringWithFormat:@"crane_deviceIdentifier.%@", appID]] != nil;
+    if (!appID.length)
+        return NO;
+    id<CRHelperServiceProtocol> proxy =
+        (id<CRHelperServiceProtocol>)[self cranehelperdGlobalSyncRemoteObjectProxy];
+    if (![proxy respondsToSelector:
+        @selector(readDeviceVendorIdentifierFromApplicationWithIdentifier:reply:)])
+        return NO;
+    __block NSString *identifier = nil;
+    [proxy readDeviceVendorIdentifierFromApplicationWithIdentifier:appID
+        reply:^(NSString *value) {
+            identifier = [value copy];
+        }];
+    return [[NSUUID alloc] initWithUUIDString:identifier] != nil;
 }
 
 - (NSString *)deviceIdentifierToUseForContainerWithIdentifier:(NSString *)containerID
@@ -1394,6 +2180,21 @@ usingBiometricsIfNeededWithSuccessHandler:(void (^)(BOOL authenticated))handler
     if (!CRManagerSafePathComponent(appID) ||
         !CRManagerSafePathComponent(containerID))
         return nil;
+    if ([containerID isEqualToString:CR_DEFAULT_CONTAINER_IDENTIFIER]) {
+        id<CRHelperServiceProtocol> proxy =
+            (id<CRHelperServiceProtocol>)[self cranehelperdGlobalSyncRemoteObjectProxy];
+        if (![proxy respondsToSelector:
+            @selector(readDeviceVendorIdentifierFromApplicationWithIdentifier:reply:)])
+            return nil;
+        __block NSString *systemIdentifier = nil;
+        [proxy readDeviceVendorIdentifierFromApplicationWithIdentifier:appID
+            reply:^(NSString *value) {
+                systemIdentifier = [value copy];
+            }];
+        return [[NSUUID alloc] initWithUUIDString:systemIdentifier]
+            ? systemIdentifier : nil;
+    }
+
     NSDictionary *settings = [self containerSettingsForContainerWithIdentifier:containerID
                                                    ofApplicationWithIdentifier:appID];
     id pref = settings[CRPref_UseContainerIdentifierAsDeviceID];
@@ -1411,39 +2212,161 @@ usingBiometricsIfNeededWithSuccessHandler:(void (^)(BOOL authenticated))handler
     return hasCustomUUID ? customValue : nil;
 }
 
-- (void)setDeviceIdentifier:(NSString *)identifier
+- (BOOL)setDeviceIdentifier:(NSString *)identifier
    ofContainerWithIdentifier:(NSString *)containerID
     andApplicationWithIdentifier:(NSString *)appID
 {
+    if (!CRManagerSafePathComponent(appID) ||
+        !CRManagerSafePathComponent(containerID) ||
+        ![[NSUUID alloc] initWithUUIDString:identifier])
+        return NO;
+
+    if ([containerID isEqualToString:CR_DEFAULT_CONTAINER_IDENTIFIER]) {
+        id<CRHelperServiceProtocol> proxy =
+            (id<CRHelperServiceProtocol>)[self cranehelperdGlobalSyncRemoteObjectProxy];
+        if (![proxy respondsToSelector:
+            @selector(writeDeviceVendorIdentifier:toApplicationWithIdentifier:)] ||
+            ![proxy respondsToSelector:
+            @selector(readDeviceVendorIdentifierFromApplicationWithIdentifier:reply:)])
+            return NO;
+
+        [proxy writeDeviceVendorIdentifier:identifier
+               toApplicationWithIdentifier:appID];
+        __block NSString *written = nil;
+        [proxy readDeviceVendorIdentifierFromApplicationWithIdentifier:appID
+            reply:^(NSString *value) {
+                written = [value copy];
+            }];
+        NSUUID *requestedUUID = [[NSUUID alloc] initWithUUIDString:identifier];
+        NSUUID *writtenUUID = [[NSUUID alloc] initWithUUIDString:written];
+        return requestedUUID && writtenUUID &&
+            [requestedUUID isEqual:writtenUUID];
+    }
+
     NSDictionary *existing = [self containerSettingsForContainerWithIdentifier:containerID
                                                    ofApplicationWithIdentifier:appID];
     NSMutableDictionary *settings = [existing mutableCopy];
+    if (!settings)
+        settings = [NSMutableDictionary new];
     settings[@"customDeviceIdentifier"] = identifier;
     [self setContainerSettings:settings forContainerWithIdentifier:containerID
                            ofApplicationWithIdentifier:appID];
-    [self setPreferenceValue:identifier
-                      forKey:[NSString stringWithFormat:@"crane_deviceIdentifier.%@", appID]];
+    return YES;
 }
 
 /* ---- process control ---------------------------------------------------- */
 
-- (void)reloadApplicationWithIdentifier:(NSString *)appID
+- (void)reloadAccountsdDaemon
 {
-    [self reloadApplicationWithIdentifier:appID ifContainerIsActive:NO];
+    [self runSafeXPCBlock:^{
+        id<CRHelperServiceProtocol> proxy =
+            (id<CRHelperServiceProtocol>)[self cranehelperdGlobalSyncRemoteObjectProxy];
+        if ([proxy respondsToSelector:@selector(reloadDaemons:)])
+            [proxy reloadDaemons:@[@"accountsd"]];
+    }];
 }
 
-- (void)reloadApplicationWithIdentifier:(NSString *)appID ifContainerIsActive:(BOOL)check
+- (void)reloadAppstoreDaemons
 {
-    if (check) {
-        NSString *active = [self activeContainerIdentifierForApplicationWithIdentifier:appID];
-        if ([active isEqualToString:CR_DEFAULT_CONTAINER_IDENTIFIER])
-            return;
+    [self runSafeXPCBlock:^{
+        id<CRHelperServiceProtocol> proxy =
+            (id<CRHelperServiceProtocol>)[self cranehelperdGlobalSyncRemoteObjectProxy];
+        if ([proxy respondsToSelector:@selector(reloadDaemons:)])
+            [proxy reloadDaemons:@[@"appstored", @"itunesstored",
+                                    @"StoreKitUIService"]];
+    }];
+}
+
+- (void)reloadMusicDaemons
+{
+    [self runSafeXPCBlock:^{
+        id<CRHelperServiceProtocol> proxy =
+            (id<CRHelperServiceProtocol>)[self cranehelperdGlobalSyncRemoteObjectProxy];
+        if ([proxy respondsToSelector:@selector(reloadDaemons:)])
+            [proxy reloadDaemons:@[@"itunescloudd"]];
+    }];
+}
+
+- (void)reloadGameDaemons
+{
+    [self runSafeXPCBlock:^{
+        id<CRHelperServiceProtocol> proxy =
+            (id<CRHelperServiceProtocol>)[self cranehelperdGlobalSyncRemoteObjectProxy];
+        if ([proxy respondsToSelector:@selector(reloadDaemons:)])
+            [proxy reloadDaemons:@[@"gamed"]];
+    }];
+}
+
+- (void)reloadApplicationWithIdentifier:(NSString *)appID
+{
+    if (!appID.length)
+        return;
+    id<CRHelperServiceProtocol> proxy =
+        (id<CRHelperServiceProtocol>)[self cranehelperdGlobalSyncRemoteObjectProxy];
+    if ([proxy respondsToSelector:@selector(reloadApplication:)])
+        [proxy reloadApplication:appID];
+}
+
+/* CranePrefs 0x23A30 passes CRPBackupContainer._containerID here. */
+- (void)reloadApplicationWithIdentifier:(NSString *)appID
+                    ifContainerIsActive:(NSString *)containerID
+{
+    if (!appID.length || !containerID.length)
+        return;
+    NSString *active =
+        [self activeContainerIdentifierForApplicationWithIdentifier:appID];
+    if ([active isEqualToString:containerID])
+        [self reloadApplicationWithIdentifier:appID];
+    /* Native libcrane 0x10288 always flushes cfprefsd after the conditional
+     * reload, even when the requested container is not currently active. */
+    [self flushCFPrefsdCacheForApplicationWithIdentifier:appID];
+}
+
+- (void)flushCFPrefsdCacheForApplicationWithIdentifier:(NSString *)appID
+{
+    if (!appID.length)
+        return;
+
+    Class prefsClass = NSClassFromString(@"_CFXPreferences");
+    SEL copySEL = NSSelectorFromString(@"copyDefaultPreferences");
+    SEL flushSEL = NSSelectorFromString(@"flushCachesForAppIdentifier:user:");
+    if (!prefsClass || ![prefsClass respondsToSelector:copySEL])
+        return;
+
+    id preferences = ((id (*)(id, SEL))objc_msgSend)(prefsClass, copySEL);
+    if (!preferences || ![preferences respondsToSelector:flushSEL])
+        return; /* Original has an older private fallback; fail closed here. */
+
+    NSString *active =
+        [self activeContainerIdentifierForApplicationWithIdentifier:appID];
+    NSDictionary<NSString *, NSString *> *paths =
+        [self pathsAssociatedToContainerWithIdentifier:active
+                           ofApplicationWithIdentifier:appID];
+    id user = (__bridge id)kCFPreferencesCurrentUser;
+    NSFileManager *fm = NSFileManager.defaultManager;
+
+    for (NSString *identifier in paths) {
+        NSString *containerPath = paths[identifier];
+        if (!identifier.length || !containerPath.length)
+            continue;
+
+        ((void (*)(id, SEL, id, id))objc_msgSend)(
+            preferences, flushSEL, identifier, user);
+
+        NSString *prefsPath =
+            [containerPath stringByAppendingPathComponent:@"Library/Preferences"];
+        NSArray<NSString *> *entries =
+            [fm contentsOfDirectoryAtPath:prefsPath error:NULL];
+        for (NSString *entry in entries) {
+            if (![[entry pathExtension] isEqualToString:@"plist"])
+                continue;
+            NSString *domain = [entry stringByDeletingPathExtension];
+            if (!domain.length || [domain isEqualToString:identifier])
+                continue;
+            ((void (*)(id, SEL, id, id))objc_msgSend)(
+                preferences, flushSEL, domain, user);
+        }
     }
-    /* [INFERRED] The original goes through cranehelperd, which owns the
-     * kill/relaunch. This build posts the same Darwin notification the original
-     * uses (com.opa334.crane/ReloadApplication, CONFIRMED_STATIC) so the
-     * behaviour degrades to whatever listens for it. */
-    notify_post(CR_NOTIFICATION_RELOAD_APPLICATION.UTF8String);
 }
 
 - (void)fetchActiveContainerIDForProcessWithPid:(pid_t)pid
@@ -1608,27 +2531,148 @@ usingBiometricsIfNeededWithSuccessHandler:(void (^)(BOOL authenticated))handler
 
 - (BOOL)isKeychainVersionUpToDate
 {
-    return [[self preferenceValueForKey:@"crane_keychainVersion"] integerValue] >= 1;
+    return [[self preferenceValueForKey:@"keychainVersion"] integerValue] == 2;
 }
 
 - (void)updateKeychainVersion
 {
-    [self setPreferenceValue:@1 forKey:@"crane_keychainVersion"];
-    notify_post(CR_NOTIFICATION_MIGRATION_SUCCEEDED.UTF8String);
+    [self setPreferenceValue:@2 forKey:@"keychainVersion"];
+}
+
+/* ---- UserNotifications bridge ------------------------------------------ */
+
+- (void)_initUserNotificationsServerConnection
+{
+    @synchronized(self) {
+        if (self.userNotificationsServerClass ||
+            self.userNotificationsServerXpcConnection)
+            return;
+
+        NSBundle *bundle = [NSBundle bundleWithPath:
+            @"/System/Library/Frameworks/UserNotifications.framework"];
+        [bundle load];
+
+        if (self.isRunningInSpringBoard) {
+            self.userNotificationsServerClass =
+                NSClassFromString(@"UNSUserNotificationServer");
+            return;
+        }
+
+        Protocol *protocol = CRUserNotificationsExtendedProtocol();
+        if (!protocol)
+            return;
+
+        SEL initSEL = NSSelectorFromString(@"initWithMachServiceName:");
+        id allocated = [NSXPCConnection alloc];
+        if (![allocated respondsToSelector:initSEL])
+            return;
+        NSXPCConnection *connection =
+            ((id (*)(id, SEL, id))objc_msgSend)(
+                allocated, initSEL,
+                @"com.apple.usernotifications.usernotificationservice");
+        if (!connection)
+            return;
+        connection.remoteObjectInterface =
+            [NSXPCInterface interfaceWithProtocol:protocol];
+        [connection resume];
+        self.userNotificationsServerXpcConnection = connection;
+    }
+}
+
+- (id)_userNotificationsSyncRemoteProxy
+{
+    [self _initUserNotificationsServerConnection];
+
+    if (self.isRunningInSpringBoard) {
+        Class serverClass = self.userNotificationsServerClass;
+        SEL sharedSEL = NSSelectorFromString(@"sharedInstance");
+        if (!serverClass || ![serverClass respondsToSelector:sharedSEL])
+            return nil;
+        @try {
+            id server =
+                ((id (*)(id, SEL))objc_msgSend)(serverClass, sharedSEL);
+            return [server valueForKey:@"_userNotificationServerConnectionListener"];
+        } @catch (NSException *exception) {
+            NSLog(@"CraneManager: notification listener unavailable: %@",
+                  exception);
+            return nil;
+        }
+    }
+
+    NSXPCConnection *connection = self.userNotificationsServerXpcConnection;
+    if (!connection)
+        return nil;
+    return [connection synchronousRemoteObjectProxyWithErrorHandler:
+        ^(NSError *error) {
+            NSLog(@"CraneManager: UserNotifications XPC error: %@", error);
+        }];
 }
 
 /* ---- Crane hooks -------------------------------------------------------- */
 
 - (void)unregisterFromNotificationsIfNeededForContainerIdentifier:(NSString *)containerID
-                                ofApplicationWithIdentifier:(NSString *)appID {}
+                                ofApplicationWithIdentifier:(NSString *)appID
+{
+    if (!containerID.length || !appID.length)
+        return;
+    id proxy = [self _userNotificationsSyncRemoteProxy];
+    SEL selector = @selector(
+        crane_unregisterFromNotificationsIfNeededForContainerIdentifier:
+        ofApplicationWithIdentifier:);
+    if ([proxy respondsToSelector:selector]) {
+        ((void (*)(id, SEL, id, id))objc_msgSend)(
+            proxy, selector, containerID, appID);
+    }
+}
+
 - (void)resetBadgeOfContainerWithIdentifier:(NSString *)containerID
-                ofApplicationWithIdentifier:(NSString *)appID {}
+                ofApplicationWithIdentifier:(NSString *)appID
+{
+    if (!containerID.length || !appID.length)
+        return;
+    id proxy = [self _userNotificationsSyncRemoteProxy];
+    SEL selector =
+        @selector(crane_resetBadgeOfContainerWithIdentifier:
+                  ofApplicationWithIdentifier:);
+    if ([proxy respondsToSelector:selector]) {
+        ((void (*)(id, SEL, id, id))objc_msgSend)(
+            proxy, selector, containerID, appID);
+    }
+}
+
 - (void)switchBadgesOfContainerWithIdentifier:(NSString *)containerID
                       andContainerWithIdentifier:(NSString *)otherContainerID
-                   ofApplicationWithIdentifier:(NSString *)appID {}
-- (void)migrateApplication:(NSString *)appID withAppSettings:(NSDictionary *)settings
+                   ofApplicationWithIdentifier:(NSString *)appID
 {
-    [self setApplicationSettings:settings forApplicationWithIdentifier:appID];
+    if (!containerID.length || !otherContainerID.length || !appID.length)
+        return;
+    id proxy = [self _userNotificationsSyncRemoteProxy];
+    SEL selector =
+        @selector(crane_switchBadgesOfContainerWithIdentifier:
+                  andContainerWithIdentifier:
+                  ofApplicationWithIdentifier:);
+    if ([proxy respondsToSelector:selector]) {
+        ((void (*)(id, SEL, id, id, id))objc_msgSend)(
+            proxy, selector, containerID, otherContainerID, appID);
+    }
+}
+- (void)migrateApplication:(NSString *)appID
+          withAppSettings:(NSDictionary *)settings
+{
+    /* Original CranePrefs sends this selector to CRHPreferencesService to
+     * migrate keychain material for an already-existing app configuration.
+     * Rewriting application settings here is unrelated and can make a failed
+     * migration look successful. Keep the public selector fail-closed until
+     * the original keychain serialization/migration backend is transcribed. */
+    (void)appID;
+    (void)settings;
+    NSError *error = CRHelperTransportError(
+        CRHelperUnexpectedReply,
+        @"migrate_application",
+        @"Keychain migration backend is unavailable");
+    self.lastError = error;
+    NSLog(@"CraneManager: keychain migration unavailable app=%@ error=%@",
+          appID, error);
 }
 
 - (void)crane_recordHelperTransportError:(NSError *)error { self.lastError = error; }

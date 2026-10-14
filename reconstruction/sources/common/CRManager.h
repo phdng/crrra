@@ -50,8 +50,23 @@
                                       reply:(void (^)(BOOL loaded))reply;
 - (void)fetchActiveContainerIDForProcessWithPid:(pid_t)pid
                                            reply:(void (^)(NSString *containerID, BOOL connectionWorks))reply;
-- (void)reloadApplicationWithIdentifier:(NSString *)appID;
+- (void)reloadApplication:(NSString *)appID;
 - (void)reloadDaemons:(NSArray<NSString *> *)daemons;
+- (void)moveKeychainItemsFromContainerWithIdentifier:(NSString *)sourceContainer
+                           toContainerWithIdentifier:(NSString *)destinationContainer
+                        forApplicationWithIdentifier:(NSString *)appID
+                                              reply:(void (^)(BOOL success))reply;
+- (void)deleteKeychainItemsForContainerWithIdentifier:(NSString *)containerID
+                             forApplicationIdentifier:(NSString *)appID;
+- (void)getDisplayNameOfApplicationWithIdentifier:(NSString *)appID
+                                             reply:(void (^)(NSString *displayName))reply;
+- (void)getIdentifiersOfAllSupportedApplicationsAndReply:(void (^)(NSArray<NSString *> *identifiers))reply;
+- (void)checkIsApplicationWithIdentifier:(NSString *)appID
+                     supportedByCraneAndReply:(void (^)(BOOL supported))reply;
+- (void)readDeviceVendorIdentifierFromApplicationWithIdentifier:(NSString *)appID
+                                                                    reply:(void (^)(NSString *identifier))reply;
+- (void)writeDeviceVendorIdentifier:(NSString *)identifier
+          toApplicationWithIdentifier:(NSString *)appID;
 - (void)getIdentifierOfType:(uint64_t)type
              forVendorName:(NSString *)vendorName
          andBundleIdentifier:(NSString *)bundleID
@@ -69,8 +84,13 @@
 @end
 
 @protocol CRPreferencesServiceProtocol <NSObject>
-- (void)getPreferenceValueForKey:(NSString *)key withReply:(void (^)(id value))reply;
-- (void)setPreferenceValue:(id)value forKey:(NSString *)key;
+- (void)dumpKeychainItemsFromContainerWithIdentifier:(NSString *)containerID
+                            forApplicationIdentifier:(NSString *)appID
+                                               reply:(void (^)(NSDictionary *items))reply;
+- (void)restoreKeychainItemsToContainerWithIdentifier:(NSString *)containerID
+                              forApplicationIdentifier:(NSString *)appID
+                                       fromDictionary:(NSDictionary *)items;
+- (void)migrateApplication:(NSString *)appID withAppSettings:(NSDictionary *)settings;
 @end
 
 @interface CraneManager : NSObject
@@ -123,7 +143,10 @@ usingBiometricsIfNeededWithSuccessHandler:(void (^)(BOOL authenticated))handler;
 - (void)makeDefaultForContainerWithIdentifier:(NSString *)containerID
                       forApplicationWithIdentifier:(NSString *)appID;     /* [API] */
 - (void)moveOrCopyContainerFromPath:(NSString *)src toPath:(NSString *)dst move:(BOOL)move; /* [API] */
-- (NSArray<NSString *> *)pathsAssociatedToContainerWithIdentifier:(NSString *)containerID
+- (void)enumerate:(void (^)(NSInteger type, NSString *identifier, NSString *path, BOOL *stop))block
+ pathsAssociatedToContainerWithIdentifier:(NSString *)containerID
+              ofApplicationWithIdentifier:(NSString *)appID;             /* [API] */
+- (NSDictionary<NSString *, NSString *> *)pathsAssociatedToContainerWithIdentifier:(NSString *)containerID
                                       ofApplicationWithIdentifier:(NSString *)appID; /* [API] */
 - (void)sizeOccupiedByContainerWithIdentifier:(NSString *)containerID
                       forApplicationWithIdentifier:(NSString *)appID
@@ -144,13 +167,18 @@ usingBiometricsIfNeededWithSuccessHandler:(void (^)(BOOL authenticated))handler;
 - (BOOL)applicationHasDeviceIdentifier:(NSString *)appID;                /* [API] */
 - (NSString *)deviceIdentifierToUseForContainerWithIdentifier:(NSString *)containerID
                                     ofApplicationWithIdentifier:(NSString *)appID; /* [API] */
-- (void)setDeviceIdentifier:(NSString *)identifier
+- (BOOL)setDeviceIdentifier:(NSString *)identifier
    ofContainerWithIdentifier:(NSString *)containerID
     andApplicationWithIdentifier:(NSString *)appID;                      /* [API] */
 
 /* ---- process control ---------------------------------------------------- */
+- (void)reloadAccountsdDaemon;                                           /* [API] */
+- (void)reloadAppstoreDaemons;                                          /* [API] */
+- (void)reloadMusicDaemons;                                             /* [API] */
+- (void)reloadGameDaemons;                                              /* [API] */
 - (void)reloadApplicationWithIdentifier:(NSString *)appID;              /* [API] */
-- (void)reloadApplicationWithIdentifier:(NSString *)appID ifContainerIsActive:(BOOL)check; /* [API] */
+- (void)reloadApplicationWithIdentifier:(NSString *)appID ifContainerIsActive:(NSString *)containerID; /* [API] */
+- (void)flushCFPrefsdCacheForApplicationWithIdentifier:(NSString *)appID; /* [API] */
 - (void)fetchActiveContainerIDForProcessWithPid:(pid_t)pid
                                 reply:(void (^)(NSString *containerID, BOOL connectionWorks))reply; /* [API] */
 - (BOOL)cranehelperdConnectionWorks;                                     /* [API] */

@@ -162,7 +162,11 @@ ownership = part('- (BOOL)cr_containerIdentifierShared:', '- (NSString *)createN
 for expected in [
     'CFPreferencesCopyAppValue(',
     'withOtherThan:(NSString *)appID',
-    'if ([otherID isEqual:appID])',
+    'CFPreferencesCopyKeyList(',
+    'kCFPreferencesCurrentUser, kCFPreferencesAnyHost',
+    '[key hasPrefix:@"appSettings_"]',
+    'CRApplicationSettingsPreferenceKey(otherID)',
+    '[otherID isEqual:appID])',
     '[entry[CRCContainer_Identifier] isEqual:identifier]',
     '[[self activeContainerIdentifierForApplicationWithIdentifier:appID]',
     'containsObject:identifier',
@@ -170,6 +174,9 @@ for expected in [
     'destinationOfSymbolicLinkAtPath:path error:NULL',
 ]:
     assert expected in ownership, expected
+assert '[self applicationSettingsForApplicationWithIdentifier:otherID]' not in ownership
+assert '[self setPreferenceValue:' not in ownership
+assert 'if (![settings isKindOfClass:[NSDictionary class]])' in ownership
 
 create = part('- (void)createNewContainerWithName:', '- (void)deleteContentOfContainerWithIdentifier:')
 assert 'if (!CRManagerSafePathComponent(appID)' in create
@@ -202,12 +209,23 @@ assert 'CRManagerEnsureDirectory(next, NO, error)' in safety
 assert create.index('if (!CRManagerCreateEmptyContainer') < create.index('moveItemAtPath:staging toPath:path') < create.index('[self setContainerSettings:settings')
 
 deletion = part('- (void)deleteContentOfContainerWithIdentifier:', '- (void)wipeContainerWithIdentifier:')
-assert 'if (![self cr_canModifyStoredContainer:containerID' in deletion
-assert 'if ([fm fileExistsAtPath:path] &&' in deletion
-assert '![fm removeItemAtPath:path error:&error])' in deletion
-assert deletion.index('![fm removeItemAtPath:path error:&error])') < deletion.index('[self setApplicationSettings:app')
-assert 'NSIndexSet *matches = [containers indexesOfObjectsPassingTest:' in deletion
-
+# Original CranePrefs owns the registry mutation. libcrane only clears
+# container-associated content and may reload an active target first.
+for fragment in (
+    'CRManagerSafePathComponent(appID)',
+    'CRManagerSafePathComponent(containerID)',
+    '[containerID isEqualToString:CR_DEFAULT_CONTAINER_IDENTIFIER]',
+    'containsObject:containerID',
+    '[self cr_containerIdentifierShared:containerID withOtherThan:appID]',
+    '[self reloadApplicationWithIdentifier:appID ifContainerIsActive:containerID]',
+    'pathsAssociatedToContainerWithIdentifier:containerID',
+    'destinationOfSymbolicLinkAtPath:path error:NULL',
+    '[fm removeItemAtPath:path error:&error]',
+    'deleteKeychainItemsForContainerWithIdentifier:containerID',
+):
+    assert fragment in deletion, fragment
+assert 'setApplicationSettings:' not in deletion
+assert deletion.index('reloadApplicationWithIdentifier:appID') < deletion.index('pathsAssociatedToContainerWithIdentifier:containerID')
 wipe = part('- (void)wipeContainerWithIdentifier:', '- (void)makeDefaultForContainerWithIdentifier:')
 assert 'if (![self cr_canModifyStoredContainer:containerID' in wipe
 assert '[self deleteContentOfContainerWithIdentifier:' not in wipe

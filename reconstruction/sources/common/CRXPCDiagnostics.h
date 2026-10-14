@@ -17,7 +17,9 @@ typedef NS_ENUM(NSInteger, CRHelperTransportErrorCode) {
     CRHelperReplyTimedOut = 1007,
     CRHelperRequestAllocationFailed = 1008,
     CRHelperInvalidPID = 1009,
-    CRHelperUnauthorizedPeer = 1010
+    CRHelperUnauthorizedPeer = 1010,
+    CRHelperInvalidRequest = 1011,
+    CRHelperOperationFailed = 1012
 };
 
 static inline NSError *CRHelperTransportError(CRHelperTransportErrorCode code,

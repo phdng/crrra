@@ -54,8 +54,14 @@ jobs:
           python3 reconstruction/tools/check_helper_launch_registration_contract.py
           sh -n reconstruction/tools/diagnose_cranehelperd.sh
 
-      - name: Verify unsupported privileged helper calls fail closed
+      - name: Verify recovered privileged helper operations
         run: python3 reconstruction/tools/check_helper_privileged_contract.py
+
+      - name: Verify helper keychain move/delete safety
+        run: python3 reconstruction/tools/check_helper_keychain_contract.py
+
+      - name: Verify recovered libcrane storage and lifecycle contracts
+        run: python3 reconstruction/tools/check_libcrane_original_contract.py
 
       - name: Verify runningboardd launch hook ABI
         run: python3 reconstruction/tools/check_runningboard_contract.py

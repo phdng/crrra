@@ -31,6 +31,7 @@
 
 #import <Foundation/Foundation.h>
 #import <Security/Security.h>
+#import <objc/message.h>
 
 #import "CRManager.h"
 #import "CRPaths.h"
@@ -38,6 +39,7 @@
 #import "CRXPCDiagnostics.h"
 
 #include <notify.h>
+#include <dlfcn.h>
 #include <errno.h>
 #include <limits.h>
 #include <signal.h>
@@ -45,6 +47,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <sys/wait.h>
+#include <unistd.h>
 #include <xpc/xpc.h>
 
 extern char **environ;
@@ -63,58 +66,270 @@ extern pid_t CRXPCConnectionGetPid(xpc_connection_t connection)
 
 #pragma mark - Identifiers
 
-/* cranehelperd 0x10000DFA2 / 0x10000DFE0 */
+#pragma mark - Keychain
+
+/* Directly recovered from original cranehelperd:
+ *   CRHKeychain class methods 0x100007B2C..0x100008A68
+ *   helper SecItem loops      0x10000644C..0x10000747C
+ * Move/delete are implemented here first because their query/update shape is
+ * completely recoverable and they are required by container lifecycle. Dump,
+ * restore and migration remain fail-closed until their serialization format is
+ * fully transcribed. */
 @interface CRHKeychain : NSObject
-/* Present as a class in the original (cranehelperd __objc_classlist @0x100012DE0)
- * with its methods supplied by categories. Keychain dump/restore is not
- * implemented here - see analysis/binary_inventory.md section 7 and U-01. */
++ (NSString *)craneStringForContainerIdentifier:(NSString *)containerID;
++ (NSString *)redirectedAccessGroupForAccessGroup:(NSString *)accessGroup
+                              containerIdentifier:(NSString *)containerID;
++ (NSSet<NSString *> *)accessGroupsForApplicationWithIdentifier:(NSString *)appID;
++ (BOOL)moveKeychainItemsFromContainerWithIdentifier:(NSString *)sourceContainer
+                           toContainerWithIdentifier:(NSString *)destinationContainer
+                        forApplicationWithIdentifier:(NSString *)appID;
++ (BOOL)deleteKeychainItemsForContainerWithIdentifier:(NSString *)containerID
+                             forApplicationIdentifier:(NSString *)appID;
 @end
+
+static NSArray *CRHAllSecItemClasses(void)
+{
+    return @[
+        (__bridge id)kSecClassGenericPassword,
+        (__bridge id)kSecClassInternetPassword,
+        (__bridge id)kSecClassCertificate,
+        (__bridge id)kSecClassKey,
+        (__bridge id)kSecClassIdentity
+    ];
+}
+
+static NSSet<NSString *> *CRHKeychainAccessGroupsToIgnore(void)
+{
+    static NSSet<NSString *> *groups;
+    static dispatch_once_t once;
+    dispatch_once(&once, ^{
+        groups = [NSSet setWithObjects:
+            @"com.apple.token",
+            @"com.apple.certificates",
+            @"com.apple.identities",
+            @"apple",
+            @"com.apple.cfnetwork",
+            @"com.apple.ProtectedCloudStorage",
+            @"com.apple.passd",
+            @"com.apple.managed.vpn.shared",
+            nil];
+    });
+    return groups;
+}
+
+static BOOL CRHSecItemStatusIsSuccess(OSStatus status)
+{
+    /* Original 0x1000071B4/0x1000073E0 preserves the aggregate success
+     * flag for both errSecSuccess and errSecItemNotFound (-25300). */
+    return status == errSecSuccess || status == errSecItemNotFound;
+}
+
+static BOOL CRHSecItemUpdateAllClasses(NSDictionary *query,
+                                       NSDictionary *attributes)
+{
+    if (![query isKindOfClass:NSDictionary.class] ||
+        ![attributes isKindOfClass:NSDictionary.class])
+        return NO;
+
+    BOOL success = YES;
+    for (id secClass in CRHAllSecItemClasses()) {
+        NSMutableDictionary *classQuery = [query mutableCopy];
+        classQuery[(__bridge id)kSecClass] = secClass;
+        classQuery[@"craneprefs_unrestrict"] = @YES;
+        OSStatus status = SecItemUpdate((__bridge CFDictionaryRef)classQuery,
+                                        (__bridge CFDictionaryRef)attributes);
+        if (!CRHSecItemStatusIsSuccess(status))
+            success = NO;
+    }
+    return success;
+}
+
+static BOOL CRHSecItemDeleteAllClasses(NSDictionary *query)
+{
+    if (![query isKindOfClass:NSDictionary.class])
+        return NO;
+
+    BOOL success = YES;
+    for (id secClass in CRHAllSecItemClasses()) {
+        NSMutableDictionary *classQuery = [query mutableCopy];
+        classQuery[(__bridge id)kSecClass] = secClass;
+        classQuery[@"craneprefs_unrestrict"] = @YES;
+        OSStatus status = SecItemDelete((__bridge CFDictionaryRef)classQuery);
+        if (!CRHSecItemStatusIsSuccess(status))
+            success = NO;
+    }
+    return success;
+}
 
 @implementation CRHKeychain
-@end
 
++ (NSString *)craneStringForContainerIdentifier:(NSString *)containerID
+{
+    return containerID.length
+        ? [@".c_r_a_n_e." stringByAppendingString:containerID] : nil;
+}
+
++ (NSString *)redirectedAccessGroupForAccessGroup:(NSString *)accessGroup
+                              containerIdentifier:(NSString *)containerID
+{
+    if (!accessGroup.length || !containerID.length)
+        return nil;
+    if ([containerID isEqualToString:CR_DEFAULT_CONTAINER_IDENTIFIER])
+        return accessGroup;
+    NSString *suffix = [self craneStringForContainerIdentifier:containerID];
+    return suffix.length ? [accessGroup stringByAppendingString:suffix] : nil;
+}
+
++ (NSSet<NSString *> *)accessGroupsForApplicationWithIdentifier:(NSString *)appID
+{
+    if (!appID.length)
+        return [NSSet set];
+
+    Class proxyClass = NSClassFromString(@"LSApplicationProxy");
+    SEL proxySEL = NSSelectorFromString(@"applicationProxyForIdentifier:");
+    if (!proxyClass || ![proxyClass respondsToSelector:proxySEL])
+        return [NSSet set];
+
+    @try {
+        id proxy = ((id (*)(id, SEL, id))objc_msgSend)(
+            proxyClass, proxySEL, appID);
+        SEL entitlementsSEL = NSSelectorFromString(@"entitlements");
+        NSDictionary *entitlements = [proxy respondsToSelector:entitlementsSEL]
+            ? ((id (*)(id, SEL))objc_msgSend)(proxy, entitlementsSEL) : nil;
+        if (![entitlements isKindOfClass:NSDictionary.class])
+            return [NSSet set];
+
+        NSMutableSet<NSString *> *groups = [NSMutableSet set];
+        id keychainGroups = entitlements[@"keychain-access-groups"];
+        if ([keychainGroups isKindOfClass:NSArray.class])
+            [groups addObjectsFromArray:keychainGroups];
+        id applicationGroups =
+            entitlements[@"com.apple.security.application-groups"];
+        if ([applicationGroups isKindOfClass:NSArray.class])
+            [groups addObjectsFromArray:applicationGroups];
+        id applicationIdentifier = entitlements[@"application-identifier"];
+        if ([applicationIdentifier isKindOfClass:NSString.class] &&
+            [applicationIdentifier length])
+            [groups addObject:applicationIdentifier];
+
+        [groups minusSet:CRHKeychainAccessGroupsToIgnore()];
+        return [groups copy];
+    } @catch (NSException *exception) {
+        NSLog(@"Crane helper: keychain entitlement lookup failed app=%@: %@",
+              appID, exception);
+        return [NSSet set];
+    }
+}
+
++ (BOOL)moveKeychainItemsFromContainerWithIdentifier:(NSString *)sourceContainer
+                           toContainerWithIdentifier:(NSString *)destinationContainer
+                        forApplicationWithIdentifier:(NSString *)appID
+{
+    if (!sourceContainer.length || !destinationContainer.length || !appID.length)
+        return NO;
+
+    BOOL success = YES;
+    for (NSString *baseGroup in [self accessGroupsForApplicationWithIdentifier:appID]) {
+        NSString *sourceGroup =
+            [self redirectedAccessGroupForAccessGroup:baseGroup
+                                  containerIdentifier:sourceContainer];
+        NSString *destinationGroup =
+            [self redirectedAccessGroupForAccessGroup:baseGroup
+                                  containerIdentifier:destinationContainer];
+        if (!sourceGroup.length || !destinationGroup.length ||
+            [sourceGroup isEqualToString:destinationGroup])
+            continue;
+
+        NSDictionary *query = @{
+            (__bridge id)kSecAttrAccessGroup: sourceGroup,
+            (__bridge id)kSecAttrSynchronizable:
+                (__bridge id)kSecAttrSynchronizableAny
+        };
+        NSDictionary *update = @{
+            (__bridge id)kSecAttrAccessGroup: destinationGroup
+        };
+        if (!CRHSecItemUpdateAllClasses(query, update))
+            success = NO;
+    }
+    return success;
+}
+
++ (BOOL)deleteKeychainItemsForContainerWithIdentifier:(NSString *)containerID
+                             forApplicationIdentifier:(NSString *)appID
+{
+    if (!containerID.length || !appID.length)
+        return NO;
+
+    BOOL success = YES;
+    for (NSString *baseGroup in [self accessGroupsForApplicationWithIdentifier:appID]) {
+        NSString *redirected =
+            [self redirectedAccessGroupForAccessGroup:baseGroup
+                                  containerIdentifier:containerID];
+        if (!redirected.length)
+            continue;
+        NSDictionary *query = @{
+            (__bridge id)kSecAttrAccessGroup: redirected,
+            (__bridge id)kSecAttrSynchronizable:
+                (__bridge id)kSecAttrSynchronizableAny
+        };
+        if (!CRHSecItemDeleteAllClasses(query))
+            success = NO;
+    }
+    return success;
+}
+
+@end
 #pragma mark - Preferences service
 
-/* Protocol definitions live here rather than being forward-declared, so the
- * delegate/service conformances and the NSXPCInterface are well formed. */
+/* Original CRHPreferencesService exposes only the three keychain migration /
+ * backup selectors recovered from cranehelperd metadata. Do not repurpose this
+ * privileged surface as a generic preference store: CraneManager and Root.plist
+ * already own com.opa334.craneprefs directly. The serialization/migration body
+ * is not fully recovered yet, so all three operations remain explicitly
+ * fail-closed instead of fabricating an empty dump or reporting migration. */
 @protocol CRHPreferencesServiceProtocol <NSObject>
-- (void)getPreferenceValueForKey:(NSString *)key withReply:(void (^)(id value))reply;
-- (void)setPreferenceValue:(id)value forKey:(NSString *)key;
+- (void)dumpKeychainItemsFromContainerWithIdentifier:(NSString *)containerID
+                            forApplicationIdentifier:(NSString *)appID
+                                               reply:(void (^)(NSDictionary *items))reply;
+- (void)restoreKeychainItemsToContainerWithIdentifier:(NSString *)containerID
+                              forApplicationIdentifier:(NSString *)appID
+                                       fromDictionary:(NSDictionary *)items;
+- (void)migrateApplication:(NSString *)appID withAppSettings:(NSDictionary *)settings;
 @end
 
 @interface CRHPreferencesServiceDelegate : NSObject <CRHPreferencesServiceProtocol>
 @end
 
 @implementation CRHPreferencesServiceDelegate
-/* Internal, non-protocol helper (the protocol method is the reply variant). */
-- (id)storedPreferenceValueForKey:(NSString *)key
+
+- (void)dumpKeychainItemsFromContainerWithIdentifier:(NSString *)containerID
+                            forApplicationIdentifier:(NSString *)appID
+                                               reply:(void (^)(NSDictionary *))reply
 {
-    if (!key.length)
-        return nil;
-    return CFBridgingRelease(CFPreferencesCopyAppValue(
-        (__bridge CFStringRef)key, (__bridge CFStringRef)CR_PREFS_DOMAIN));
+    (void)containerID; (void)appID;
+    NSLog(@"Crane helper: preferences keychain dump unavailable");
+    if (reply)
+        reply(nil);
 }
 
-- (void)storePreferenceValue:(id)value forKey:(NSString *)key
+- (void)restoreKeychainItemsToContainerWithIdentifier:(NSString *)containerID
+                              forApplicationIdentifier:(NSString *)appID
+                                       fromDictionary:(NSDictionary *)items
 {
-    if (!key)
-        return;
-    /* Root.plist and CraneManager use a shared explicit preferences domain;
-     * the daemon's standardUserDefaults belongs to a different process. */
-    CFPreferencesSetAppValue((__bridge CFStringRef)key,
-        (__bridge CFPropertyListRef)value,
-        (__bridge CFStringRef)CR_PREFS_DOMAIN);
-    if (!CFPreferencesAppSynchronize((__bridge CFStringRef)CR_PREFS_DOMAIN))
-        NSLog(@"Crane helper: failed to synchronize global preference key=%@", key);
-    /* The preference domain is com.opa334.craneprefs; posting the reload
-     * notification keeps the settings bundle and the injected daemons in sync,
-     * which is what Root.plist's PostNotification does on every switch. */
-    notify_post(CR_NOTIFICATION_RELOAD_PREFS.UTF8String);
+    (void)containerID; (void)appID; (void)items;
+    NSLog(@"Crane helper: preferences keychain restore unavailable");
 }
+
+- (void)migrateApplication:(NSString *)appID withAppSettings:(NSDictionary *)settings
+{
+    (void)appID; (void)settings;
+    NSLog(@"Crane helper: preferences keychain migration unavailable");
+}
+
 @end
 
 @interface CRHPreferencesService : NSObject <CRHPreferencesServiceProtocol>
-@property (nonatomic, strong) id delegate;
+@property (nonatomic, strong) id<CRHPreferencesServiceProtocol> delegate;
 @end
 
 @implementation CRHPreferencesService
@@ -131,14 +346,27 @@ extern pid_t CRXPCConnectionGetPid(xpc_connection_t connection)
     return [NSXPCInterface interfaceWithProtocol:protocol];
 }
 
-- (void)getPreferenceValueForKey:(NSString *)key withReply:(void (^)(id))reply
+- (void)dumpKeychainItemsFromContainerWithIdentifier:(NSString *)containerID
+                            forApplicationIdentifier:(NSString *)appID
+                                               reply:(void (^)(NSDictionary *))reply
 {
-    reply([self.delegate storedPreferenceValueForKey:key]);
+    [self.delegate dumpKeychainItemsFromContainerWithIdentifier:containerID
+                                      forApplicationIdentifier:appID
+                                                         reply:reply];
 }
 
-- (void)setPreferenceValue:(id)value forKey:(NSString *)key
+- (void)restoreKeychainItemsToContainerWithIdentifier:(NSString *)containerID
+                              forApplicationIdentifier:(NSString *)appID
+                                       fromDictionary:(NSDictionary *)items
 {
-    [self.delegate storePreferenceValue:value forKey:key];
+    [self.delegate restoreKeychainItemsToContainerWithIdentifier:containerID
+                                        forApplicationIdentifier:appID
+                                                 fromDictionary:items];
+}
+
+- (void)migrateApplication:(NSString *)appID withAppSettings:(NSDictionary *)settings
+{
+    [self.delegate migrateApplication:appID withAppSettings:settings];
 }
 
 @end
@@ -403,6 +631,7 @@ static NSMutableDictionary<NSNumber *, NSMutableDictionary *> *CRRuntimeRegistry
 
 typedef int (*CRProcNameFn)(int, void *, uint32_t);
 typedef int (*CRProcListPidsFn)(uint32_t, uint32_t, void *, int);
+typedef int (*CRProcPidPathFn)(int, void *, uint32_t);
 typedef int (*CRProcPidInfoFn)(int, int, uint64_t, void *, int);
 typedef int (*CRProcRegionFilenameFn)(int, uint64_t, void *, uint32_t);
 
@@ -588,6 +817,435 @@ CRProcessPidsForNames(NSArray<NSString *> *names)
     return [result copy];
 }
 
+/* Original CRHServiceShared process-control helpers are recoverable from the
+ * stripped helper's Objective-C IMPs. reloadApplication: resolves an
+ * LSApplicationProxy canonical executable path and looks up the PID by that
+ * exact path; daemon control resolves by process name. */
+static CRProcPidPathFn CRHelperProcPidPathFunction(void)
+{
+    static CRProcPidPathFn procPidPath;
+    static dispatch_once_t once;
+    dispatch_once(&once, ^{
+        void *handle = dlopen("/usr/lib/libproc.dylib", RTLD_LAZY);
+        procPidPath = (CRProcPidPathFn)dlsym(
+            handle ?: RTLD_DEFAULT, "proc_pidpath");
+    });
+    return procPidPath;
+}
+
+static pid_t CRPidForProcessName(NSString *name)
+{
+    if (!name.length)
+        return 0;
+    NSNumber *pid = CRProcessPidsForNames(@[name])[name];
+    return pid ? (pid_t)pid.intValue : 0;
+}
+
+static pid_t CRPidForExecutablePath(NSString *executablePath)
+{
+    if (!executablePath.length)
+        return 0;
+
+    CRProcListPidsFn procListPids = CRHelperProcListPidsFunction();
+    CRProcPidPathFn procPidPath = CRHelperProcPidPathFunction();
+    if (!procListPids || !procPidPath)
+        return 0;
+
+    int required = procListPids(1, 0, NULL, 0);
+    if (required <= 0)
+        return 0;
+    int capacity = required + (int)(256 * sizeof(pid_t));
+    pid_t *pids = calloc(1, (size_t)capacity);
+    if (!pids)
+        return 0;
+
+    int bytes = procListPids(1, 0, pids, capacity);
+    if (bytes <= 0) {
+        free(pids);
+        return 0;
+    }
+
+    pid_t result = 0;
+    NSUInteger count = (NSUInteger)bytes / sizeof(pid_t);
+    for (NSUInteger i = 0; i < count; ++i) {
+        pid_t pid = pids[i];
+        if (pid < 2)
+            continue;
+        char pathBuffer[4096] = {0};
+        if (procPidPath(pid, pathBuffer, sizeof(pathBuffer)) <= 0)
+            continue;
+        NSString *path = [NSString stringWithUTF8String:pathBuffer];
+        if ([path isEqualToString:executablePath]) {
+            result = pid;
+            break;
+        }
+    }
+    free(pids);
+    return result;
+}
+
+/* Recovered _serviceNameForDaemon: at 0x10000AA64. Four daemons use
+ * nontrivial Mach-service names; all others are "com.apple." + daemon. */
+static NSString *CRServiceNameForDaemon(NSString *daemon)
+{
+    if ([daemon isEqualToString:@"cfprefsd"])
+        return @"com.apple.cfprefsd.daemon";
+    if ([daemon isEqualToString:@"pkd"])
+        return @"com.apple.pluginkit.pkd";
+    if ([daemon isEqualToString:@"lsd"])
+        return @"com.apple.lsd.xpc";
+    if ([daemon isEqualToString:@"accountsd"])
+        return @"com.apple.accountsd.accountmanager";
+    return daemon.length
+        ? [@"com.apple." stringByAppendingString:daemon]
+        : nil;
+}
+
+/* Recovered _pingDaemon: at 0x10000AB4C. A privileged Mach-service
+ * connection plus one synchronous empty dictionary is enough to ask launchd
+ * to activate an on-demand daemon. Connection-invalid/interrupted means the
+ * activation probe failed. */
+static BOOL CRPingDaemon(NSString *daemon)
+{
+    NSString *serviceName = CRServiceNameForDaemon(daemon);
+    if (!serviceName.length)
+        return NO;
+
+    xpc_connection_t connection = CRXPCConnectionCreateMachService(
+        serviceName.UTF8String, NULL, XPC_CONNECTION_MACH_SERVICE_PRIVILEGED);
+    if (!connection)
+        return NO;
+    xpc_connection_set_event_handler(connection, ^(xpc_object_t event) {
+        (void)event;
+    });
+    xpc_connection_resume(connection);
+
+    xpc_object_t request = xpc_dictionary_create(NULL, NULL, 0);
+    if (!request) {
+        xpc_connection_cancel(connection);
+        return NO;
+    }
+    xpc_object_t response =
+        xpc_connection_send_message_with_reply_sync(connection, request);
+    BOOL success = response &&
+        response != XPC_ERROR_CONNECTION_INVALID &&
+        response != XPC_ERROR_CONNECTION_INTERRUPTED;
+    xpc_connection_cancel(connection);
+    return success;
+}
+
+/* Recovered _execute:whileDaemonWithNameIsRunning: at 0x10000AC20 first
+ * checks for a running PID, pings the service only when absent, then checks
+ * the PID again. Insurance uses the same activation intent for the crucial
+ * daemon set instead of treating an on-demand daemon as permanently absent. */
+static void CRActivateCrucialCraneSupportDaemons(void)
+{
+    for (NSString *daemon in CRCrucialCraneSupportProcessNames()) {
+        pid_t before = CRPidForProcessName(daemon);
+        if (before > 0)
+            continue;
+        BOOL pinged = CRPingDaemon(daemon);
+        pid_t after = CRPidForProcessName(daemon);
+        NSLog(@"Crane helper: daemon activation process=%@ pinged=%d pid=%d",
+              daemon, pinged, after);
+    }
+}
+
+typedef CFNotificationCenterRef (*CRGetDistributedCenterFn)(void);
+
+static void CRPostReloadApplicationNotification(NSString *appID)
+{
+    if (!appID.length)
+        return;
+
+    /* Recovered helper sub_100009FB4: log, then post the distributed
+     * com.opa334.crane/ReloadApplication notification with object
+     * "ReloadApplication" and { applicationIdentifier = appID }. */
+    NSLog(@"Crane - Reload requested, killed");
+
+    static CRGetDistributedCenterFn getDistributedCenter;
+    static dispatch_once_t once;
+    dispatch_once(&once, ^{
+        getDistributedCenter = (CRGetDistributedCenterFn)dlsym(
+            RTLD_DEFAULT, "CFNotificationCenterGetDistributedCenter");
+    });
+    if (!getDistributedCenter)
+        return;
+
+    CFNotificationCenterRef center = getDistributedCenter();
+    if (!center)
+        return;
+    NSDictionary *userInfo = @{@"applicationIdentifier": appID};
+    CFNotificationCenterPostNotification(
+        center,
+        CFSTR("com.opa334.crane/ReloadApplication"),
+        CFSTR("ReloadApplication"),
+        (__bridge CFDictionaryRef)userInfo,
+        true);
+}
+
+static id CRApplicationProxyForIdentifier(NSString *appID)
+{
+    if (!appID.length)
+        return nil;
+
+    static dispatch_once_t once;
+    dispatch_once(&once, ^{
+        dlopen("/System/Library/Frameworks/MobileCoreServices.framework/MobileCoreServices",
+               RTLD_LAZY | RTLD_LOCAL);
+    });
+
+    Class proxyClass = NSClassFromString(@"LSApplicationProxy");
+    SEL proxySEL = NSSelectorFromString(@"applicationProxyForIdentifier:");
+    if (!proxyClass || ![proxyClass respondsToSelector:proxySEL])
+        return nil;
+    return ((id (*)(id, SEL, id))objc_msgSend)(
+        (id)proxyClass, proxySEL, appID);
+}
+
+/* Recovered helper 0x10000CC68. Crane excludes ten Apple system apps, allows
+ * the three Store/Music bundle IDs even if they do not have a normal data
+ * container, and otherwise requires a dataContainerURL and !atl_isHidden. */
+static BOOL CRApplicationProxyIsSupported(id application)
+{
+    if (!application)
+        return NO;
+
+    SEL bundleSEL = NSSelectorFromString(@"bundleIdentifier");
+    if (![application respondsToSelector:bundleSEL])
+        return NO;
+    NSString *bundleID =
+        ((id (*)(id, SEL))objc_msgSend)(application, bundleSEL);
+    if (![bundleID isKindOfClass:NSString.class] || !bundleID.length)
+        return NO;
+
+    static NSSet<NSString *> *excluded;
+    static NSSet<NSString *> *storeApps;
+    static dispatch_once_t once;
+    dispatch_once(&once, ^{
+        excluded = [NSSet setWithArray:@[
+            @"com.apple.Preferences",
+            @"com.apple.MobileSMS",
+            @"com.apple.mobilesafari",
+            @"com.apple.MobileAddressBook",
+            @"com.apple.mobilephone",
+            @"com.apple.facetime",
+            @"com.apple.mobilecal",
+            @"com.apple.sidecar",
+            @"com.apple.siri",
+            @"com.apple.DocumentsApp",
+        ]];
+        storeApps = [NSSet setWithArray:@[
+            @"com.apple.AppStore",
+            @"com.apple.Music",
+            @"com.apple.MobileStore",
+        ]];
+    });
+    if ([excluded containsObject:bundleID])
+        return NO;
+    if ([storeApps containsObject:bundleID])
+        return YES;
+
+    SEL hiddenSEL = NSSelectorFromString(@"atl_isHidden");
+    BOOL hidden = [application respondsToSelector:hiddenSEL]
+        ? ((BOOL (*)(id, SEL))objc_msgSend)(application, hiddenSEL) : NO;
+    SEL dataSEL = NSSelectorFromString(@"dataContainerURL");
+    id dataURL = [application respondsToSelector:dataSEL]
+        ? ((id (*)(id, SEL))objc_msgSend)(application, dataSEL) : nil;
+    return dataURL != nil && !hidden;
+}
+
+static BOOL CRApplicationIdentifierIsSupported(NSString *appID)
+{
+    return CRApplicationProxyIsSupported(
+        CRApplicationProxyForIdentifier(appID));
+}
+
+static NSString *CRDisplayNameForApplicationIdentifier(NSString *appID)
+{
+    id application = CRApplicationProxyForIdentifier(appID);
+    SEL nameSEL = NSSelectorFromString(@"localizedName");
+    id name = application && [application respondsToSelector:nameSEL]
+        ? ((id (*)(id, SEL))objc_msgSend)(application, nameSEL) : nil;
+    return [name isKindOfClass:NSString.class] ? name : nil;
+}
+
+/* Recovered helper 0x10000CF8C: enumerate LSApplicationWorkspace types 0 and
+ * 1 and append the bundle identifier only when the exact support predicate
+ * above passes. Preserve enumeration order while avoiding accidental dupes. */
+static NSArray<NSString *> *CRSupportedApplicationIdentifiers(void)
+{
+    static dispatch_once_t once;
+    dispatch_once(&once, ^{
+        dlopen("/System/Library/Frameworks/MobileCoreServices.framework/MobileCoreServices",
+               RTLD_LAZY | RTLD_LOCAL);
+    });
+
+    Class workspaceClass = NSClassFromString(@"LSApplicationWorkspace");
+    SEL defaultSEL = NSSelectorFromString(@"defaultWorkspace");
+    if (!workspaceClass || ![workspaceClass respondsToSelector:defaultSEL])
+        return nil;
+    id workspace = ((id (*)(id, SEL))objc_msgSend)(
+        (id)workspaceClass, defaultSEL);
+    SEL enumerateSEL = NSSelectorFromString(@"enumerateApplicationsOfType:block:");
+    if (!workspace || ![workspace respondsToSelector:enumerateSEL])
+        return nil;
+
+    NSMutableArray<NSString *> *result = [NSMutableArray new];
+    NSMutableSet<NSString *> *seen = [NSMutableSet new];
+    void (^visit)(id) = ^(id application) {
+        if (!CRApplicationProxyIsSupported(application))
+            return;
+        SEL bundleSEL = NSSelectorFromString(@"bundleIdentifier");
+        NSString *bundleID = [application respondsToSelector:bundleSEL]
+            ? ((id (*)(id, SEL))objc_msgSend)(application, bundleSEL) : nil;
+        if (bundleID.length && ![seen containsObject:bundleID]) {
+            [seen addObject:bundleID];
+            [result addObject:bundleID];
+        }
+    };
+    ((void (*)(id, SEL, NSUInteger, id))objc_msgSend)(
+        workspace, enumerateSEL, 0, visit);
+    ((void (*)(id, SEL, NSUInteger, id))objc_msgSend)(
+        workspace, enumerateSEL, 1, visit);
+    return [result copy];
+}
+
+static id CRLSDDeviceIdentifierProxy(void)
+{
+    /* Original read/write methods resolve _LSDDeviceIdentifierService and use
+     * synchronousXPCProxyWithErrorHandler:. CraneSupport/CRLsd.m installs the
+     * two crane_* methods on the remote _LSDDeviceIdentifierClient and
+     * authenticates the helper again by its executable path. */
+    dlopen("/System/Library/Frameworks/MobileCoreServices.framework/MobileCoreServices",
+           RTLD_LAZY | RTLD_LOCAL);
+    dlopen("/System/Library/Frameworks/CoreServices.framework/CoreServices",
+           RTLD_LAZY | RTLD_LOCAL);
+
+    Class serviceClass = NSClassFromString(@"_LSDDeviceIdentifierService");
+    SEL proxySEL = NSSelectorFromString(@"synchronousXPCProxyWithErrorHandler:");
+    if (!serviceClass || ![serviceClass respondsToSelector:proxySEL])
+        return nil;
+
+    __block NSError *proxyError = nil;
+    id errorHandler = ^(NSError *error) {
+        proxyError = error;
+    };
+    id proxy = ((id (*)(id, SEL, id))objc_msgSend)(
+        (id)serviceClass, proxySEL, errorHandler);
+    if (proxyError) {
+        NSLog(@"Crane helper: LSD device identifier proxy error=%@", proxyError);
+        return nil;
+    }
+    return proxy;
+}
+
+static id CRReadDeviceVendorIdentifier(NSString *appID)
+{
+    id application = CRApplicationProxyForIdentifier(appID);
+    SEL vendorSEL = NSSelectorFromString(@"vendorName");
+    NSString *vendorName = application &&
+        [application respondsToSelector:vendorSEL]
+        ? ((id (*)(id, SEL))objc_msgSend)(application, vendorSEL) : nil;
+
+    id proxy = CRLSDDeviceIdentifierProxy();
+    SEL readSEL = NSSelectorFromString(
+        @"crane_getIdentifier:ofType:forVendorName:andBundleIdentifier:");
+    if (!proxy || ![proxy respondsToSelector:readSEL])
+        return nil;
+
+    __block id identifier = nil;
+    void (^reply)(NSArray *) = ^(NSArray *values) {
+        if ([values isKindOfClass:NSArray.class] && values.count)
+            identifier = values.firstObject;
+    };
+    ((void (*)(id, SEL, id, int64_t, id, id))objc_msgSend)(
+        proxy, readSEL, reply, (int64_t)0, vendorName, appID);
+    return identifier;
+}
+
+static BOOL CRWriteDeviceVendorIdentifier(id identifier, NSString *appID)
+{
+    if (!identifier || !appID.length)
+        return NO;
+
+    id application = CRApplicationProxyForIdentifier(appID);
+    SEL vendorSEL = NSSelectorFromString(@"vendorName");
+    NSString *vendorName = application &&
+        [application respondsToSelector:vendorSEL]
+        ? ((id (*)(id, SEL))objc_msgSend)(application, vendorSEL) : nil;
+
+    id proxy = CRLSDDeviceIdentifierProxy();
+    SEL writeSEL = NSSelectorFromString(
+        @"crane_setIdentifier:ofType:forVendorName:andBundleIdentifier:");
+    if (!proxy || ![proxy respondsToSelector:writeSEL])
+        return NO;
+
+    ((void (*)(id, SEL, id, int64_t, id, id))objc_msgSend)(
+        proxy, writeSEL, identifier, (int64_t)0, vendorName, appID);
+    return YES;
+}
+
+static NSString *CRDeviceIdentifierString(id identifier)
+{
+    if ([identifier isKindOfClass:NSString.class])
+        return identifier;
+    SEL uuidStringSEL = NSSelectorFromString(@"UUIDString");
+    if ([identifier respondsToSelector:uuidStringSEL]) {
+        id value = ((id (*)(id, SEL))objc_msgSend)(
+            identifier, uuidStringSEL);
+        return [value isKindOfClass:NSString.class] ? value : nil;
+    }
+    return nil;
+}
+
+static NSString *CRExecutablePathForApplicationIdentifier(NSString *appID)
+{
+    if (!appID.length)
+        return nil;
+
+    id proxy = CRApplicationProxyForIdentifier(appID);
+    SEL pathSEL = NSSelectorFromString(@"canonicalExecutablePath");
+    if (!proxy || ![proxy respondsToSelector:pathSEL])
+        return nil;
+    id path = ((id (*)(id, SEL))objc_msgSend)(proxy, pathSEL);
+    return [path isKindOfClass:NSString.class] ? path : nil;
+}
+
+/* Recovered CRHGlobalService reloadApplication: at 0x100005CD0:
+ *  1. post the PlugInKit distributed reload notification;
+ *  2. resolve canonical executable path -> PID;
+ *  3. SIGTERM that PID;
+ *  4. resolve the path/PID again and SIGKILL only if still present.
+ * There is deliberately no caller-selected PID or executable path. */
+static BOOL CRReloadApplication(NSString *appID)
+{
+    if (!appID.length)
+        return NO;
+
+    CRPostReloadApplicationNotification(appID);
+    NSString *path = CRExecutablePathForApplicationIdentifier(appID);
+    if (!path.length) {
+        NSLog(@"Crane helper: reload application=%@ unavailable=no_executable_path",
+              appID);
+        return NO;
+    }
+
+    pid_t pid = CRPidForExecutablePath(path);
+    if (pid >= 2)
+        kill(pid, SIGTERM);
+
+    NSString *currentPath = CRExecutablePathForApplicationIdentifier(appID);
+    pid_t currentPid = currentPath.length
+        ? CRPidForExecutablePath(currentPath) : 0;
+    if (currentPid >= 2)
+        kill(currentPid, SIGKILL);
+
+    NSLog(@"Crane helper: reload application=%@ path=%@ termPid=%d killPid=%d",
+          appID, path, pid, currentPid);
+    return YES;
+}
+
 static NSString *const CRSupportFilterVirtualPath =
     @"/Library/MobileSubstrate/DynamicLibraries/CraneSupport.plist";
 static NSString *const CRSupportDylibVirtualPath =
@@ -726,6 +1384,74 @@ static NSArray<NSString *> *CRSupportFixupTargets(NSError **error)
             [validated addObject:item];
     }
     return [validated copy];
+}
+
+/* Recovered CRHGlobalService reloadDaemons: at 0x100005A48. The original
+ * never accepts an arbitrary process name: it intersects the caller's set
+ * with CraneSupport's configured daemons plus these five fixed Store/Game
+ * Center processes before calling _killallProcessesWithName:. */
+static NSSet<NSString *> *CRAllowedReloadDaemonNames(void)
+{
+    NSMutableSet<NSString *> *allowed = [NSMutableSet new];
+    NSArray<NSString *> *support = CRSupportFixupTargets(NULL);
+    if (support.count)
+        [allowed addObjectsFromArray:support];
+    [allowed addObjectsFromArray:@[
+        @"appstored",
+        @"itunesstored",
+        @"StoreKitUIService",
+        @"itunescloudd",
+        @"gamed",
+    ]];
+    return [allowed copy];
+}
+
+/* Recovered _killallProcessesWithName: at 0x10000BAB0. A newly observed PID
+ * gets SIGTERM. If the same PID survives the next lookup it is escalated to
+ * SIGKILL, then SIGTERM is issued as in the original. Bound the reconstruction
+ * loop so a launchd KeepAlive service cannot wedge the helper indefinitely. */
+static void CRKillAllProcessesWithName(NSString *process)
+{
+    if (!process.length)
+        return;
+
+    pid_t previous = 0;
+    for (NSUInteger attempt = 0; attempt < 64; ++attempt) {
+        pid_t pid = CRPidForProcessName(process);
+        if (pid < 2)
+            return;
+        if (pid == previous)
+            kill(pid, SIGKILL);
+        kill(pid, SIGTERM);
+        previous = pid;
+    }
+    NSLog(@"Crane helper: reload daemon=%@ stopped after bounded kill loop",
+          process);
+}
+
+static NSArray<NSString *> *CRReloadDaemons(NSArray *requestedDaemons)
+{
+    if (![requestedDaemons isKindOfClass:NSArray.class])
+        return nil;
+
+    NSMutableSet<NSString *> *requested = [NSMutableSet new];
+    for (id value in requestedDaemons) {
+        if ([value isKindOfClass:NSString.class] && [value length])
+            [requested addObject:value];
+    }
+
+    NSMutableSet<NSString *> *selected =
+        [CRAllowedReloadDaemonNames() mutableCopy];
+    [selected intersectSet:requested];
+
+    NSArray<NSString *> *ordered = [[selected allObjects]
+        sortedArrayUsingSelector:@selector(compare:)];
+    for (NSString *process in ordered)
+        CRKillAllProcessesWithName(process);
+
+    NSLog(@"Crane helper: reload daemons requested=%@ selected=%@",
+          requestedDaemons, ordered);
+    return ordered;
 }
 
 static BOOL CRPidMapsImageLeaf(pid_t pid, NSString *leaf,
@@ -1271,6 +1997,20 @@ static BOOL CRIsAuthenticatedCraneSBPeer(NSString *process, NSString *signingID)
     return NO;
 }
 
+/* Privileged control requests are narrower than health/insurance. The
+ * recovered reload call sites are SpringBoard (daemon recovery/menu flow) and
+ * Preferences (settings changes). Do not inherit runningboardd's health-only
+ * allowance for operations that terminate processes. */
+static BOOL CRIsAuthenticatedCraneControlPeer(NSString *process,
+                                               NSString *signingID)
+{
+    if ([process isEqualToString:@"SpringBoard"])
+        return [signingID isEqualToString:@"com.apple.springboard"];
+    if ([process isEqualToString:@"Preferences"])
+        return [signingID isEqualToString:@"com.apple.Preferences"];
+    return NO;
+}
+
 static BOOL CRIsAuthenticatedCraneSupportPeer(NSString *process, NSString *signingID)
 {
     static NSDictionary<NSString *, NSString *> *signingIDs;
@@ -1450,7 +2190,16 @@ static NSString *CRHandleHealthRequest(xpc_connection_t peer,
         strcmp(operation, "insurance") != 0 &&
         strcmp(operation, "lookup_pid") != 0 &&
         strcmp(operation, "component_loaded") != 0 &&
-        strcmp(operation, "injection_fixup") != 0)
+        strcmp(operation, "injection_fixup") != 0 &&
+        strcmp(operation, "reload_application") != 0 &&
+        strcmp(operation, "reload_daemons") != 0 &&
+        strcmp(operation, "get_application_display_name") != 0 &&
+        strcmp(operation, "get_supported_application_ids") != 0 &&
+        strcmp(operation, "check_application_supported") != 0 &&
+        strcmp(operation, "read_device_vendor_identifier") != 0 &&
+        strcmp(operation, "write_device_vendor_identifier") != 0 &&
+        strcmp(operation, "move_keychain_items") != 0 &&
+        strcmp(operation, "delete_keychain_items") != 0)
         return nil;
 
     xpc_object_t reply = xpc_dictionary_create_reply(message);
@@ -1487,6 +2236,238 @@ static NSString *CRHandleHealthRequest(xpc_connection_t peer,
                     fixError.localizedDescription.UTF8String);
             }
         }
+    } else if (strcmp(operation, "get_application_display_name") == 0) {
+        BOOL authorized = compatible &&
+            CRIsAuthenticatedCraneControlPeer(peerProcess, peerSigningID);
+        const char *appCString =
+            xpc_dictionary_get_string(message, "application_id");
+        NSString *appID = appCString
+            ? [NSString stringWithUTF8String:appCString] : nil;
+        BOOL validRequest = appID.length > 0 && appID.length <= 255 &&
+            [appID rangeOfString:@"/"].location == NSNotFound;
+        NSString *displayName = authorized && validRequest
+            ? CRDisplayNameForApplicationIdentifier(appID) : nil;
+        xpc_dictionary_set_bool(reply, "authorized", authorized);
+        xpc_dictionary_set_bool(reply, "success", authorized && validRequest);
+        if (displayName.length)
+            xpc_dictionary_set_string(reply, "display_name", displayName.UTF8String);
+    } else if (strcmp(operation, "get_supported_application_ids") == 0) {
+        BOOL authorized = compatible &&
+            CRIsAuthenticatedCraneControlPeer(peerProcess, peerSigningID);
+        NSArray<NSString *> *identifiers = authorized
+            ? CRSupportedApplicationIdentifiers() : nil;
+        BOOL success = authorized && identifiers != nil;
+        xpc_dictionary_set_bool(reply, "authorized", authorized);
+        xpc_dictionary_set_bool(reply, "success", success);
+        if (success) {
+            xpc_object_t values = xpc_array_create(NULL, 0);
+            for (NSString *identifier in identifiers) {
+                xpc_object_t item = xpc_string_create(identifier.UTF8String);
+                if (item)
+                    xpc_array_append_value(values, item);
+            }
+            xpc_dictionary_set_value(reply, "application_ids", values);
+        }
+    } else if (strcmp(operation, "check_application_supported") == 0) {
+        BOOL authorized = compatible &&
+            CRIsAuthenticatedCraneControlPeer(peerProcess, peerSigningID);
+        const char *appCString =
+            xpc_dictionary_get_string(message, "application_id");
+        NSString *appID = appCString
+            ? [NSString stringWithUTF8String:appCString] : nil;
+        BOOL validRequest = appID.length > 0 && appID.length <= 255 &&
+            [appID rangeOfString:@"/"].location == NSNotFound;
+        BOOL supported = authorized && validRequest &&
+            CRApplicationIdentifierIsSupported(appID);
+        xpc_dictionary_set_bool(reply, "authorized", authorized);
+        xpc_dictionary_set_bool(reply, "success", authorized && validRequest);
+        xpc_dictionary_set_bool(reply, "supported", supported);
+    } else if (strcmp(operation, "read_device_vendor_identifier") == 0) {
+        BOOL authorized = compatible &&
+            CRIsAuthenticatedCraneControlPeer(peerProcess, peerSigningID);
+        const char *appCString =
+            xpc_dictionary_get_string(message, "application_id");
+        NSString *appID = appCString
+            ? [NSString stringWithUTF8String:appCString] : nil;
+        BOOL validRequest = appID.length > 0 && appID.length <= 255 &&
+            [appID rangeOfString:@"/"].location == NSNotFound;
+        id identifier = authorized && validRequest
+            ? CRReadDeviceVendorIdentifier(appID) : nil;
+        NSString *identifierString =
+            CRDeviceIdentifierString(identifier);
+        xpc_dictionary_set_bool(reply, "authorized", authorized);
+        xpc_dictionary_set_bool(reply, "success", authorized && validRequest);
+        if (identifierString.length) {
+            xpc_dictionary_set_string(reply, "identifier",
+                                      identifierString.UTF8String);
+        }
+    } else if (strcmp(operation, "write_device_vendor_identifier") == 0) {
+        BOOL authorized = compatible &&
+            CRIsAuthenticatedCraneControlPeer(peerProcess, peerSigningID);
+        const char *appCString =
+            xpc_dictionary_get_string(message, "application_id");
+        const char *identifierCString =
+            xpc_dictionary_get_string(message, "identifier");
+        NSString *appID = appCString
+            ? [NSString stringWithUTF8String:appCString] : nil;
+        NSString *identifierString = identifierCString
+            ? [NSString stringWithUTF8String:identifierCString] : nil;
+        NSUUID *identifier = identifierString.length
+            ? [[NSUUID alloc] initWithUUIDString:identifierString] : nil;
+        BOOL validRequest = appID.length > 0 && appID.length <= 255 &&
+            [appID rangeOfString:@"/"].location == NSNotFound &&
+            identifier != nil;
+        BOOL success = authorized && validRequest &&
+            CRWriteDeviceVendorIdentifier(identifier, appID);
+        xpc_dictionary_set_bool(reply, "authorized", authorized);
+        xpc_dictionary_set_bool(reply, "success", success);
+        if (authorized && !validRequest) {
+            xpc_dictionary_set_string(reply, "error_description",
+                "Invalid application or vendor identifier");
+        } else if (authorized && validRequest && !success) {
+            xpc_dictionary_set_string(reply, "error_description",
+                "LSD device identifier service unavailable");
+        }
+    } else if (strcmp(operation, "move_keychain_items") == 0) {
+        BOOL authorized = compatible &&
+            CRIsAuthenticatedCraneControlPeer(peerProcess, peerSigningID);
+        const char *appCString =
+            xpc_dictionary_get_string(message, "application_id");
+        const char *sourceCString =
+            xpc_dictionary_get_string(message, "source_container_id");
+        const char *destinationCString =
+            xpc_dictionary_get_string(message, "destination_container_id");
+        NSString *appID = appCString
+            ? [NSString stringWithUTF8String:appCString] : nil;
+        NSString *sourceContainer = sourceCString
+            ? [NSString stringWithUTF8String:sourceCString] : nil;
+        NSString *destinationContainer = destinationCString
+            ? [NSString stringWithUTF8String:destinationCString] : nil;
+        BOOL sourceValid = sourceContainer.length > 0 &&
+            ([sourceContainer isEqualToString:CR_DEFAULT_CONTAINER_IDENTIFIER] ||
+             [[NSUUID alloc] initWithUUIDString:sourceContainer] != nil);
+        BOOL destinationValid = destinationContainer.length > 0 &&
+            ([destinationContainer isEqualToString:CR_DEFAULT_CONTAINER_IDENTIFIER] ||
+             [[NSUUID alloc] initWithUUIDString:destinationContainer] != nil);
+        BOOL validRequest = appID.length > 0 && appID.length <= 255 &&
+            [appID rangeOfString:@"/"].location == NSNotFound &&
+            sourceValid && destinationValid;
+        BOOL success = authorized && validRequest &&
+            [CRHKeychain
+                moveKeychainItemsFromContainerWithIdentifier:sourceContainer
+                                   toContainerWithIdentifier:destinationContainer
+                                forApplicationWithIdentifier:appID];
+        NSLog(@"Crane helper: move keychain caller=%@ app=%@ source=%@ destination=%@ authorized=%d valid=%d success=%d",
+              peerProcess, appID, sourceContainer, destinationContainer,
+              authorized, validRequest, success);
+        xpc_dictionary_set_bool(reply, "authorized", authorized);
+        xpc_dictionary_set_bool(reply, "success", success);
+        if (authorized && !validRequest)
+            CRSetReplyError(reply, CRHelperInvalidRequest,
+                            @"Invalid keychain move request");
+        else if (authorized && validRequest && !success)
+            CRSetReplyError(reply, CRHelperOperationFailed,
+                            @"One or more keychain classes could not be moved");
+    } else if (strcmp(operation, "delete_keychain_items") == 0) {
+        BOOL authorized = compatible &&
+            CRIsAuthenticatedCraneControlPeer(peerProcess, peerSigningID);
+        const char *appCString =
+            xpc_dictionary_get_string(message, "application_id");
+        const char *containerCString =
+            xpc_dictionary_get_string(message, "container_id");
+        NSString *appID = appCString
+            ? [NSString stringWithUTF8String:appCString] : nil;
+        NSString *containerID = containerCString
+            ? [NSString stringWithUTF8String:containerCString] : nil;
+        BOOL containerValid = containerID.length > 0 &&
+            ([containerID isEqualToString:CR_DEFAULT_CONTAINER_IDENTIFIER] ||
+             [[NSUUID alloc] initWithUUIDString:containerID] != nil);
+        BOOL validRequest = appID.length > 0 && appID.length <= 255 &&
+            [appID rangeOfString:@"/"].location == NSNotFound &&
+            containerValid;
+        BOOL success = authorized && validRequest &&
+            [CRHKeychain
+                deleteKeychainItemsForContainerWithIdentifier:containerID
+                                     forApplicationIdentifier:appID];
+        NSLog(@"Crane helper: delete keychain caller=%@ app=%@ container=%@ authorized=%d valid=%d success=%d",
+              peerProcess, appID, containerID, authorized, validRequest, success);
+        xpc_dictionary_set_bool(reply, "authorized", authorized);
+        xpc_dictionary_set_bool(reply, "success", success);
+        if (authorized && !validRequest)
+            CRSetReplyError(reply, CRHelperInvalidRequest,
+                            @"Invalid keychain delete request");
+        else if (authorized && validRequest && !success)
+            CRSetReplyError(reply, CRHelperOperationFailed,
+                            @"One or more keychain classes could not be deleted");
+    } else if (strcmp(operation, "reload_application") == 0) {
+        /* The caller supplies only a bundle identifier. The helper resolves
+         * LSApplicationProxy -> canonicalExecutablePath -> live PID itself,
+         * matching original reloadApplication: and preventing PID/path abuse. */
+        BOOL authorized = compatible &&
+            CRIsAuthenticatedCraneControlPeer(peerProcess, peerSigningID);
+        const char *appCString =
+            xpc_dictionary_get_string(message, "application_id");
+        NSString *appID = appCString
+            ? [NSString stringWithUTF8String:appCString] : nil;
+        BOOL validRequest = appID.length > 0 && appID.length <= 255 &&
+            [appID rangeOfString:@"/"].location == NSNotFound;
+        BOOL success = authorized && validRequest &&
+            CRReloadApplication(appID);
+        NSLog(@"Crane helper: reload_application caller=%@ app=%@ authorized=%d valid=%d success=%d",
+              peerProcess, appID, authorized, validRequest, success);
+        xpc_dictionary_set_bool(reply, "authorized", authorized);
+        xpc_dictionary_set_bool(reply, "success", success);
+        if (authorized && !validRequest) {
+            xpc_dictionary_set_string(reply, "error_description",
+                "Invalid application identifier");
+        } else if (authorized && validRequest && !success) {
+            xpc_dictionary_set_string(reply, "error_description",
+                "Application executable path could not be resolved");
+        }
+    } else if (strcmp(operation, "reload_daemons") == 0) {
+        /* Original CraneSB 0x1A53C is the recovered caller. Keep this
+         * operation SpringBoard-only and intersect names with the helper's
+         * fixed recovered allowlist before sending any signal. */
+        BOOL authorized = compatible &&
+            [peerProcess isEqualToString:@"SpringBoard"] &&
+            [peerSigningID isEqualToString:@"com.apple.springboard"];
+        xpc_object_t values = xpc_dictionary_get_value(message, "daemons");
+        __block BOOL validRequest = values && xpc_get_type(values) == XPC_TYPE_ARRAY;
+        NSMutableArray<NSString *> *requested = [NSMutableArray new];
+        if (validRequest) {
+            xpc_array_apply(values, ^bool(size_t index, xpc_object_t value) {
+                (void)index;
+                if (xpc_get_type(value) != XPC_TYPE_STRING) {
+                    validRequest = NO;
+                    return false;
+                }
+                const char *item = xpc_string_get_string_ptr(value);
+                NSString *name = item
+                    ? [NSString stringWithUTF8String:item] : nil;
+                if (!name.length || name.length > 128) {
+                    validRequest = NO;
+                    return false;
+                }
+                [requested addObject:name];
+                return true;
+            });
+        }
+        NSArray<NSString *> *selected = authorized && validRequest
+            ? CRReloadDaemons(requested) : nil;
+        BOOL success = authorized && validRequest && selected != nil;
+        NSLog(@"Crane helper: reload_daemons caller=%@ authorized=%d valid=%d selected=%@",
+              peerProcess, authorized, validRequest, selected);
+        xpc_dictionary_set_bool(reply, "authorized", authorized);
+        xpc_dictionary_set_bool(reply, "success", success);
+        if (selected.count) {
+            NSString *summary = [selected componentsJoinedByString:@","];
+            xpc_dictionary_set_string(reply, "reloaded_daemons",
+                                      summary.UTF8String);
+        }
+        if (authorized && !validRequest) {
+            xpc_dictionary_set_string(reply, "error_description",
+                "Invalid daemon list");
+        }
     } else if (strcmp(operation, "insurance") == 0) {
         NSString *filter = CRJailbreakRootPath(CR_MAIN_DYLIB_FILTER_PLIST);
         BOOL installed = filter.length &&
@@ -1499,6 +2480,9 @@ static NSString *CRHandleHealthRequest(xpc_connection_t peer,
             CRIsAuthenticatedCraneSBPeer(peerProcess, peerSigningID);
         BOOL preflight = compatible && installed && sandy;
 
+        if (injectionVerified)
+            CRActivateCrucialCraneSupportDaemons();
+
         NSArray<NSString *> *runningSupport =
             CRRunningCraneSupportProcesses();
         BOOL supportInspectionAvailable = runningSupport != nil;
@@ -1508,11 +2492,10 @@ static NSString *CRHandleHealthRequest(xpc_connection_t peer,
                 [brokenSupport addObject:process];
         }
 
-        /* Original helper insurance verifies its exact crucial set even when
-         * one of those daemons is currently absent; _execute:whileDaemon...
-         * pings an on-demand service before verification. Reconstruction does
-         * not yet reproduce that activation ping here, so fail closed instead
-         * of silently treating an absent crucial daemon as healthy. */
+        /* Original helper verifies its exact crucial set after using
+         * _execute:whileDaemon... to activate on-demand services. The ping
+         * above reproduces that activation attempt; if a crucial daemon is
+         * still absent, insurance remains fail-closed. */
         for (NSString *process in CRCrucialCraneSupportProcessNames()) {
             if (![runningSupport containsObject:process] &&
                 ![brokenSupport containsObject:process]) {

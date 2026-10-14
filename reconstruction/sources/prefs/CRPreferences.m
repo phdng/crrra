@@ -261,28 +261,60 @@
         NSString *appID = self.applicationIdentifier;
         NSString *containerID = self.containerIdentifier;
         if (appID.length && containerID.length) {
-            NSArray<NSString *> *paths = [CraneManager.sharedManager
-                pathsAssociatedToContainerWithIdentifier:containerID
-                              ofApplicationWithIdentifier:appID];
+            NSMutableDictionary<NSString *, NSString *> *applicationPaths =
+                [NSMutableDictionary new];
+            NSMutableDictionary<NSString *, NSString *> *groupPaths =
+                [NSMutableDictionary new];
+            NSMutableDictionary<NSString *, NSString *> *pluginPaths =
+                [NSMutableDictionary new];
             NSFileManager *fm = NSFileManager.defaultManager;
-            NSMutableSet<NSString *> *seen = [NSMutableSet new];
-            for (NSString *path in paths) {
-                if (![path isKindOfClass:NSString.class] || !path.length ||
-                    [seen containsObject:path])
-                    continue;
-                BOOL directory = NO;
-                if (![fm fileExistsAtPath:path isDirectory:&directory] ||
-                    !directory ||
-                    [fm destinationOfSymbolicLinkAtPath:path error:NULL])
-                    continue;
-                if (!rows.count) {
-                    PSSpecifier *group = [PSSpecifier emptyGroupSpecifier];
-                    [group setName:CRLocalize(@"APPLICATION")];
-                    [rows addObject:group];
+
+            [CraneManager.sharedManager enumerate:
+                ^(NSInteger type, NSString *identifier, NSString *path, BOOL *stop) {
+                    (void)stop;
+                    if (!identifier.length || !path.length)
+                        return;
+                    BOOL directory = NO;
+                    if (![fm fileExistsAtPath:path isDirectory:&directory] ||
+                        !directory ||
+                        [fm destinationOfSymbolicLinkAtPath:path error:NULL])
+                        return;
+                    switch (type) {
+                        case 0: applicationPaths[identifier] = path; break;
+                        case 1: groupPaths[identifier] = path; break;
+                        case 2: pluginPaths[identifier] = path; break;
+                        default: break;
+                    }
                 }
-                [seen addObject:path];
-                [rows addObject:[self specifierForIdentifier:@"APPLICATION"
-                                                      path:path]];
+                pathsAssociatedToContainerWithIdentifier:containerID
+                ofApplicationWithIdentifier:appID];
+
+            NSArray *applicationKeys = applicationPaths.allKeys;
+            NSArray *groupKeys = [groupPaths.allKeys
+                sortedArrayUsingSelector:@selector(localizedCaseInsensitiveCompare:)];
+            NSArray *pluginKeys = [pluginPaths.allKeys
+                sortedArrayUsingSelector:@selector(localizedCaseInsensitiveCompare:)];
+
+            NSArray *groups = @[
+                @{@"title": @"APPLICATION", @"keys": applicationKeys,
+                  @"paths": applicationPaths},
+                @{@"title": @"GROUPS", @"keys": groupKeys, @"paths": groupPaths},
+                @{@"title": @"PLUGINS", @"keys": pluginKeys, @"paths": pluginPaths}
+            ];
+            for (NSDictionary *entry in groups) {
+                NSArray *keys = entry[@"keys"];
+                NSDictionary *paths = entry[@"paths"];
+                if (!keys.count)
+                    continue;
+                PSSpecifier *group = [PSSpecifier emptyGroupSpecifier];
+                [group setName:CRLocalize(entry[@"title"])];
+                [rows addObject:group];
+                for (NSString *identifier in keys) {
+                    NSString *path = paths[identifier];
+                    if (path.length)
+                        [rows addObject:[self specifierForIdentifier:identifier
+                                                              path:path]];
+                }
             }
         }
         self.craneBrowseSpecifiers = [rows copy];
@@ -304,9 +336,10 @@
         return;
     /* The displayed specifier may be stale after reinstall/switch.
      * Revalidate against the current verified manager paths at click time. */
-    NSArray<NSString *> *paths = [CraneManager.sharedManager
+    NSDictionary<NSString *, NSString *> *pathMap = [CraneManager.sharedManager
         pathsAssociatedToContainerWithIdentifier:containerID
                           ofApplicationWithIdentifier:appID];
+    NSArray<NSString *> *paths = pathMap.allValues;
     BOOL directory = NO;
     NSFileManager *fm = NSFileManager.defaultManager;
     if (![paths containsObject:path] ||
@@ -525,9 +558,13 @@
             [allow setProperty:@YES forKey:@"default"];
             [allow setProperty:CRCContainer_NotificationsAllowed forKey:@"key"];
             [rows addObject:allow];
-            /* The original also has Reset Notification Registration.
-             * CraneManager's backend selector is still a no-op in this
-             * reconstruction; do not expose an action that cannot work. */
+
+            PSSpecifier *reset = [PSSpecifier preferenceSpecifierNamed:
+                CRLocalize(@"RESET_NOTIFICATION_REGISTRATION")
+                target:self set:NULL get:NULL detail:NULL cell:13 edit:0];
+            [reset setProperty:@YES forKey:@"enabled"];
+            [reset setButtonAction:@selector(resetNotificationRegistrationButtonPressed)];
+            [rows addObject:reset];
         }
 
         /* CranePrefs 0x10BD4/0x10E68/0x11734: optional container editor (0x3F108).
@@ -631,8 +668,9 @@
         return;
     CraneManager *manager = CraneManager.sharedManager;
     /* No guessed/shared fallback if the app container cannot be resolved. */
-    NSArray<NSString *> *paths = [manager pathsAssociatedToContainerWithIdentifier:containerID
-                                                        ofApplicationWithIdentifier:appID];
+    NSDictionary<NSString *, NSString *> *paths = [manager
+        pathsAssociatedToContainerWithIdentifier:containerID
+                          ofApplicationWithIdentifier:appID];
     if (!paths.count)
         return;
     NSUInteger generation = ++self.sizeFetchGeneration;
@@ -741,6 +779,14 @@
     [manager setContainerSettings:settings
         forContainerWithIdentifier:self.containerIdentifier
          ofApplicationWithIdentifier:self.applicationIdentifier];
+}
+
+- (void)resetNotificationRegistrationButtonPressed
+{
+    CraneManager *manager = CraneManager.sharedManager;
+    [manager unregisterFromNotificationsIfNeededForContainerIdentifier:
+        self.containerIdentifier
+        ofApplicationWithIdentifier:self.applicationIdentifier];
 }
 
 /* ChoicyPrefs is optional; original 0x10BD4 loads its bundle before

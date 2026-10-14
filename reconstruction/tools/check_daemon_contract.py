@@ -71,10 +71,18 @@ assert 'componentsSeparatedByString:' in strip_body
 assert '@"/" CR_CONTAINERS_DIR_COMPONENT' in strip_body
 assert 'firstObject' in strip_body
 assert 'stringByAppendingString:' not in strip_body
-for source in (manager, helper):
-    assert 'CFPreferencesCopyAppValue(' in source, "global domain read missing"
-    assert 'CFPreferencesSetAppValue(' in source, "global domain write missing"
-    assert '(__bridge CFStringRef)CR_PREFS_DOMAIN' in source, "explicit global domain missing"
+# The original Preferences service is for keychain backup/migration, not a
+# generic privileged preference store. Global app settings remain owned by
+# CraneManager; helperd must not expose arbitrary domain read/write.
+assert 'CFPreferencesCopyAppValue(' in manager, 'manager global domain read missing'
+assert 'CFPreferencesSetAppValue(' in manager, 'manager global domain write missing'
+assert '(__bridge CFStringRef)CR_PREFS_DOMAIN' in manager
+assert 'CFPreferencesCopyAppValue(' not in helper
+assert 'CFPreferencesSetAppValue(' not in helper
+assert '@protocol CRHPreferencesServiceProtocol <NSObject>' in helper
+assert 'dumpKeychainItemsFromContainerWithIdentifier:' in helper
+assert 'restoreKeychainItemsToContainerWithIdentifier:' in helper
+assert 'migrateApplication:(NSString *)appID withAppSettings:' in helper
 
 # The credential-less Objective-C delegate must never turn installation
 # preflight into a successful insurance result.

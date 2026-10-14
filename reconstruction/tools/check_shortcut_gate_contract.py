@@ -87,13 +87,18 @@ assert "if (![seen containsObject:CR_DEFAULT_CONTAINER_IDENTIFIER])" in registry
 assert "insertObject:@{CRCContainer_Identifier:CR_DEFAULT_CONTAINER_IDENTIFIER}" in registry
 assert "atIndex:0" in registry
 assert "#import \"CRContainerRegistry.h\"" in manager
-assert "return CRManagerSettingsIncludingDefault(self.applications[appID]);" in manager
+assert "id stored = [self preferenceValueForKey:key];" in manager
+assert "legacy = [self.applications[appID] copy];" in manager
+assert "return CRManagerSettingsIncludingDefault(stored);" in manager
 assert "settings = CRManagerSettingsIncludingDefault(settings);" in manager
 support = section(manager, "- (BOOL)isApplicationSupportedByCrane:",
                   "- (NSArray<NSString *> *)identifiersOfAllSupportedApplications")
-assert "applicationSettingsForApplicationWithIdentifier:appID" in support
+assert "checkIsApplicationWithIdentifier:appID" in support
+assert "supportedByCraneAndReply:" in support
+assert "applicationSettingsForApplicationWithIdentifier:appID" not in support
 assert "return self.applications[appID]" not in support
-assert 'CFPreferencesAppSynchronize(CFSTR("com.opa334.cranereconstruction.apps"))' in manager
+assert 'CFPreferencesAppSynchronize((__bridge CFStringRef)CR_PREFS_DOMAIN)' in manager
+assert 'CFPreferencesSetAppValue(CFSTR("applications")' not in manager
 assert "self.lastError = error;" in manager
 add = section(ui, "- (void)addButtonPressed", "@end")
 assert add.index("if (!identifier.length)") < add.index('NSLog(@"CranePrefs: created container')

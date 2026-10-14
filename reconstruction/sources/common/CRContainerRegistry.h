@@ -4,15 +4,23 @@
 #import "CRPreferences.h"
 #import "CRPaths.h"
 
-/* Native 0x15E20/0x170A4 count all Containers (>1 means DEFAULT + custom);
- * 0x137FC/0x16A90 enumerate that same array into selection actions.
- * Reconstructed older registries stored only custom entries. Project an
- * implicit DEFAULT into those dictionaries without deleting or relocating data.
- * Original libcrane storage internals are not exported; this is an adapter. */
+/* Original libcrane 0x937C stores each app under appSettings_<bundleID>.
+ * If that key is absent it returns exactly:
+ *   { Containers = ({ name = ""; identifier = DEFAULT; });
+ *     activeContainer = DEFAULT; }
+ * Older reconstruction builds omitted DEFAULT from their persisted arrays, so
+ * existing nonempty dictionaries are normalized on read without deleting data. */
 static inline NSDictionary *CRManagerSettingsIncludingDefault(NSDictionary *settings)
 {
-    if (![settings isKindOfClass:NSDictionary.class] || !settings.count)
-        return @{};
+    if (![settings isKindOfClass:NSDictionary.class] || !settings.count) {
+        return @{
+            CRAppSetting_Containers: @[@{
+                CRCContainer_Name: @"",
+                CRCContainer_Identifier: CR_DEFAULT_CONTAINER_IDENTIFIER
+            }],
+            CRCContainer_ActiveContainer: CR_DEFAULT_CONTAINER_IDENTIFIER
+        };
+    }
     NSMutableDictionary *result = [settings mutableCopy];
     id stored = settings[CRAppSetting_Containers];
     NSMutableArray *containers = [NSMutableArray new];
