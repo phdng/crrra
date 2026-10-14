@@ -305,14 +305,129 @@ Capture:
 oslog | grep -E 'CraneSupportProbe:|CraneSupport: (constructor process=|init process=|XPC unsandbox profile.*process=)|Crane helper: insurance|CraneManager: helper insurance|CraneSB: support health process='
 ```
 
-Interpret the first fresh post-reboot run as follows: neither probe constructor
-appears => Dopamine2-roothide daemon injector/platform path did not inject even
-the minimal tweak-pipeline probes; `plain` appears but `flags1` does not =>
-investigate `Flags=1` loader
-semantics; both probes appear but `CraneSupport` constructor does not =>
-CraneSupport Mach-O/load dependency is the fault and CI `linkage.txt` is the
-next evidence; CraneSupport constructor appears but health remains zero =>
-move downstream to libSandy/profile/runtime-report authentication.
+Interpret only after verifying that the three dylibs plus their filter
+plists exist in the *installed* package and that the log stream captures
+daemon-side events during a fresh process start. Neither probe constructor in
+a log-only sample is **not proof of failed injection**, because the constructor
+may have run before logging began or daemon messages may be missing from the
+stream. After these prerequisites, no probe constructor points toward the
+Dopamine2-roothide daemon injection/filter path; `plain` but not `flags1`
+points toward `Flags=1` semantics; both probes but no CraneSupport constructor
+points toward CraneSupport's Mach-O/dependencies and CI `linkage.txt`;
+CraneSupport constructor with health=0 points toward libSandy/profile/runtime
+report authentication.
+
+The latest device sample at 19:02:02 on Dopamine 2 + roothide has two identical
+SpringBoard insurance lines: `works=0 connection=1 broken=cfprefsd,
+containermanagerd, securityd, pkd, lsd, accountsd, apsd error=(null)`. It has
+neither `CraneSupportProbe:` constructor nor the expected `Crane helper:
+insurance` line, even though the helper *must* log the latter when it prepares
+this insurance response. Thus the sample proves the seven missing runtime
+proofs but does **not** establish complete daemon log coverage. Check the
+installed payload read-only as the `mobile` user before drawing a loader
+conclusion:
+
+```sh
+for n in CraneSupport CraneSupportProbeFlags CraneSupportProbePlain; do
+  for suffix in dylib plist; do
+    p=$(jbroot "/Library/MobileSubstrate/DynamicLibraries/$n.$suffix")
+    ls -l "$p"
+  done
+done
+```
+
+If `jbroot` is unavailable, inspect
+`dpkg -L com.opa334.cranereconstruction` and the corresponding accessible
+jailbreak root paths instead. The listing proves installation presence, not execution.
+
+**2026-10-13 device result:** the mobile shell's `jbroot` + `ls -l` verified
+all six files under the actual Dopamine 2 roothide root
+`/var/containers/Bundle/Application/.jbroot-DFEDD416F550194C/Library/MobileSubstrate/DynamicLibraries/`:
+
+- `CraneSupport.dylib` 344176 bytes, `CraneSupport.plist` 159 bytes
+- `CraneSupportProbeFlags.dylib` 165856 bytes, `CraneSupportProbeFlags.plist` 159 bytes
+- `CraneSupportProbePlain.dylib` 165856 bytes, `CraneSupportProbePlain.plist` 147 bytes
+
+Each has timestamp **Oct 13 17:55**, permissions `0755` for dylibs and
+`0644` for plists, owner `root:wheel`. The **16:36** insurance sample predates
+that installation and cannot test the latest probe build; the **19:02**
+SpringBoard insurance failure postdates installation but lacks **both** probe
+constructor messages **and** the helper's expected `Crane helper: insurance`
+message. Do not treat a missing message in that stream as proof of no daemon
+injection. The files are installed but neither filter parsing nor actual
+dylib mapping and daemon restart has yet been demonstrated.
+
+Next read-only mobile checks:
+
+```sh
+for n in CraneSupport CraneSupportProbeFlags CraneSupportProbePlain; do
+  p="$(jbroot "/Library/MobileSubstrate/DynamicLibraries/$n.plist")"
+  echo "=== $n filter ==="
+  plutil -p "$p"
+done
+ps -A -o pid,lstart,comm | grep -E 'cfprefsd|containermanagerd|securityd|pkd|lsd|accountsd|apsd'
+```
+
+**2026-10-13 device process evidence:** the `mobile` shell supports the
+`ps -A -o pid,lstart,comm` command. The resulting actual system daemon start
+times were `cfprefsd` PID 455 at **14:34:43**, `accountsd` PID 456 at
+**14:34:44**, `lsd` PID 458 at **14:34:45**, `securityd` PID 469 at
+**14:34:50**, `apsd` PID 481 at **14:34:55**, and `pkd` PID 483 at
+**14:34:55** (all Oct 13), fully **before** the **17:55** diagnostic-package
+install. An unrelated `amsaccountsd` PID 451 appeared too; do not confuse it
+with the exact `accountsd` executable filter target. `containermanagerd` was
+not shown in this particular `ps` output. These six verified daemon processes
+**were not restarted after the diagnostic tweak probes were installed**.
+Consequently the lack of constructor logs at **19:02** cannot diagnose the
+Dopamine2-roothide injection subsystem. Perform a userspace reboot **after**
+the installed 17:55 diagnostic build, via the jailbreak UI (choose **Reboot
+Userspace**, not **Restart SpringBoard**), then check new process start times
+and insurance/log outcome. Do not use `killall`, privileged shell launchctl,
+or any manual daemon termination from mobile.
+
+`plutil -p` was attempted from the device `mobile` shell and returned
+`zsh: command not found: plutil` for all three filter checks. That is a
+missing shell utility, **not** a Crane filter parsing result. Do not require
+users to install `plutil` merely for this test.
+
+**2026-10-13 20:36 device evidence, after userspace reboot:** the six visible
+target daemons restarted around **19:45**, after the 17:55 installation:
+`cfprefsd` PID 485 at 19:45:41, `accountsd` PID 489 at 19:45:45, `lsd`
+PID 490 at 19:45:45, `securityd` PID 500 at 19:45:49, `pkd` PID 508 at
+19:45:53 and `apsd` PID 514 at 19:45:55. `amsaccountsd` PID 482 is a
+different process; `containermanagerd` remains absent in the mobile-shell
+process listing, despite appearing in helper insurance broken names.
+SpringBoard PID 1066 logged twice at **20:36:17**:
+
+```text
+CraneManager: helper insurance works=0 connection=1 broken=cfprefsd, containermanagerd, securityd, pkd, lsd, accountsd, apsd error=(null)
+```
+
+Therefore the old-process hypothesis is **ruled out for the six observed
+daemons**. Installation presence and fresh process starts are confirmed; yet
+the helper received no valid CraneSupport runtime proofs. The absence of
+`CraneSupportProbe:` and `CraneSupport:` constructor messages in a live
+`oslog` stream **after** userspace reboot is not enough to prove no code
+injection: constructors run during daemon startup at ~19:45, and the same
+stream also omits the helper's on-demand `Crane helper: insurance` log at
+20:36. In reconstruction `CRSupport.m`, constructor diagnostics precede
+libSandy and registration, while `CRHelperd.m` distinguishes only live
+accepted registration, not actual mapped-image presence. The unresolved
+branches are (1) daemon filter/loader injection did not occur, or (2)
+injected CraneSupport could not send an authenticated runtime report through
+its libSandy/Mach path (or the helper rejected it). **Do not weaken the
+insurance gate** or attempt to patch securityd/private symbols until one
+branch has independent evidence. As a noninvasive platform check, confirm
+that Dopamine 2 Settings has `Disable Tweak Injection` turned **off**, and
+that no relevant daemon is selectively excluded by the installed tweak
+injection controls. The SpringBoard CraneManager log proves some injection
+is working but not that the daemon-injection path is enabled. Repeating an
+identical reboot and live grep alone will not distinguish these branches.
+
+If this `ps` implementation lacks `lstart` on another device, use
+`ps -A -o pid,etime,comm` to compare elapsed runtime, or use the full
+`ps -A` output. These commands read current daemon state and do not
+restart/kill anything. Do not delete/reset container data.
 
 The recovered CraneSB 0x1B45C + callback 0x1BAA4 also establish that insurance
 failure returns the original launch environment: the callback is exactly

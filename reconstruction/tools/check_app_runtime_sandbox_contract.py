@@ -99,6 +99,17 @@ for name in ("CraneRB.plist", "CraneSupport.plist"):
         "com.apple.security.exception.mach-lookup.global-name",
     }, name
 
+# Verify the reconstructed init order against the actual IDA decompilation,
+# not merely hand-copied comments. The original installs the handler first,
+# dispatches daemon hooks second, and has no startup runtime-report RPC.
+original_support = root.parent / "Library/MobileSubstrate/DynamicLibraries/CraneSupport.dylib_export_for_ai/decompile"
+original_ctor = (original_support / "6C5C.c").read_text(encoding="utf-8")
+original_profile_callback = (original_support / "6E44.c").read_text(encoding="utf-8")
+assert original_ctor.index('"_setXPCUnsandboxHandler:"') < original_ctor.index('initCfprefsd();')
+assert original_ctor.index('initCfprefsd();') < original_ctor.index('initLsd();')
+assert 'CRReportRuntimeInjection' not in original_ctor
+assert 'libSandy_applyProfile("CraneSupport") == 0' in original_profile_callback
+assert 'if ( byte_22D18 )' in original_profile_callback
 # Original CraneSupport 0x6C5C installs a global _setXPCUnsandboxHandler:
 # block whose invoke target 0x6E44 applies libSandy profile "CraneSupport"
 # and caches only success. The reconstruction runtime_report bypasses the
@@ -125,8 +136,16 @@ constructor_support = support[support.index("static void CRInitFunc(void)"):]
 assert 'CraneSupport: constructor process=%@ platform=%@' in constructor_support
 assert constructor_support.index('CraneSupport: constructor process=%@ platform=%@') < constructor_support.index('[manager _setXPCUnsandboxHandler:^BOOL{')
 assert '[manager _setXPCUnsandboxHandler:^BOOL{' in constructor_support
-assert 'BOOL unsandboxed = CRPrepareSupportXPCUnsandbox();' in constructor_support
-assert constructor_support.index('BOOL unsandboxed = CRPrepareSupportXPCUnsandbox();') < constructor_support.index('CRReportRuntimeInjection(@"CraneSupport", nil);')
+# Original 0x6C5C dispatches daemon hooks immediately after registering
+# the unsandbox handler. Attestation is reconstruction-only: reporting before
+# hooks could falsely certify isolation before its hooks even exist.
+hook_first = constructor_support.index('if ([process isEqualToString:@"cfprefsd"])')
+hook_last = constructor_support.index('CRInitLsd();')
+profile_apply = constructor_support.index('BOOL unsandboxed = CRPrepareSupportXPCUnsandbox();')
+runtime_proof = constructor_support.index('CRReportRuntimeInjection(@"CraneSupport", nil);')
+assert constructor_support.index('[manager _setXPCUnsandboxHandler:^BOOL{') < hook_first
+assert hook_first < hook_last < profile_apply < runtime_proof
+assert constructor_support.count('CRReportRuntimeInjection(@"CraneSupport", nil);') == 1
 assert 'CraneSupport: init process=%@ xpcUnsandbox=%d' in constructor_support
 
 # libcrane's reconstructed raw-XPC paths now honor the recovered handler.

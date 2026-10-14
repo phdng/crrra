@@ -176,17 +176,13 @@ static void CRInitFunc(void)
 
         /* Original 0x6C5C installs global block stru_206B0 into CraneManager;
          * its invoke target 0x6E44 applies libSandy profile "CraneSupport".
-         * Preserve that selector surface, and explicitly invoke the same block
-         * before the reconstruction-only CRCommon runtime report because that
-         * raw-XPC path bypasses CraneManager's unrecovered original transport. */
+         * Preserve the original callback registration BEFORE daemon hooks.
+         * The reconstruction-only raw-XPC runtime report is delayed until
+         * AFTER initialization so insurance cannot certify an unready daemon. */
         CraneManager *manager = [CraneManager sharedManager];
         [manager _setXPCUnsandboxHandler:^BOOL{
             return CRPrepareSupportXPCUnsandbox();
         }];
-        BOOL unsandboxed = CRPrepareSupportXPCUnsandbox();
-        NSLog(@"CraneSupport: init process=%@ xpcUnsandbox=%d",
-              process, unsandboxed);
-        CRReportRuntimeInjection(@"CraneSupport", nil);
 
         if ([process isEqualToString:@"cfprefsd"]) {
             CRInitCfprefsd();
@@ -205,6 +201,14 @@ static void CRInitFunc(void)
         } else if ([process isEqualToString:@"lsd"]) {
             CRInitLsd();
         }
+
+        /* Original 0x6C5C completes hook dispatch before the XPC handler
+         * is needed. Raw-XPC attestation is reconstruction-only and must
+         * apply the libSandy profile before sending its registration. */
+        BOOL unsandboxed = CRPrepareSupportXPCUnsandbox();
+        NSLog(@"CraneSupport: init process=%@ xpcUnsandbox=%d",
+              process, unsandboxed);
+        CRReportRuntimeInjection(@"CraneSupport", nil);
 
         (void)ignoredProcesses;
     }
