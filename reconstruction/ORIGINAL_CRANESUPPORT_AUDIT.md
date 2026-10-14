@@ -54,6 +54,54 @@ fixture plus reconstruction source without assuming ignored original files
 exist in the GitHub checkout. This avoids the earlier CI FileNotFoundError
 while retaining a real native evidence cross-check.
 
+## Recovered original live injection fix-up — no Userspace Reboot requirement
+
+Later direct analysis of the recovered original binaries resolves an important
+lifecycle gap that the earlier audit did not cover.
+
+`CraneSB.dylib` decompile `0x1782C` (`didFinishLaunching`) first ensures
+`cranehelperd` is reachable, then obtains the helper's async proxy and calls:
+
+```text
+runInjectionFixUpIfNeededAndReply:
+```
+
+The reply callback at `0x179C4` stores `injectionFixupError` only when the
+helper reports failure. This happens during SpringBoard launch, so original
+Crane does **not** depend on waiting for all CraneSupport target daemons to
+restart after package installation.
+
+The recovered original `cranehelperd` binary has no matched IDA pseudocode
+export, but its Objective-C metadata/imports/strings now establish the
+privileged operation surface directly:
+
+- `_verifyCraneSupportLoadedIntoDaemon:error:`
+- `_crucialCraneSupportDaemons`
+- `_daemonsForCraneSupportInjection`
+- `_fixupInjectionIfNeededForDaemon:error:`
+- `_isDylib:loadedIntoProcessWithPid:`
+- `_isDylib:loadedIntoProcessWithName:`
+- `_injectDylib:intoProcessWithPid:error:`
+- `_injectDylib:intoProcessWithName:error:`
+- `_waitUntilDylib:isLoadedIntoProcessWithPid:timeoutInSeconds:`
+- `_waitUntilDylib:isLoadedIntoProcessWithName:timeoutInSeconds:`
+- `/Library/MobileSubstrate/DynamicLibraries/CraneSupport.dylib`
+- injection backends `/usr/libexec/libhooker/libsyringe`,
+  `/usr/bin/cynject`, and `/usr/bin/cynject.old`
+- imports `task_for_pid`, `vm_read_overwrite`, `vm_write`, `kill`
+- original helper entitlement `task_for_pid-allow = true`.
+
+The helper also exposes `reloadDaemons:`, but the evidence above is enough to
+show that the **normal recovered startup path is verify/fix-up/inject**, not a
+mandatory Userspace Reboot. The reconstruction already preserved the
+`runInjectionFixUpIfNeededAndReply:` selector ABI, but its implementation
+now carries a bounded fixed-purpose helper operation. The prior Userspace Reboot requirement was only a diagnostic workaround and is not part of the reconstructed product behavior.
+
+Separately, opa334's public SliceFixup project explicitly names
+`CraneSupport.dylib` as a dylib that had arm64e ABI loading problems on
+iOS 15 and says SliceFixup is intended to run from package `postinst`.
+Native package/linkage/arm64e verification remains required while validating the newly implemented helper fix-up on iOS 15.
+
 ## What is *not* proved
 
 - Whether the three diagnostic dylibs are mapped into post-reboot system daemons.

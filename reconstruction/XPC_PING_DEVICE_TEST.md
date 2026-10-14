@@ -590,6 +590,34 @@ whose jailbreak-library install name is not under
 `@loader_path/.jbroot/...`, matching RootHide's documented load-path rule.
 The helper mapper reports this fourth discriminator as `bare=0/1`.
 
+**2026-10-14 03:26 — Bare result is generation-invalid, not a negative.**
+SpringBoard PID 1560 and the helper were clearly updated because the image-map
+format contains the new `bare=` field. However, every target PID shown in the
+same log is unchanged from the **00:43–00:44** boot generation:
+`cfprefsd=385`, `containermanagerd=363`, `securityd=413`, `pkd=445`,
+`lsd=392` (and the untruncated earlier sample established the corresponding
+accountsd/apsd generation). Those processes existed **before
+CraneSupportProbeBare was introduced/built**, so `bare=0` in this sample only
+means "this old process does not map a library that did not exist when it
+started." Do **not** classify this as filter/signing failure. The older,
+already-valid facts remain useful: ElleKit is active in cfprefsd/securityd/lsd,
+SandyProxy is mapped in securityd, and Support/Flags/Plain remain absent.
+
+The `03:26` Bare sample is generation-invalid, but **do not turn
+that diagnostic limitation into a product requirement for Userspace Reboot**.
+Direct original-binary analysis now explains why original Crane does not need
+one: recovered CraneSB `didFinishLaunching` at `0x1782C` calls the helper's
+`runInjectionFixUpIfNeededAndReply:`, and original `cranehelperd` contains
+the complete verify/fix-up surface including
+`_fixupInjectionIfNeededForDaemon:error:`,
+`_injectDylib:intoProcessWithPid:error:` and
+`_injectDylib:intoProcessWithName:error:`. It imports `task_for_pid`, has
+`task_for_pid-allow`, and contains injection backend paths for
+`libsyringe`/`cynject`. Therefore original Crane can repair
+`CraneSupport` in already-running daemons after SpringBoard starts.
+
+Reconstruction now implements the recovered normal live fix-up path through a fixed-purpose authenticated helper request. It never accepts a caller-selected PID or dylib path; it reads the installed CraneSupport filter, skips non-running/already-loaded targets, invokes a bounded injector backend, and verifies the fixed CraneSupport image is mapped. Do not require Userspace Reboot as a normal installation or upgrade step. Bare remains diagnostic only.
+
 The mapper has now been extended to report the surrounding injection stack
 without changing insurance: exact `systemhook.dylib`, TweakLoader/TweakInject,
 ElleKit's `libinjector.dylib`/`libellekit.dylib`, Substrate compatibility,

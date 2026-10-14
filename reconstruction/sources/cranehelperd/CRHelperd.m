@@ -38,9 +38,16 @@
 #import "CRXPCDiagnostics.h"
 
 #include <notify.h>
+#include <errno.h>
 #include <limits.h>
+#include <signal.h>
+#include <spawn.h>
+#include <stdio.h>
 #include <stdlib.h>
+#include <sys/wait.h>
 #include <xpc/xpc.h>
+
+extern char **environ;
 
 /* Modern iOS SDKs declare xpc_connection_create_mach_service() as unavailable
  * to app targets even though the symbol is present in libxpc and is imported
@@ -570,6 +577,414 @@ CRProcessPidsForNames(NSArray<NSString *> *names)
     return [result copy];
 }
 
+static NSString *const CRSupportFilterVirtualPath =
+    @"/Library/MobileSubstrate/DynamicLibraries/CraneSupport.plist";
+static NSString *const CRSupportDylibVirtualPath =
+    @"/Library/MobileSubstrate/DynamicLibraries/CraneSupport.dylib";
+static NSString *const CRInjectionErrorDomain = @"cranehelperdErrorDomain";
+
+typedef NS_ENUM(NSInteger, CRInjectionErrorCode) {
+    CRInjectionDylibFileNotFound = 1001,
+    CRInjectionBinaryNotFound = 1002,
+    CRInjectionExceptionOccurred = 1003,
+    CRInjectionInvalidFilter = 1101,
+    CRInjectionInspectionUnavailable = 1102,
+    CRInjectionSpawnFailed = 1103,
+    CRInjectionTimedOut = 1104,
+    CRInjectionToolFailed = 1105,
+    CRInjectionVerificationFailed = 1106,
+    CRInjectionTargetChanged = 1107,
+};
+
+static NSError *CRInjectionError(CRInjectionErrorCode code,
+                                 NSString *description)
+{
+    return [NSError errorWithDomain:CRInjectionErrorDomain
+                               code:code
+                           userInfo:@{NSLocalizedDescriptionKey:
+                               description ?: @"CraneSupport injection failed"}];
+}
+
+static NSArray<NSString *> *CRSupportFixupTargets(NSError **error)
+{
+    if (error)
+        *error = nil;
+
+    NSString *filterPath = CRJailbreakRootPath(CRSupportFilterVirtualPath);
+    NSDictionary *root = filterPath.length
+        ? [NSDictionary dictionaryWithContentsOfFile:filterPath] : nil;
+    NSDictionary *filter = [root[@"Filter"] isKindOfClass:NSDictionary.class]
+        ? root[@"Filter"] : nil;
+    NSArray *executables = [filter[@"Executables"] isKindOfClass:NSArray.class]
+        ? filter[@"Executables"] : nil;
+
+    if (executables.count == 0) {
+        if (error) {
+            *error = CRInjectionError(CRInjectionInvalidFilter,
+                [NSString stringWithFormat:
+                    @"CraneSupport filter has no executable list at %@", filterPath]);
+        }
+        return nil;
+    }
+
+    NSSet<NSString *> *allowed =
+        [NSSet setWithArray:CRCraneSupportProcessNames()];
+    NSMutableArray<NSString *> *validated = [NSMutableArray new];
+    for (id item in executables) {
+        if (![item isKindOfClass:NSString.class] ||
+            ![allowed containsObject:(NSString *)item]) {
+            if (error) {
+                *error = CRInjectionError(CRInjectionInvalidFilter,
+                    [NSString stringWithFormat:
+                        @"CraneSupport filter contains unexpected executable %@", item]);
+            }
+            return nil;
+        }
+        if (![validated containsObject:item])
+            [validated addObject:item];
+    }
+    return [validated copy];
+}
+
+static BOOL CRPidMapsImageLeaf(pid_t pid, NSString *leaf,
+                               BOOL *inspectionAvailable)
+{
+    if (inspectionAvailable)
+        *inspectionAvailable = NO;
+    if (pid <= 0 || leaf.length == 0)
+        return NO;
+
+    CRProcPidInfoFn procPidInfo = CRHelperProcPidInfoFunction();
+    CRProcRegionFilenameFn procRegionFilename =
+        CRHelperProcRegionFilenameFunction();
+    if (!procPidInfo || !procRegionFilename)
+        return NO;
+
+    BOOL sawRegion = NO;
+    BOOL sawPath = NO;
+    uint64_t address = 0;
+    for (NSUInteger region = 0; region < 16384; ++region) {
+        struct CRProcRegionInfo info = {0};
+        int bytes = procPidInfo(pid, 7, address, &info, (int)sizeof(info));
+        if (bytes < (int)sizeof(info) || info.pri_size == 0)
+            break;
+        sawRegion = YES;
+
+        char path[PATH_MAX] = {0};
+        int length = procRegionFilename(
+            pid, info.pri_address, path, (uint32_t)sizeof(path));
+        if (length > 0) {
+            sawPath = YES;
+            const char *name = strrchr(path, '/');
+            name = name ? name + 1 : path;
+            if (strcmp(name, leaf.UTF8String) == 0) {
+                if (inspectionAvailable)
+                    *inspectionAvailable = YES;
+                return YES;
+            }
+        }
+
+        if (UINT64_MAX - info.pri_address < info.pri_size)
+            break;
+        uint64_t next = info.pri_address + info.pri_size;
+        if (next <= address)
+            break;
+        address = next;
+    }
+
+    if (inspectionAvailable)
+        *inspectionAvailable = sawRegion && sawPath;
+    return NO;
+}
+
+static NSString *CRFindSupportInjectionBinary(void)
+{
+#if CRANE_ROOTHIDE
+    NSArray<NSString *> *candidates = @[
+        @"/basebin/opainject",
+        @"/usr/bin/opainject",
+        @"/usr/local/bin/opainject",
+        @"/usr/libexec/libhooker/libsyringe",
+        @"/usr/bin/cynject",
+        @"/usr/bin/cynject.old",
+    ];
+#else
+    NSArray<NSString *> *candidates = @[
+        @"/usr/libexec/libhooker/libsyringe",
+        @"/usr/bin/cynject",
+        @"/usr/bin/cynject.old",
+        @"/basebin/opainject",
+        @"/usr/bin/opainject",
+        @"/usr/local/bin/opainject",
+    ];
+#endif
+
+    NSFileManager *fm = NSFileManager.defaultManager;
+    for (NSString *virtualPath in candidates) {
+        NSString *path = CRJailbreakRootPath(virtualPath);
+        BOOL directory = NO;
+        if (path.length &&
+            [fm fileExistsAtPath:path isDirectory:&directory] &&
+            !directory && [fm isExecutableFileAtPath:path]) {
+            return path;
+        }
+    }
+    return nil;
+}
+
+static BOOL CRRunInjectionTool(NSString *toolPath, pid_t targetPid,
+                               NSString *dylibPath, NSError **error)
+{
+    if (error)
+        *error = nil;
+
+    const char *tool = toolPath.fileSystemRepresentation;
+    const char *dylib = dylibPath.fileSystemRepresentation;
+    if (!tool || !dylib || targetPid <= 0) {
+        if (error)
+            *error = CRInjectionError(CRInjectionSpawnFailed,
+                                      @"Injector arguments are invalid");
+        return NO;
+    }
+
+    char pidBuffer[32] = {0};
+    snprintf(pidBuffer, sizeof(pidBuffer), "%d", targetPid);
+    char *argv[] = {(char *)tool, pidBuffer, (char *)dylib, NULL};
+
+    pid_t injectorPid = 0;
+    int spawnResult = posix_spawn(&injectorPid, tool, NULL, NULL, argv, environ);
+    if (spawnResult != 0 || injectorPid <= 0) {
+        if (error) {
+            *error = CRInjectionError(CRInjectionSpawnFailed,
+                [NSString stringWithFormat:
+                    @"Unable to start %@ for pid %d: %s",
+                    toolPath.lastPathComponent, targetPid,
+                    strerror(spawnResult ?: errno)]);
+        }
+        return NO;
+    }
+
+    int status = 0;
+    BOOL reaped = NO;
+    NSTimeInterval deadline =
+        [NSDate timeIntervalSinceReferenceDate] + 8.0;
+    while ([NSDate timeIntervalSinceReferenceDate] < deadline) {
+        pid_t waited = waitpid(injectorPid, &status, WNOHANG);
+        if (waited == injectorPid) {
+            reaped = YES;
+            break;
+        }
+        if (waited < 0 && errno != EINTR) {
+            if (error) {
+                *error = CRInjectionError(CRInjectionToolFailed,
+                    [NSString stringWithFormat:
+                        @"waitpid failed for injector %@: %s",
+                        toolPath.lastPathComponent, strerror(errno)]);
+            }
+            return NO;
+        }
+        usleep(100000);
+    }
+
+    if (!reaped) {
+        kill(injectorPid, SIGTERM);
+        for (NSUInteger attempt = 0; attempt < 10; ++attempt) {
+            pid_t waited = waitpid(injectorPid, &status, WNOHANG);
+            if (waited == injectorPid) {
+                reaped = YES;
+                break;
+            }
+            usleep(50000);
+        }
+        if (!reaped) {
+            kill(injectorPid, SIGKILL);
+            while (waitpid(injectorPid, &status, 0) < 0 && errno == EINTR) {}
+        }
+        if (error) {
+            *error = CRInjectionError(CRInjectionTimedOut,
+                [NSString stringWithFormat:
+                    @"Injector %@ timed out for pid %d",
+                    toolPath.lastPathComponent, targetPid]);
+        }
+        return NO;
+    }
+
+    if (!WIFEXITED(status) || WEXITSTATUS(status) != 0) {
+        NSString *reason = WIFEXITED(status)
+            ? [NSString stringWithFormat:@"exit=%d", WEXITSTATUS(status)]
+            : (WIFSIGNALED(status)
+                ? [NSString stringWithFormat:@"signal=%d", WTERMSIG(status)]
+                : @"abnormal termination");
+        if (error) {
+            *error = CRInjectionError(CRInjectionToolFailed,
+                [NSString stringWithFormat:
+                    @"Injector %@ failed for pid %d (%@)",
+                    toolPath.lastPathComponent, targetPid, reason]);
+        }
+        return NO;
+    }
+    return YES;
+}
+
+static BOOL CRFixupCraneSupportInPid(pid_t pid, NSString *process,
+                                     NSError **error)
+{
+    if (error)
+        *error = nil;
+
+    NSString *actualProcess = CRProcessNameForPid(pid);
+    if (pid <= 0 || ![actualProcess isEqualToString:process]) {
+        if (error) {
+            *error = CRInjectionError(CRInjectionTargetChanged,
+                [NSString stringWithFormat:
+                    @"Target %@ changed before injection (pid=%d actual=%@)",
+                    process, pid, actualProcess]);
+        }
+        return NO;
+    }
+
+    NSString *dylibPath = CRJailbreakRootPath(CRSupportDylibVirtualPath);
+    BOOL isDirectory = NO;
+    if (!dylibPath.length ||
+        ![NSFileManager.defaultManager fileExistsAtPath:dylibPath
+                                            isDirectory:&isDirectory] ||
+        isDirectory) {
+        if (error) {
+            *error = CRInjectionError(CRInjectionDylibFileNotFound,
+                [NSString stringWithFormat:
+                    @"CRANEHELPERD_INJECTION_ERROR_DYLIB_FILE_NOT_FOUND: %@",
+                    dylibPath ?: CRSupportDylibVirtualPath]);
+        }
+        return NO;
+    }
+
+    BOOL inspectionAvailable = NO;
+    if (CRPidMapsImageLeaf(pid, @"CraneSupport.dylib",
+                           &inspectionAvailable)) {
+        NSLog(@"Crane helper: injection fixup process=%@ pid=%d alreadyLoaded=1",
+              process, pid);
+        return YES;
+    }
+    if (!inspectionAvailable) {
+        if (error) {
+            *error = CRInjectionError(CRInjectionInspectionUnavailable,
+                [NSString stringWithFormat:
+                    @"Cannot inspect mapped images for %@ pid=%d; refusing blind injection",
+                    process, pid]);
+        }
+        return NO;
+    }
+
+    NSString *toolPath = CRFindSupportInjectionBinary();
+    if (!toolPath.length) {
+        if (error) {
+            *error = CRInjectionError(CRInjectionBinaryNotFound,
+                @"CRANEHELPERD_INJECTION_ERROR_INJECTION_BINARY_NOT_FOUND");
+        }
+        return NO;
+    }
+
+    NSLog(@"Crane helper: injection fixup process=%@ pid=%d tool=%@ dylib=%@",
+          process, pid, toolPath.lastPathComponent, dylibPath);
+    @try {
+        NSError *toolError = nil;
+        if (!CRRunInjectionTool(toolPath, pid, dylibPath, &toolError)) {
+            if (error)
+                *error = toolError;
+            return NO;
+        }
+    } @catch (NSException *exception) {
+        if (error) {
+            *error = CRInjectionError(CRInjectionExceptionOccurred,
+                [NSString stringWithFormat:
+                    @"CRANEHELPERD_INJECTION_ERROR_EXCEPTION_OCCURED: %@",
+                    exception.reason ?: exception.name]);
+        }
+        return NO;
+    }
+
+    NSTimeInterval deadline =
+        [NSDate timeIntervalSinceReferenceDate] + 2.0;
+    do {
+        NSString *currentProcess = CRProcessNameForPid(pid);
+        if (![currentProcess isEqualToString:process]) {
+            if (error) {
+                *error = CRInjectionError(CRInjectionTargetChanged,
+                    [NSString stringWithFormat:
+                        @"Target %@ exited or changed during injection (pid=%d actual=%@)",
+                        process, pid, currentProcess]);
+            }
+            return NO;
+        }
+
+        BOOL canInspect = NO;
+        if (CRPidMapsImageLeaf(pid, @"CraneSupport.dylib", &canInspect)) {
+            NSLog(@"Crane helper: injection fixup process=%@ pid=%d verified=1",
+                  process, pid);
+            return YES;
+        }
+        if (!canInspect) {
+            if (error) {
+                *error = CRInjectionError(CRInjectionInspectionUnavailable,
+                    [NSString stringWithFormat:
+                        @"Lost mapped-image inspection for %@ pid=%d after injection",
+                        process, pid]);
+            }
+            return NO;
+        }
+        usleep(100000);
+    } while ([NSDate timeIntervalSinceReferenceDate] < deadline);
+
+    if (error) {
+        *error = CRInjectionError(CRInjectionVerificationFailed,
+            [NSString stringWithFormat:
+                @"Injector exited successfully but CraneSupport.dylib is not mapped in %@ pid=%d",
+                process, pid]);
+    }
+    return NO;
+}
+
+static BOOL CRRunCraneSupportInjectionFixup(NSError **error)
+{
+    if (error)
+        *error = nil;
+
+    NSError *targetError = nil;
+    NSArray<NSString *> *targets = CRSupportFixupTargets(&targetError);
+    if (!targets) {
+        if (error)
+            *error = targetError;
+        return NO;
+    }
+
+    NSDictionary<NSString *, NSNumber *> *pidMap =
+        CRProcessPidsForNames(targets);
+    if (!pidMap) {
+        if (error) {
+            *error = CRInjectionError(CRInjectionInspectionUnavailable,
+                @"Unable to enumerate CraneSupport target processes");
+        }
+        return NO;
+    }
+
+    for (NSString *process in targets) {
+        pid_t pid = (pid_t)[pidMap[process] intValue];
+        if (pid <= 0) {
+            NSLog(@"Crane helper: injection fixup process=%@ skipped=not_running",
+                  process);
+            continue;
+        }
+
+        NSError *fixError = nil;
+        if (!CRFixupCraneSupportInPid(pid, process, &fixError)) {
+            if (error)
+                *error = fixError;
+            return NO;
+        }
+    }
+    return YES;
+}
+
 static NSString *CRSupportMappedImageSummary(NSArray<NSString *> *processes)
 {
     /* Diagnostic only. Never use this mapper as insurance proof: proc region
@@ -893,7 +1308,8 @@ static NSString *CRRuntimeContainerForPid(pid_t pid, NSString *process)
 }
 
 /* The two Mach listeners share a deliberately small raw-XPC surface:
- * health, runtime attestation, and caller-authorized PID inspection only. */
+ * health, runtime attestation, caller-authorized PID inspection, and one
+ * fixed-purpose SpringBoard-only CraneSupport live fix-up. */
 static NSString *CRHandleHealthRequest(xpc_connection_t peer,
                                        xpc_object_t message,
                                        pid_t peerPid,
@@ -943,14 +1359,41 @@ static NSString *CRHandleHealthRequest(xpc_connection_t peer,
     if (strcmp(operation, "ping") != 0 &&
         strcmp(operation, "insurance") != 0 &&
         strcmp(operation, "lookup_pid") != 0 &&
-        strcmp(operation, "component_loaded") != 0)
+        strcmp(operation, "component_loaded") != 0 &&
+        strcmp(operation, "injection_fixup") != 0)
         return nil;
 
     xpc_object_t reply = xpc_dictionary_create_reply(message);
     if (!reply)
         return nil;
 
-    if (strcmp(operation, "insurance") == 0) {
+    if (strcmp(operation, "injection_fixup") == 0) {
+        /* Original CraneSB 0x1782C invokes this only after helper connectivity
+         * succeeds. Keep the reconstruction endpoint narrower than a generic
+         * injector: caller identity comes from the XPC peer, no PID/path is
+         * accepted from the request, and the helper may inject only its fixed
+         * installed CraneSupport dylib into its fixed filter targets. */
+        BOOL authorized = compatible &&
+            CRIsAuthenticatedCraneSBPeer(peerProcess, peerSigningID) &&
+            [peerProcess isEqualToString:@"SpringBoard"];
+        NSError *fixError = nil;
+        BOOL success = authorized &&
+            CRRunCraneSupportInjectionFixup(&fixError);
+        NSLog(@"Crane helper: injection_fixup caller=%@ authorized=%d success=%d error=%@",
+              peerProcess, authorized, success, fixError);
+        xpc_dictionary_set_bool(reply, "authorized", authorized);
+        xpc_dictionary_set_bool(reply, "success", success);
+        if (fixError) {
+            xpc_dictionary_set_string(reply, "error_domain",
+                fixError.domain.UTF8String);
+            xpc_dictionary_set_int64(reply, "error_code",
+                (int64_t)fixError.code);
+            if (fixError.localizedDescription.length) {
+                xpc_dictionary_set_string(reply, "error_description",
+                    fixError.localizedDescription.UTF8String);
+            }
+        }
+    } else if (strcmp(operation, "insurance") == 0) {
         NSString *filter = CRJailbreakRootPath(CR_MAIN_DYLIB_FILTER_PLIST);
         BOOL installed = filter.length &&
             [NSFileManager.defaultManager fileExistsAtPath:filter];

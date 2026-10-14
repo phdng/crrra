@@ -63,6 +63,20 @@ for item in ("setIdentifier", "getIdentifierOfType", "dumpKeychainItems",
     assert item not in raw, item
 assert 'strcmp(operation, "insurance") == 0' in raw
 assert 'strcmp(operation, "lookup_pid") == 0' in raw
+assert 'strcmp(operation, "injection_fixup") == 0' in raw
+assert 'CRRunCraneSupportInjectionFixup(&fixError)' in raw
+assert 'CRIsAuthenticatedCraneSBPeer(peerProcess, peerSigningID)' in raw
+assert '[peerProcess isEqualToString:@"SpringBoard"]' in raw
+fixup_raw = raw[
+    raw.index('if (strcmp(operation, "injection_fixup") == 0)'):
+    raw.index('} else if (strcmp(operation, "insurance")')
+]
+assert 'xpc_dictionary_get_int64(message, "pid")' not in fixup_raw
+assert 'xpc_dictionary_get_string(message, "path")' not in fixup_raw
+assert 'xpc_dictionary_get_string(message, "dylib")' not in fixup_raw
+assert '@"/Library/MobileSubstrate/DynamicLibraries/CraneSupport.dylib"' in helper
+assert 'CRSupportFixupTargets(' in helper
+assert 'CRPidMapsImageLeaf(pid, @"CraneSupport.dylib"' in helper
 
 # Independent model: unsupported is None, whereas a genuinely empty dump
 # would be {} and a genuine vendor-ID read would be a nonempty string.
@@ -89,9 +103,12 @@ proxy_start = manager.index('@implementation CRInsuranceHealthProxy')
 proxy_end = manager.index('@end', proxy_start)
 proxy = manager[proxy_start:proxy_end]
 assert '- (void)runInjectionFixUpIfNeededAndReply:(void (^)(BOOL, NSError *))reply' in proxy
-assert '@"com.opa334.crane.helper.unsupported"' in proxy
-assert 'reply(NO, error);' in proxy
-assert 'reply(YES' not in proxy
+assert '"operation", "injection_fixup"' in proxy
+assert 'CRHelperValidateHealthReply(' in proxy
+assert 'xpc_dictionary_get_bool(response, "authorized")' in proxy
+assert 'xpc_dictionary_get_bool(response, "success")' in proxy
+assert 'CRHelperUnauthorizedPeer' in proxy
+assert '(int64_t)(30 * NSEC_PER_SEC)' in proxy
 async_start = manager.index('- (id)cranehelperdGlobalAsyncRemoteObjectProxy')
 async_end = manager.index('/* A filter plist', async_start)
 async_proxy = manager[async_start:async_end]

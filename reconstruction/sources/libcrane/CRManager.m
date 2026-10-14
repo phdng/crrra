@@ -371,13 +371,85 @@ static void CRManagerVerifyRuntimeComponent(NSString *component,
     if (!reply)
         return;
 
-    /* Original helper protocol/implementation is U-01. Preserve the recovered
-     * selector and 0x179C4 (BOOL, NSError *) reply ABI, but never report a
-     * privileged fix-up that this reconstruction did not actually perform. */
-    NSError *error = [NSError errorWithDomain:@"com.opa334.crane.helper.unsupported"
-        code:2001 userInfo:@{NSLocalizedDescriptionKey:
-            @"Original Crane injection fix-up operation is unavailable in this reconstruction"}];
-    reply(NO, error);
+    xpc_connection_t connection = CRManagerCreateHelperConnection();
+    if (!connection) {
+        NSError *error = CRHelperTransportError(CRHelperConnectionCreationFailed,
+            @"injection_fixup", @"Unable to create XPC connection");
+        CRManagerDeliverHelperReply(error, ^{ reply(NO, error); });
+        return;
+    }
+
+    NSObject *replyLock = [NSObject new];
+    __block BOOL finished = NO;
+    void (^finish)(BOOL, NSError *) = ^(BOOL success, NSError *error) {
+        @synchronized(replyLock) {
+            if (finished)
+                return;
+            finished = YES;
+        }
+        NSLog(@"CraneManager: helper injection fixup success=%d error=%@",
+              success, error);
+        CRManagerDeliverHelperReply(error, ^{ reply(success, error); });
+        xpc_connection_cancel(connection);
+    };
+
+    xpc_connection_set_event_handler(connection, ^(xpc_object_t event) {
+        if (xpc_get_type(event) == XPC_TYPE_ERROR)
+            finish(NO, CRHelperXPCEventError(event, @"injection_fixup"));
+    });
+    xpc_connection_resume(connection);
+
+    xpc_object_t request = xpc_dictionary_create(NULL, NULL, 0);
+    if (!request) {
+        finish(NO, CRHelperTransportError(CRHelperRequestAllocationFailed,
+            @"injection_fixup", @"Unable to allocate XPC request"));
+        return;
+    }
+
+    xpc_dictionary_set_string(request, "operation", "injection_fixup");
+    xpc_dictionary_set_string(request, "protocol", CR_HELPERD_PING_PROTOCOL_V1);
+    xpc_connection_send_message_with_reply(connection, request,
+        dispatch_get_global_queue(QOS_CLASS_UTILITY, 0), ^(xpc_object_t response) {
+            NSError *error = nil;
+            BOOL valid = CRHelperValidateHealthReply(
+                response, @"injection_fixup", &error);
+            BOOL authorized = valid &&
+                xpc_dictionary_get_bool(response, "authorized");
+            BOOL success = authorized &&
+                xpc_dictionary_get_bool(response, "success");
+
+            if (valid && !authorized) {
+                error = CRHelperTransportError(CRHelperUnauthorizedPeer,
+                    @"injection_fixup",
+                    @"Helper rejected caller identity");
+            } else if (valid && authorized && !success) {
+                const char *domainCString =
+                    xpc_dictionary_get_string(response, "error_domain");
+                const char *descriptionCString =
+                    xpc_dictionary_get_string(response, "error_description");
+                NSString *domain = domainCString
+                    ? [NSString stringWithUTF8String:domainCString]
+                    : @"cranehelperdErrorDomain";
+                NSString *description = descriptionCString
+                    ? [NSString stringWithUTF8String:descriptionCString]
+                    : @"CraneSupport injection fix-up failed";
+                NSInteger code = (NSInteger)
+                    xpc_dictionary_get_int64(response, "error_code");
+                error = [NSError errorWithDomain:domain
+                    code:code userInfo:@{NSLocalizedDescriptionKey: description}];
+            }
+
+            NSLog(@"CraneManager: helper injection fixup authorized=%d success=%d error=%@",
+                  authorized, success, error);
+            finish(success, error);
+        });
+
+    dispatch_after(dispatch_time(DISPATCH_TIME_NOW,
+                       (int64_t)(30 * NSEC_PER_SEC)),
+                   dispatch_get_global_queue(QOS_CLASS_UTILITY, 0), ^{
+        finish(NO, CRHelperTransportError(CRHelperReplyTimedOut,
+            @"injection_fixup", @"No helper fix-up reply within 30 seconds"));
+    });
 }
 
 /* CraneSB 0x11CA4 expects a synchronous reply from its "sync" proxy.
@@ -1460,10 +1532,10 @@ usingBiometricsIfNeededWithSuccessHandler:(void (^)(BOOL authenticated))handler
 }
 - (id)cranehelperdGlobalAsyncRemoteObjectProxy
 {
-    /* CraneSB 0x1782C uses the async proxy only for
-     * runInjectionFixUpIfNeededAndReply:. Return the same narrow adapter; it
-     * fails that unrecovered privileged operation explicitly rather than
-     * exposing a speculative raw-XPC command. */
+    /* CraneSB 0x1782C uses the async proxy for the recovered
+     * runInjectionFixUpIfNeededAndReply: operation. The same narrow adapter
+     * carries a fixed-purpose authenticated helper request; it exposes no
+     * caller-selected PID or dylib path. */
     return [self cranehelperdGlobalSyncRemoteObjectProxy];
 }
 /* A filter plist is not a dylib and must not be passed to dlopen().

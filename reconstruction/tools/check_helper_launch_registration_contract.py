@@ -100,8 +100,10 @@ for needle in (
 ):
     assert needle in postinst, needle
 assert postinst.splitlines()[0] == "#!/bin/sh"
-assert "Reboot Userspace after installation to load updated CraneSupport daemon tweaks" in postinst
-assert "Respring alone is not sufficient" in postinst
+assert "helper ready; daemon injection verification/fix-up is handled at runtime" in postinst
+assert "runInjectionFixUpIfNeededAndReply:" in postinst
+assert "Reboot Userspace" not in postinst
+assert "Respring alone is not sufficient" not in postinst
 assert "bootout" not in postinst
 assert "killall" not in postinst
 assert "rm " not in postinst

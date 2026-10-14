@@ -128,7 +128,7 @@ assert 'dlsym(handle ?: RTLD_DEFAULT, "proc_name")' in helper
 assert 'dlsym(RTLD_DEFAULT, "xpc_connection_get_audit_token")' in helper
 assert 'dlsym(RTLD_DEFAULT, "SecTaskCreateWithAuditToken")' in helper
 assert 'dlsym(RTLD_DEFAULT, "SecTaskCopySigningIdentifier")' in helper
-for operation in ('"ping"', '"insurance"', '"runtime_report"', '"lookup_pid"', '"component_loaded"'):
+for operation in ('"ping"', '"insurance"', '"runtime_report"', '"lookup_pid"', '"component_loaded"', '"injection_fixup"'):
     assert operation in peer_code, f"missing raw-XPC operation {operation}"
 
 # Insurance must require a live caller plus CraneSupport proof for every

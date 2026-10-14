@@ -105,8 +105,9 @@ esac
             calls = log.read_text(encoding="utf-8").splitlines() if log.exists() else []
             assert result.returncode == expected_exit, (mode, result.returncode, result.stderr)
             assert calls == expected_calls, (mode, calls, expected_calls)
-            notice = "Reboot Userspace after installation to load updated CraneSupport daemon tweaks"
+            notice = "helper ready; daemon injection verification/fix-up is handled at runtime"
             assert (notice in result.stdout) == (action == "configure" and expected_exit == 0), (mode, result.stdout)
+            assert "Reboot Userspace" not in result.stdout, (mode, result.stdout)
             print(f"postinst fixture {mode}: PASS")
     print("postinst control-flow smoke: PASS (mock launchctl only; device unverified)")
 
