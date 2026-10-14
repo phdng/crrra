@@ -167,6 +167,8 @@ assert 'NSMutableSet<NSString *> *otherTweaks' in helper
 assert 'NSMutableSet<NSString *> *jailbreakImages' in helper
 assert 'systemhook=%d loader=%d injector=%d ellekit=%d substrate=%d' in helper
 assert 'jb=%lu jbSample=%@ other=%lu sample=%@' in helper
+assert '"CraneSupportProbeBare.dylib"' in helper
+assert 'bare=%d' in helper
 for process in ('cfprefsd', 'containermanagerd', 'securityd', 'pkd', 'lsd', 'accountsd', 'apsd'):
     assert f'@"{process}"' in helper, process
 assert 'CRRuntimeHasComponentInProcess(@"CraneSupport", process)' in peer_code

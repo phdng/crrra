@@ -560,6 +560,36 @@ loader/filter issue is resolved. CraneSB from the same reconstruction package
 working under the same Dopamine2-roothide environment, so this is not evidence
 that all tweak injection is globally disabled.
 
+**2026-10-14 02:10 loader-stack result:** the extended mapper showed
+`cfprefsd`, `securityd` and `lsd` with `ellekit=1`; `securityd`
+also had an actual third-party/system tweak image `SandyProxy.dylib`
+(`other=1 sample=SandyProxy.dylib`). At the same time all visible Crane
+fields remained zero. This proves tweak injection is active in at least
+`securityd` on the same boot while Crane's three daemon dylibs are absent.
+The sample also showed `containermanagerd` and `pkd` with RootHide
+runtime images but no visible ElleKit/tweak image; the accountsd/apsd tail
+was truncated in the pasted mobile log, so do not invent values for them.
+
+The device path check also proves packaging visibility is not the missing
+link: `/Library/MobileSubstrate/DynamicLibraries` is a symlink to
+`/usr/lib/TweakInject/`, and each of `CraneSupport.dylib`,
+`CraneSupportProbeFlags.dylib` and `CraneSupportProbePlain.dylib`
+resolves to the same installed file through **both** paths. Therefore stop
+investigating a missing TweakInject symlink/directory.
+
+The remaining high-value split is **filter/load eligibility vs Mach-O
+dependency failure**. Both existing probes are still built through
+`tweak.mk` and carry the tweak backend dependency, so a common roothide
+load-command failure can make `support=flags=plain=0` even when filters
+match. A new roothide-only `CraneSupportProbeBare.dylib` is therefore
+built through `library.mk`, has the same seven-process Executables filter,
+and deliberately has no Foundation/notify/tweak-backend/libcrane/libSandy
+dependency. CI inspects its `otool -L` output and rejects it if a jailbreak
+hooking dependency sneaks in. CI also rejects roothide Crane dependencies
+whose jailbreak-library install name is not under
+`@loader_path/.jbroot/...`, matching RootHide's documented load-path rule.
+The helper mapper reports this fourth discriminator as `bare=0/1`.
+
 The mapper has now been extended to report the surrounding injection stack
 without changing insurance: exact `systemhook.dylib`, TweakLoader/TweakInject,
 ElleKit's `libinjector.dylib`/`libellekit.dylib`, Substrate compatibility,

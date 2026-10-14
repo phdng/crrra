@@ -22,6 +22,9 @@ root = Path(__file__).resolve().parents[1]
 master = (root / "Makefile").read_text(encoding="utf-8")
 workflow = (root.parent / ".github/workflows/build.yml").read_text(encoding="utf-8")
 probe_mk = (root / "sources/supportprobe/Makefile").read_text(encoding="utf-8")
+bare_mk = (root / "sources/supportprobe-bare/Makefile").read_text(encoding="utf-8")
+bare_source = (root / "sources/supportprobe-bare/CRSupportProbeBare.c").read_text(encoding="utf-8")
+helper = (root / "sources/cranehelperd/CRHelperd.m").read_text(encoding="utf-8")
 wire = (root / "sources/supportprobe/CRSupportProbeProtocol.h").read_text(encoding="utf-8")
 springboard = (root / "sources/cranesb/CRSpringBoard.m").read_text(encoding="utf-8")
 flags_source = (root / "sources/supportprobe/CRSupportProbeFlags.c").read_text(encoding="utf-8")
@@ -38,17 +41,36 @@ flags = plistlib.loads(
 plain = plistlib.loads(
     (root / "sources/supportprobe/CraneSupportProbePlain.plist").read_bytes()
 )
+bare = plistlib.loads(
+    (root / "sources/supportprobe-bare/CraneSupportProbeBare.plist").read_bytes()
+)
 
 assert flags == {"Filter": {"Executables": processes, "Flags": 1}}
 assert plain == {"Filter": {"Executables": processes}}
+assert bare == {"Filter": {"Executables": processes}}
 assert "ifeq ($(THEOS_PACKAGE_SCHEME),roothide)" in master
-assert "SUBPROJECTS += sources/supportprobe" in master
+assert "SUBPROJECTS += sources/supportprobe sources/supportprobe-bare" in master
 assert master.index("ifeq ($(THEOS_PACKAGE_SCHEME),roothide)") < master.index(
     "SUBPROJECTS += sources/supportprobe"
 )
 assert "TWEAK_NAME = CraneSupportProbeFlags CraneSupportProbePlain" in probe_mk
 assert "include $(THEOS_MAKE_PATH)/tweak.mk" in probe_mk
 assert "include $(THEOS_MAKE_PATH)/library.mk" not in probe_mk
+assert "LIBRARY_NAME = CraneSupportProbeBare" in bare_mk
+assert "CraneSupportProbeBare_INSTALL_PATH = /Library/MobileSubstrate/DynamicLibraries" in bare_mk
+assert "include $(THEOS_MAKE_PATH)/library.mk" in bare_mk
+assert "include $(THEOS_MAKE_PATH)/tweak.mk" not in bare_mk
+assert "CraneSupportProbeBare_LIBRARIES" not in bare_mk
+assert "#include" not in bare_source
+for forbidden in (
+    "notify_register", "notify_post(", "os_log(", "getprogname(",
+    "MSHook", "dlopen(", "dlsym(", "CRManager",
+):
+    assert forbidden not in bare_source, forbidden
+assert "CRSupportProbeBareInit" in bare_source
+assert "CraneSupportProbeBare.dylib" in helper
+assert "bare=%d" in helper
+assert "pkg/Library/MobileSubstrate/DynamicLibraries/CraneSupportProbeBare.dylib" in workflow
 for name in ("CraneSupportProbeFlags", "CraneSupportProbePlain"):
     assert name in probe_mk
     assert f"{name}_LIBRARIES = substrate" in probe_mk
@@ -96,5 +118,11 @@ assert 'CRReportRuntimeInjection(@"CraneSupport", nil);' not in springboard
 assert "_FRAMEWORKS" not in probe_mk
 for forbidden in ("libcrane", "bsm.0", "Foundation", "CoreFoundation", "Security"):
     assert forbidden not in probe_mk
+
+# CI must prove the bare discriminator has no jailbreak-library dependency,
+# and roothide-linked tweak dependencies use its @loader_path/.jbroot rule.
+assert "Bare probe unexpectedly links a jailbreak library" in workflow
+assert "Invalid roothide jailbreak dependency load path" in workflow
+assert "@loader_path/.jbroot/" in workflow
 
 print("Crane roothide daemon injection probe contracts: PASS (device diagnostic pending)")

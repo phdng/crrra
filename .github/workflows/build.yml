@@ -291,10 +291,39 @@ jobs:
           if [ "${{ matrix.variant }}" = roothide ]; then
             for binary in \
               'pkg/Library/MobileSubstrate/DynamicLibraries/CraneSupportProbeFlags.dylib' \
-              'pkg/Library/MobileSubstrate/DynamicLibraries/CraneSupportProbePlain.dylib'; do
+              'pkg/Library/MobileSubstrate/DynamicLibraries/CraneSupportProbePlain.dylib' \
+              'pkg/Library/MobileSubstrate/DynamicLibraries/CraneSupportProbeBare.dylib'; do
               test -f "$binary" || { echo "::error::Missing daemon injection probe $binary"; exit 1; }
               echo "--- $binary" | tee -a linkage.txt
               otool -L "$binary" | tee -a linkage.txt
+            done
+
+            bare='pkg/Library/MobileSubstrate/DynamicLibraries/CraneSupportProbeBare.dylib'
+            if otool -L "$bare" | tail -n +2 | grep -Eiq 'libsubstrate|CydiaSubstrate|libellekit|libinjector|libcrane|libsandy'; then
+              echo "::error::Bare probe unexpectedly links a jailbreak library"
+              otool -L "$bare"
+              exit 1
+            fi
+
+            # RootHide requires jailbreak-library dependencies to use a
+            # @loader_path/.jbroot/... install name. System libraries remain
+            # ordinary /usr/lib or /System paths.
+            for binary in \
+              'pkg/Library/MobileSubstrate/DynamicLibraries/CraneSB.dylib' \
+              'pkg/Library/MobileSubstrate/DynamicLibraries/CraneSupport.dylib' \
+              'pkg/Library/MobileSubstrate/DynamicLibraries/CraneSupportProbeFlags.dylib' \
+              'pkg/Library/MobileSubstrate/DynamicLibraries/CraneSupportProbePlain.dylib'; do
+              otool -L "$binary" | tail -n +2 | \
+                grep -Ei 'libsubstrate|CydiaSubstrate|libcrane\.dylib' | \
+                while IFS= read -r dep; do
+                  case "$dep" in
+                    *'@loader_path/.jbroot/'*) ;;
+                    *)
+                      echo "::error::Invalid roothide jailbreak dependency load path in $binary: $dep"
+                      exit 1
+                      ;;
+                  esac
+                done
             done
           fi
           cat linkage.txt >> "$GITHUB_STEP_SUMMARY"

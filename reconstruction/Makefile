@@ -37,7 +37,7 @@ SUBPROJECTS += sources/maindylib sources/libcrane sources/cranehelperd \
 # Temporary roothide-only daemon-injection probes. Keep them outside rootful
 # fidelity builds: they are diagnostic artifacts, not recovered Crane payload.
 ifeq ($(THEOS_PACKAGE_SCHEME),roothide)
-SUBPROJECTS += sources/supportprobe
+SUBPROJECTS += sources/supportprobe sources/supportprobe-bare
 endif
 
 include $(THEOS_MAKE_PATH)/aggregate.mk
@@ -68,6 +68,8 @@ ifeq ($(THEOS_PACKAGE_SCHEME),roothide)
 	       "$(THEOS_STAGING_DIR)/Library/MobileSubstrate/DynamicLibraries/CraneSupportProbeFlags.plist"
 	@cp -f "$(THEOS_PROJECT_DIR)/sources/supportprobe/CraneSupportProbePlain.plist" \
 	       "$(THEOS_STAGING_DIR)/Library/MobileSubstrate/DynamicLibraries/CraneSupportProbePlain.plist"
+	@cp -f "$(THEOS_PROJECT_DIR)/sources/supportprobe-bare/CraneSupportProbeBare.plist" \
+	       "$(THEOS_STAGING_DIR)/Library/MobileSubstrate/DynamicLibraries/CraneSupportProbeBare.plist"
 endif
 	@echo "== staged layout =="
 	@find "$(THEOS_STAGING_DIR)" -type f | sed "s|$(THEOS_STAGING_DIR)/||" | sort

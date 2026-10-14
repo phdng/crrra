@@ -591,6 +591,7 @@ static NSString *CRSupportMappedImageSummary(NSArray<NSString *> *processes)
         BOOL support = NO;
         BOOL flags = NO;
         BOOL plain = NO;
+        BOOL bare = NO;
         BOOL systemhook = NO;
         BOOL tweakLoader = NO;
         BOOL injector = NO;
@@ -622,6 +623,8 @@ static NSString *CRSupportMappedImageSummary(NSArray<NSString *> *processes)
                         flags = YES;
                     else if (strcmp(leaf, "CraneSupportProbePlain.dylib") == 0)
                         plain = YES;
+                    else if (strcmp(leaf, "CraneSupportProbeBare.dylib") == 0)
+                        bare = YES;
 
                     if (strcmp(leaf, "systemhook.dylib") == 0)
                         systemhook = YES;
@@ -646,6 +649,7 @@ static NSString *CRSupportMappedImageSummary(NSArray<NSString *> *processes)
                         strcmp(leaf, "CraneSupport.dylib") != 0 &&
                         strcmp(leaf, "CraneSupportProbeFlags.dylib") != 0 &&
                         strcmp(leaf, "CraneSupportProbePlain.dylib") != 0 &&
+                        strcmp(leaf, "CraneSupportProbeBare.dylib") != 0 &&
                         leafName.length) {
                         [otherTweaks addObject:leafName];
                     }
@@ -686,11 +690,11 @@ static NSString *CRSupportMappedImageSummary(NSArray<NSString *> *processes)
                 NSMakeRange(0, MIN((NSUInteger)4, sortedJB.count))]
                 componentsJoinedByString:@"+"] : @"-";
         [parts addObject:[NSString stringWithFormat:
-            @"%@[pid=%d inspect=%d systemhook=%d loader=%d injector=%d ellekit=%d substrate=%d jb=%lu jbSample=%@ other=%lu sample=%@ support=%d flags=%d plain=%d]",
+            @"%@[pid=%d inspect=%d systemhook=%d loader=%d injector=%d ellekit=%d substrate=%d jb=%lu jbSample=%@ other=%lu sample=%@ support=%d flags=%d plain=%d bare=%d]",
             process, pid, inspect, systemhook, tweakLoader, injector, ellekit,
             substrate, (unsigned long)jailbreakImages.count, jbSample,
             (unsigned long)otherTweaks.count, sample,
-            support, flags, plain]];
+            support, flags, plain, bare]];
     }
     return [parts componentsJoinedByString:@"; "];
 }
