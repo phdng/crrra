@@ -316,6 +316,8 @@ static void CRManagerVerifyRuntimeComponent(NSString *component,
             if (valid) {
                 BOOL fixupAttempted =
                     xpc_dictionary_get_bool(response, "fixup_attempted");
+                BOOL fixupInProgress =
+                    xpc_dictionary_get_bool(response, "fixup_in_progress");
                 BOOL fixupSuccess =
                     xpc_dictionary_get_bool(response, "fixup_success");
                 const char *fixupProcessCString =
@@ -340,10 +342,10 @@ static void CRManagerVerifyRuntimeComponent(NSString *component,
                     ? [NSString stringWithUTF8String:backendInventoryCString] : nil;
                 int64_t fixupErrorCode =
                     xpc_dictionary_get_int64(response, "fixup_error_code");
-                NSLog(@"CraneManager: helper injection fixup state attempted=%d success=%d process=%@ backend=%@ transitions=%@ errorCode=%lld error=%@ backends=%@",
-                      fixupAttempted, fixupSuccess, fixupProcess, fixupBackend,
-                      fixupTransitions, fixupErrorCode, fixupError,
-                      backendInventory);
+                NSLog(@"CraneManager: helper injection fixup state attempted=%d inProgress=%d success=%d process=%@ backend=%@ transitions=%@ errorCode=%lld error=%@ backends=%@",
+                      fixupAttempted, fixupInProgress, fixupSuccess,
+                      fixupProcess, fixupBackend, fixupTransitions,
+                      fixupErrorCode, fixupError, backendInventory);
             }
 
             NSMutableArray *broken = [NSMutableArray new];

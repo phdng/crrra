@@ -76,6 +76,9 @@ assert 'xpc_dictionary_get_string(message, "path")' not in fixup_raw
 assert 'xpc_dictionary_get_string(message, "dylib")' not in fixup_raw
 assert 'CRBeginInjectionFixupAttempt();' in fixup_raw
 assert 'CRFinishInjectionFixupAttempt(success, fixError);' in fixup_raw
+assert 'gLastInjectionFixupInProgress = YES;' in helper
+assert 'gLastInjectionFixupInProgress = NO;' in helper
+assert '@"inProgress": @(gLastInjectionFixupInProgress)' in helper
 assert '@"/Library/MobileSubstrate/DynamicLibraries/CraneSupport.dylib"' in helper
 assert 'CRSupportFixupTargets(' in helper
 assert 'CRPidMapsImageLeaf(pid, @"CraneSupport.dylib"' in helper
@@ -89,6 +92,8 @@ assert 'fixup_error_description' in helper
 assert 'CRProcessPidsForNames(@[process])' in helper
 assert 'deferred=target_transition' in helper
 assert 'deferred=target_changed_before' in helper
+assert 'injectorExit=0 immediateMapped=%d inspect=%d' in helper
+assert '[NSDate timeIntervalSinceReferenceDate] + 2.0' not in helper
 
 # Independent model: unsupported is None, whereas a genuinely empty dump
 # would be {} and a genuine vendor-ID read would be a nonempty string.

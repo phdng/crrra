@@ -151,14 +151,16 @@ assert 'xpc_dictionary_set_string(reply, "support_image_map"' in peer_code
 assert 'CraneManager: helper support image map %@' in manager
 assert 'xpc_dictionary_get_string(response, "support_image_map")' in manager
 assert 'xpc_dictionary_set_bool(reply, "fixup_attempted"' in peer_code
+assert 'xpc_dictionary_set_bool(reply, "fixup_in_progress"' in peer_code
 assert 'xpc_dictionary_set_bool(reply, "fixup_success"' in peer_code
 assert 'xpc_dictionary_set_string(reply, "fixup_backend_inventory"' in peer_code
 assert 'xpc_dictionary_set_string(reply, "fixup_transitions"' in peer_code
 assert 'xpc_dictionary_get_bool(response, "fixup_attempted")' in manager
+assert 'xpc_dictionary_get_bool(response, "fixup_in_progress")' in manager
 assert 'xpc_dictionary_get_string(response, "fixup_transitions")' in manager
 assert 'xpc_dictionary_get_bool(response, "fixup_success")' in manager
 assert 'xpc_dictionary_get_string(response, "fixup_backend_inventory")' in manager
-assert 'CraneManager: helper injection fixup state attempted=%d success=%d' in manager
+assert 'CraneManager: helper injection fixup state attempted=%d inProgress=%d success=%d' in manager
 assert 'transitions=%@' in manager
 for marker in (
     '"systemhook.dylib"',

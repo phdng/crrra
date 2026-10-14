@@ -595,6 +595,7 @@ static NSString *const CRSupportDylibVirtualPath =
 static NSString *const CRInjectionErrorDomain = @"cranehelperdErrorDomain";
 
 static BOOL gLastInjectionFixupAttempted = NO;
+static BOOL gLastInjectionFixupInProgress = NO;
 static BOOL gLastInjectionFixupSuccess = NO;
 static NSError *gLastInjectionFixupError = nil;
 static NSString *gLastInjectionFixupProcess = nil;
@@ -606,6 +607,7 @@ static void CRBeginInjectionFixupAttempt(void)
 {
     @synchronized(CRInjectionErrorDomain) {
         gLastInjectionFixupAttempted = YES;
+        gLastInjectionFixupInProgress = YES;
         gLastInjectionFixupSuccess = NO;
         gLastInjectionFixupError = nil;
         gLastInjectionFixupProcess = nil;
@@ -640,6 +642,7 @@ static void CRRecordInjectionFixupTransition(NSString *process,
 static void CRFinishInjectionFixupAttempt(BOOL success, NSError *error)
 {
     @synchronized(CRInjectionErrorDomain) {
+        gLastInjectionFixupInProgress = NO;
         gLastInjectionFixupSuccess = success;
         gLastInjectionFixupError = error;
         gLastInjectionFixupTime = [NSDate timeIntervalSinceReferenceDate];
@@ -651,6 +654,7 @@ static NSDictionary *CRLastInjectionFixupSnapshot(void)
     @synchronized(CRInjectionErrorDomain) {
         NSMutableDictionary *snapshot = [@{
             @"attempted": @(gLastInjectionFixupAttempted),
+            @"inProgress": @(gLastInjectionFixupInProgress),
             @"success": @(gLastInjectionFixupSuccess),
             @"time": @(gLastInjectionFixupTime),
         } mutableCopy];
@@ -1027,47 +1031,23 @@ static BOOL CRFixupCraneSupportInPid(pid_t pid, NSString *process,
         return NO;
     }
 
-    NSTimeInterval deadline =
-        [NSDate timeIntervalSinceReferenceDate] + 2.0;
-    do {
-        NSString *currentProcess = CRProcessNameForPid(pid);
-        if (![currentProcess isEqualToString:process]) {
-            /* Recovered original _injectDylib:intoProcessWithPid:error:
-             * returns success when the injector exits 0 and does not add a
-             * post-injection PID-stability error. Preserve our verification
-             * when the same PID survives, but do not abort the whole seven-
-             * daemon pass merely because a launchd-managed target transitioned. */
-            CRRecordInjectionFixupTransition(process, pid, currentProcess);
-            NSLog(@"Crane helper: injection fixup process=%@ pid=%d injectorExit=0 deferred=target_transition actual=%@",
-                  process, pid, currentProcess);
-            return YES;
-        }
-
-        BOOL canInspect = NO;
-        if (CRPidMapsImageLeaf(pid, @"CraneSupport.dylib", &canInspect)) {
-            NSLog(@"Crane helper: injection fixup process=%@ pid=%d verified=1",
-                  process, pid);
-            return YES;
-        }
-        if (!canInspect) {
-            if (error) {
-                *error = CRInjectionError(CRInjectionInspectionUnavailable,
-                    [NSString stringWithFormat:
-                        @"Lost mapped-image inspection for %@ pid=%d after injection",
-                        process, pid]);
-            }
-            return NO;
-        }
-        usleep(100000);
-    } while ([NSDate timeIntervalSinceReferenceDate] < deadline);
-
-    if (error) {
-        *error = CRInjectionError(CRInjectionVerificationFailed,
-            [NSString stringWithFormat:
-                @"Injector exited successfully but CraneSupport.dylib is not mapped in %@ pid=%d",
-                process, pid]);
+    /* Recovered original _injectDylib:intoProcessWithPid:error: returns
+     * success when the injector exits 0. It does not synchronously poll the
+     * image map here; later insurance/verify paths decide real health. Keep
+     * one immediate mapper sample as diagnostic only so the pass stays fast. */
+    NSString *currentProcess = CRProcessNameForPid(pid);
+    if (![currentProcess isEqualToString:process]) {
+        CRRecordInjectionFixupTransition(process, pid, currentProcess);
+        NSLog(@"Crane helper: injection fixup process=%@ pid=%d injectorExit=0 deferred=target_transition actual=%@",
+              process, pid, currentProcess);
+        return YES;
     }
-    return NO;
+
+    BOOL canInspect = NO;
+    BOOL mapped = CRPidMapsImageLeaf(pid, @"CraneSupport.dylib", &canInspect);
+    NSLog(@"Crane helper: injection fixup process=%@ pid=%d injectorExit=0 immediateMapped=%d inspect=%d",
+          process, pid, mapped, canInspect);
+    return YES;
 }
 
 static BOOL CRRunCraneSupportInjectionFixup(NSError **error)
@@ -1570,11 +1550,12 @@ static NSString *CRHandleHealthRequest(xpc_connection_t peer,
         NSDictionary *fixupState = CRLastInjectionFixupSnapshot();
         NSError *lastFixupError = fixupState[@"error"];
         NSString *backendInventory = CRSupportInjectionBackendInventory();
-        NSLog(@"Crane helper: insurance caller=%@ authorized=%d preflight=%d supportInspect=%d running=%lu supportComplete=%d broken=%@ images=%@ fixupAttempted=%d fixupSuccess=%d fixupProcess=%@ fixupBackend=%@ fixupTransitions=%@ fixupError=%@ backends=%@",
+        NSLog(@"Crane helper: insurance caller=%@ authorized=%d preflight=%d supportInspect=%d running=%lu supportComplete=%d broken=%@ images=%@ fixupAttempted=%d fixupInProgress=%d fixupSuccess=%d fixupProcess=%@ fixupBackend=%@ fixupTransitions=%@ fixupError=%@ backends=%@",
               peerProcess, injectionVerified, preflight,
               supportInspectionAvailable, (unsigned long)runningSupport.count,
               supportComplete, brokenSupportString, supportImageMap,
               [fixupState[@"attempted"] boolValue],
+              [fixupState[@"inProgress"] boolValue],
               [fixupState[@"success"] boolValue],
               fixupState[@"process"], fixupState[@"backend"],
               fixupState[@"transitions"], lastFixupError, backendInventory);
@@ -1594,6 +1575,8 @@ static NSString *CRHandleHealthRequest(xpc_connection_t peer,
                                       supportImageMap.UTF8String);
         xpc_dictionary_set_bool(reply, "fixup_attempted",
                                 [fixupState[@"attempted"] boolValue]);
+        xpc_dictionary_set_bool(reply, "fixup_in_progress",
+                                [fixupState[@"inProgress"] boolValue]);
         xpc_dictionary_set_bool(reply, "fixup_success",
                                 [fixupState[@"success"] boolValue]);
         if ([fixupState[@"process"] length])
