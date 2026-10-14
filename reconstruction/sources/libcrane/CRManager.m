@@ -2569,7 +2569,12 @@ usingBiometricsIfNeededWithSuccessHandler:(void (^)(BOOL authenticated))handler
     /* Native CranePrefs 0x14D00/0x15448 uses {identifier, name} dictionaries,
      * not the string array the old reconstruction expected. Reads are
      * deliberately non-destructive when preferences contain malformed data. */
-    id stored = [self preferenceValueForKey:@"crane_gameCenter.availableAccounts"];
+    /* Original libcrane 0x9608 reads the CFSTR "gameCenterAccounts".
+     * Old reconstruction builds mistakenly used a different key; read that
+     * only when the native record is absent, without writing during lookup. */
+    id stored = [self preferenceValueForKey:@"gameCenterAccounts"];
+    if (!stored)
+        stored = [self preferenceValueForKey:@"crane_gameCenter.availableAccounts"];
     return CRGameCenterValidatedAccounts(stored);
 }
 - (void)gameCenter_setAvailableAccounts:(NSArray<NSDictionary *> *)accounts
@@ -2580,7 +2585,7 @@ usingBiometricsIfNeededWithSuccessHandler:(void (^)(BOOL authenticated))handler
         return;
     }
     [self setPreferenceValue:[accounts copy]
-                     forKey:@"crane_gameCenter.availableAccounts"];
+                     forKey:@"gameCenterAccounts"];
 }
 - (BOOL)gameCenter_isAccountAvailable:(NSString *)account
 {

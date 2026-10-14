@@ -25,6 +25,14 @@ assert '#import "CRGameCenterAccounts.h"' in manager
 assert "CRGameCenterValidatedAccounts(stored)" in manager
 assert "CRGameCenterAccountsAreValidForWrite(accounts)" in manager
 assert "[self setPreferenceValue:[accounts copy]" in manager
+# Disassembly of original libcrane 0x9608/0x961C resolves a CFString
+# literal "gameCenterAccounts", not the older reconstruction-specific key.
+assert 'id stored = [self preferenceValueForKey:@"gameCenterAccounts"]' in manager
+assert 'forKey:@"gameCenterAccounts"]' in manager
+assert 'if (!stored)' in manager
+assert 'stored = [self preferenceValueForKey:@"crane_gameCenter.availableAccounts"]' in manager
+assert manager.index('preferenceValueForKey:@"gameCenterAccounts"') < manager.index(
+    'preferenceValueForKey:@"crane_gameCenter.availableAccounts"')
 assert "CRGameCenterAccountIdentifierExists(" in manager
 assert "containsObject:account" not in manager[
     manager.index("- (BOOL)gameCenter_isAccountAvailable:"):

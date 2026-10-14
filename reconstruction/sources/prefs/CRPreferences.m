@@ -361,6 +361,239 @@
 }
 @end
 
+/* Game Center account list reconstructed from CranePrefs 0x14BF4..0x167D0.
+ * Native add/rename use an array of {identifier,name}; deletion also removes
+ * a live accountsd SQLite database, so do not expose deletion until device
+ * tests prove the complete cleanup transaction. */
+@interface CRPGameCenterAccountsController : PSListController
+@property (nonatomic, strong) NSArray *craneAccountSpecifiers;
+@property (nonatomic, assign) BOOL craneAccountReloadScheduled;
+- (void)addButtonPressed;
+- (void)scheduleAccountListReload;
+- (void)accountPressed:(PSSpecifier *)specifier;
+- (void)reloadListInParentController;
+@end
+
+@implementation CRPGameCenterAccountsController
+
+- (void)viewDidLoad
+{
+    [self specifiers];
+    [super viewDidLoad];
+    self.navigationItem.rightBarButtonItem =
+        [[UIBarButtonItem alloc] initWithBarButtonSystemItem:UIBarButtonSystemItemAdd
+                                                      target:self
+                                                      action:@selector(addButtonPressed)];
+}
+
+- (void)viewWillAppear:(BOOL)animated
+{
+    [super viewWillAppear:animated];
+    if (self.craneAccountSpecifiers)
+        [self scheduleAccountListReload];
+}
+
+- (void)scheduleAccountListReload
+{
+    if (!NSThread.isMainThread) {
+        dispatch_async(dispatch_get_main_queue(), ^{
+            [self scheduleAccountListReload];
+        });
+        return;
+    }
+    if (self.craneAccountReloadScheduled)
+        return;
+    self.craneAccountReloadScheduled = YES;
+    dispatch_async(dispatch_get_main_queue(), ^{
+        self.craneAccountReloadScheduled = NO;
+        self.craneAccountSpecifiers = nil;
+        @try { [self setValue:nil forKey:@"_specifiers"]; }
+        @catch (__unused NSException *exception) {}
+        [self reloadSpecifiers];
+    });
+}
+
+- (id)specifiers
+{
+    if (!self.craneAccountSpecifiers) {
+        NSMutableArray *rows = [NSMutableArray new];
+        PSSpecifier *group = [PSSpecifier emptyGroupSpecifier];
+        [group setProperty:CRLocalize(@"GAME_CENTER_MANAGER_FOOTER")
+                   forKey:@"footerText"];
+        [rows addObject:group];
+        /* Native 0x157E4 renders DEFAULT as a fixed, non-editable row. */
+        PSSpecifier *system = [PSSpecifier preferenceSpecifierNamed:
+            CRLocalize(@"SYSTEM_DEFAULT") target:self set:NULL get:NULL
+            detail:NULL cell:7 edit:0];
+        [system setProperty:@YES forKey:@"enabled"];
+        [system setProperty:CR_DEFAULT_CONTAINER_IDENTIFIER
+                    forKey:@"accountIdentifier"];
+        [rows addObject:system];
+        for (NSDictionary *entry in [CraneManager.sharedManager gameCenter_availableAccounts]) {
+            PSSpecifier *row = [PSSpecifier preferenceSpecifierNamed:
+                entry[@"name"] target:self set:NULL get:NULL
+                detail:NULL cell:13 edit:0];
+            [row setProperty:@YES forKey:@"enabled"];
+            [row setProperty:entry[@"identifier"] forKey:@"accountIdentifier"];
+            [row setButtonAction:@selector(accountPressed:)];
+            [rows addObject:row];
+        }
+        self.craneAccountSpecifiers = [rows copy];
+    }
+    self.title = CRLocalize(@"GAME_CENTER_ACCOUNTS");
+    @try { [self setValue:self.craneAccountSpecifiers forKey:@"_specifiers"]; }
+    @catch (NSException *exception) {
+        NSLog(@"CranePrefs: Game Center account list backing failed: %@", exception);
+    }
+    return self.craneAccountSpecifiers;
+}
+
+/* Native 0x14BF4 asks the parent detail to update its selected account
+ * after an add/rename. Do not invalidate a Preferences table mid-dispatch. */
+- (void)reloadListInParentController
+{
+    NSArray *stack = self.navigationController.viewControllers;
+    if (stack.count < 2)
+        return;
+    id parent = stack[stack.count - 2];
+    SEL refresh = @selector(reloadAssociatedGameCenterAccount);
+    if ([parent respondsToSelector:refresh])
+        ((void (*)(id, SEL))objc_msgSend)(parent, refresh);
+}
+
+- (NSDictionary *)dictionaryForAccountWithIdentifier:(NSString *)identifier
+{
+    if (![identifier isKindOfClass:NSString.class] ||
+        !identifier.length ||
+        [identifier isEqualToString:CR_DEFAULT_CONTAINER_IDENTIFIER])
+        return nil;
+    for (NSDictionary *entry in [CraneManager.sharedManager gameCenter_availableAccounts]) {
+        if ([entry[@"identifier"] isEqualToString:identifier])
+            return entry;
+    }
+    return nil;
+}
+
+- (NSString *)accountNameForAccountWithIdentifier:(NSString *)identifier
+{
+    if ([identifier isEqualToString:CR_DEFAULT_CONTAINER_IDENTIFIER])
+        return CRLocalize(@"SYSTEM_DEFAULT");
+    return [self dictionaryForAccountWithIdentifier:identifier][@"name"];
+}
+
+/* Each write rereads the current persisted array. Never build a replacement
+ * from a stale list controller snapshot or normalize a corrupted list into
+ * an unintended mass account deletion. */
+- (BOOL)writeAccountWithIdentifier:(NSString *)identifier
+                             name:(NSString *)name
+                           create:(BOOL)create
+{
+    if (![identifier isKindOfClass:NSString.class] || !identifier.length ||
+        [identifier isEqualToString:CR_DEFAULT_CONTAINER_IDENTIFIER] ||
+        ![name isKindOfClass:NSString.class])
+        return NO;
+    NSString *cleanName = [name stringByTrimmingCharactersInSet:
+        NSCharacterSet.whitespaceAndNewlineCharacterSet];
+    if (!cleanName.length)
+        return NO;
+
+    CraneManager *manager = CraneManager.sharedManager;
+    @synchronized(manager) {
+        id raw = [manager preferenceValueForKey:@"gameCenterAccounts"];
+        if (!raw)
+            raw = [manager preferenceValueForKey:@"crane_gameCenter.availableAccounts"];
+        if (raw && !CRGameCenterAccountsAreValidForWrite(raw)) {
+            NSLog(@"CranePrefs: refusing Game Center write over malformed account list");
+            return NO;
+        }
+        NSMutableArray<NSDictionary *> *accounts =
+            [[manager gameCenter_availableAccounts] mutableCopy];
+        NSUInteger index = [accounts indexOfObjectPassingTest:
+            ^BOOL(NSDictionary *entry, NSUInteger idx, BOOL *stop) {
+                (void)idx; (void)stop;
+                return [entry[@"identifier"] isEqualToString:identifier];
+            }];
+        if (create) {
+            if (index != NSNotFound)
+                return NO;
+            [accounts addObject:@{@"identifier":identifier, @"name":cleanName}];
+        } else {
+            if (index == NSNotFound)
+                return NO;
+            NSMutableDictionary *updated = [accounts[index] mutableCopy];
+            if ([updated[@"name"] isEqualToString:cleanName])
+                return NO;
+            updated[@"name"] = cleanName;
+            accounts[index] = updated;
+        }
+        [manager gameCenter_setAvailableAccounts:accounts];
+    }
+    [self reloadListInParentController];
+    [self scheduleAccountListReload];
+    return YES;
+}
+
+- (NSString *)addAccountWithName:(NSString *)name
+{
+    NSString *identifier = [NSUUID UUID].UUIDString;
+    return [self writeAccountWithIdentifier:identifier name:name create:YES]
+        ? identifier : nil;
+}
+
+- (void)renameAccountWithIdentifier:(NSString *)identifier toName:(NSString *)name
+{
+    [self writeAccountWithIdentifier:identifier name:name create:NO];
+}
+
+/* Original 0x15BE0 uses an alert + text field; 0x15564 creates the UUID. */
+- (void)addButtonPressed
+{
+    UIAlertController *alert = [UIAlertController alertControllerWithTitle:
+        CRLocalize(@"GAME_CENTER_ADD_ACCOUNT_TITLE")
+        message:CRLocalize(@"GAME_CENTER_ADD_ACCOUNT_MESSAGE")
+        preferredStyle:UIAlertControllerStyleAlert];
+    [alert addTextFieldWithConfigurationHandler:^(UITextField *field) {
+        field.placeholder = CRLocalize(@"GAME_CENTER_ACCOUNT");
+    }];
+    __weak typeof(self) weakSelf = self;
+    [alert addAction:[UIAlertAction actionWithTitle:CRLocalize(@"CANCEL")
+        style:UIAlertActionStyleCancel handler:nil]];
+    [alert addAction:[UIAlertAction actionWithTitle:CRLocalize(@"ADD")
+        style:UIAlertActionStyleDefault handler:^(__unused UIAlertAction *action) {
+        [weakSelf addAccountWithName:alert.textFields.firstObject.text];
+    }]];
+    [self presentViewController:alert animated:YES completion:nil];
+}
+
+/* Original 0x15F90 opens a rename alert for non-DEFAULT accounts. */
+- (void)accountPressed:(PSSpecifier *)specifier
+{
+    NSString *identifier = [specifier propertyForKey:@"accountIdentifier"];
+    if (![identifier isKindOfClass:NSString.class] ||
+        [identifier isEqualToString:CR_DEFAULT_CONTAINER_IDENTIFIER])
+        return;
+    NSDictionary *account = [self dictionaryForAccountWithIdentifier:identifier];
+    if (!account)
+        return;
+    UIAlertController *alert = [UIAlertController alertControllerWithTitle:
+        CRLocalize(@"GAME_CENTER_RENAME_ACCOUNT_TITLE")
+        message:nil preferredStyle:UIAlertControllerStyleAlert];
+    [alert addTextFieldWithConfigurationHandler:^(UITextField *field) {
+        field.text = account[@"name"];
+    }];
+    __weak typeof(self) weakSelf = self;
+    [alert addAction:[UIAlertAction actionWithTitle:CRLocalize(@"CANCEL")
+        style:UIAlertActionStyleCancel handler:nil]];
+    [alert addAction:[UIAlertAction actionWithTitle:CRLocalize(@"RENAME")
+        style:UIAlertActionStyleDefault handler:^(__unused UIAlertAction *action) {
+        [weakSelf renameAccountWithIdentifier:identifier
+                                       toName:alert.textFields.firstObject.text];
+    }]];
+    [self presentViewController:alert animated:YES completion:nil];
+}
+
+@end
+
 /* Initial container detail controller reconstructed from CranePrefs 0x8920,
  * 0xEF38, 0xF0EC and 0xF268. Advanced groups remain unsupported. */
 @interface CRPContainerConfigurationListController : PSListController
@@ -633,6 +866,16 @@
             [account setProperty:@"availableGameCenterAccountNames"
                          forKey:@"titlesDataSource"];
             [rows addObject:account];
+
+            /* Native 0x11734 links the manager immediately below the picker.
+             * Use the recovered class rather than a placeholder controller. */
+            PSSpecifier *manage = [PSSpecifier preferenceSpecifierNamed:
+                CRLocalize(@"MANAGE_GAME_CENTER_ACCOUNTS") target:self
+                set:NULL get:NULL
+                detail:[CRPGameCenterAccountsController class] cell:2 edit:0];
+            [manage setProperty:@YES forKey:@"enabled"];
+            [manage setDetailControllerClass:[CRPGameCenterAccountsController class]];
+            [rows addObject:manage];
         }
 
         /* Native CranePrefs 0x11520 displays size in a footer, initially
@@ -847,6 +1090,13 @@
         containerSettingsForContainerWithIdentifier:self.containerIdentifier
                           ofApplicationWithIdentifier:self.applicationIdentifier];
     return settings[key];
+}
+
+/* Native 0x14BF4 refreshes the selected account in the parent when the
+ * account registry changes. Delay the rebuild to avoid table reentrancy. */
+- (void)reloadAssociatedGameCenterAccount
+{
+    [self scheduleContainerConfigurationReload];
 }
 
 /* CranePrefs 0x1312C and 0x13310 expose matching titles and identifiers.

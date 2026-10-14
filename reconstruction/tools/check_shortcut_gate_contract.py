@@ -100,7 +100,8 @@ assert "return self.applications[appID]" not in support
 assert 'CFPreferencesAppSynchronize((__bridge CFStringRef)CR_PREFS_DOMAIN)' in manager
 assert 'CFPreferencesSetAppValue(CFSTR("applications")' not in manager
 assert "self.lastError = error;" in manager
-add = section(ui, "- (void)addButtonPressed", "@end")
+app_controller = ui[ui.index("@implementation CRPApplicationConfigurationListController"):]
+add = section(app_controller, "- (void)addButtonPressed", "@end")
 assert add.index("if (!identifier.length)") < add.index('NSLog(@"CranePrefs: created container')
 assert "tools/container_menu_smoke.m" in workflow
 smoke = (root / "tools/container_menu_smoke.m").read_text(encoding="utf-8")
