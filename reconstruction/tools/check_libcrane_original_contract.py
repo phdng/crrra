@@ -1,11 +1,12 @@
 """Direct libcrane parity contracts recovered from original Mach-O metadata/disassembly.
 
 The original libcrane has no IDA export directory, but its Objective-C metadata
-lives in __DATA_CONST,__objc_classlist. tools/objc_classes.py must retain that
-classlist and the reconstructed source must preserve the recovered high-value
-contracts: appSettings_<bundleID> storage, DEFAULT projection, associated-path
-enumeration, keychainVersion=2, daemon reload groups, notification XPC bridge,
-and cfprefsd flush after reload-if-active.
+lives in __DATA_CONST,__objc_classlist. The tracked analysis/objc_classes.json
+fixture provides CI-stable evidence; the workstation-only tools/objc_classes.py
+parser is checked only when available. The reconstructed source must preserve
+high-value contracts: appSettings_<bundleID> storage, DEFAULT projection,
+associated paths, lifecycle, keychainVersion=2, daemon reload groups,
+notification XPC bridge, and cfprefsd flush after reload-if-active.
 """
 from pathlib import Path
 import json
@@ -15,10 +16,17 @@ workspace = root.parent
 manager = (root / "sources/libcrane/CRManager.m").read_text(encoding="utf-8")
 header = (root / "sources/common/CRManager.h").read_text(encoding="utf-8")
 registry = (root / "sources/common/CRContainerRegistry.h").read_text(encoding="utf-8")
-parser = (workspace / "tools/objc_classes.py").read_text(encoding="utf-8")
-classes = json.loads((workspace / "analysis/objc_classes.json").read_text(encoding="utf-8"))
+parser_path = workspace / "tools/objc_classes.py"
+# The parser belongs to local reverse-engineering tooling and is ignored by
+# Git. GitHub Actions checks out the committed evidence fixture instead.
+# If the original parser is available locally, also validate its classlist.
+if parser_path.is_file():
+    parser = parser_path.read_text(encoding="utf-8")
+    assert '"__DATA_CONST,__objc_classlist"' in parser
 
-assert '"__DATA_CONST,__objc_classlist"' in parser
+fixture_path = workspace / "analysis/objc_classes.json"
+assert fixture_path.is_file(), f"Tracked ObjC evidence fixture missing: {fixture_path}"
+classes = json.loads(fixture_path.read_text(encoding="utf-8"))
 lib = classes.get("libcrane.dylib", {})
 assert list(lib) == ["CraneManager"], lib.keys()
 methods = lib["CraneManager"]["instance_methods"]
