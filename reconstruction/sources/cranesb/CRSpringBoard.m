@@ -33,6 +33,11 @@
 #import <objc/runtime.h>
 #import <objc/message.h>
 
+#if CRANE_ROOTHIDE
+#include <notify.h>
+#include "../supportprobe/CRSupportProbeProtocol.h"
+#endif
+
 #import "CRManager.h"
 #import "CRPaths.h"
 #import "CRPreferences.h"
@@ -67,6 +72,48 @@ static BOOL keychainOutdated = NO;        /* CraneSB 0x2DDF8 */
 NSError *CRInjectionFixupError = nil;     /* CraneSB 0x2DDF0 */
 
 extern int sandbox_container_path_for_pid(int pid, char *buf, size_t size);
+
+#if CRANE_ROOTHIDE
+/* Constructor os_log entries from system daemons can predate mobile's oslog
+ * session. A positive reply via Darwin notifications is instead captured
+ * inside SpringBoard, whose CraneManager logs are already visible on device.
+ * This is a diagnostic observer only: never use replies as insurance proof. */
+static int gSupportProbeReplyTokens[14];
+
+static void CRRegisterSupportProbeReplies(void)
+{
+    NSArray<NSString *> *processes = @[
+        @"cfprefsd", @"containermanagerd", @"securityd", @"pkd",
+        @"lsd", @"accountsd", @"apsd"
+    ];
+    NSUInteger index = 0;
+    for (NSString *variant in @[@"flags1", @"plain"]) {
+        for (NSString *process in processes) {
+            NSString *channel = [NSString stringWithFormat:@"%s.%@.%@",
+                CR_SUPPORT_PROBE_REPLY_PREFIX, variant, process];
+            uint32_t status = notify_register_dispatch(
+                channel.UTF8String, &gSupportProbeReplyTokens[index++],
+                dispatch_get_global_queue(DISPATCH_QUEUE_PRIORITY_DEFAULT, 0),
+                ^(int token) {
+                    (void)token;
+                    NSLog(@"CraneSB: support probe reply variant=%@ process=%@",
+                          variant, process);
+                });
+            if (status != NOTIFY_STATUS_OK) {
+                NSLog(@"CraneSB: support probe listener failed variant=%@ process=%@ status=%u",
+                      variant, process, status);
+            }
+        }
+    }
+}
+
+static void CRRequestSupportProbeReplies(void)
+{
+    uint32_t status = notify_post(CR_SUPPORT_PROBE_PING);
+    NSLog(@"CraneSB: support probe ping status=%u (positive replies prove live probe injection)",
+          status);
+}
+#endif
 
 /* ------------------------------------------------------------------------- */
 /* Preference predicates (CONFIRMED_STATIC, one per recovered function)      */
@@ -187,6 +234,10 @@ static NSMutableDictionary *CRApplyEnvironmentChanges(NSMutableDictionary *envir
     /* Re-attest on every redirected launch so helperd restart cannot leave a
      * stale positive cache or permanently lose the live CraneSB proof. */
     CRReportRuntimeInjection(@"CraneSB", nil);
+#if CRANE_ROOTHIDE
+    /* Diagnostic-only independent liveness check, never an insurance bypass. */
+    CRRequestSupportProbeReplies();
+#endif
 
     /* Verify that everything Crane needs is actually in place before handing
      * the app a container it cannot honour. */
@@ -1194,6 +1245,9 @@ static void CRInitFunc(void)
         NSLog(@"CraneSB: constructor reached; executable=%@; bundle=%@",
               executable, [NSBundle mainBundle].bundleIdentifier);
         if ([executable isEqualToString:@"SpringBoard"]) {
+#if CRANE_ROOTHIDE
+            CRRegisterSupportProbeReplies();
+#endif
             CRReportRuntimeInjection(@"CraneSB", nil);
             gIsSpringBoard = YES;
             CRInitErrorAlerts();

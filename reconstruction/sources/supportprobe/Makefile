@@ -11,11 +11,11 @@ include $(THEOS)/makefiles/common.mk
 TWEAK_NAME = CraneSupportProbeFlags CraneSupportProbePlain
 
 CraneSupportProbeFlags_FILES = CRSupportProbeFlags.c
-CraneSupportProbeFlags_CFLAGS = -fvisibility=hidden
+CraneSupportProbeFlags_CFLAGS = -fvisibility=hidden -fblocks
 CraneSupportProbeFlags_LIBRARIES = substrate
 
 CraneSupportProbePlain_FILES = CRSupportProbePlain.c
-CraneSupportProbePlain_CFLAGS = -fvisibility=hidden
+CraneSupportProbePlain_CFLAGS = -fvisibility=hidden -fblocks
 CraneSupportProbePlain_LIBRARIES = substrate
 
 include $(THEOS_MAKE_PATH)/tweak.mk

@@ -424,6 +424,51 @@ injection controls. The SpringBoard CraneManager log proves some injection
 is working but not that the daemon-injection path is enabled. Repeating an
 identical reboot and live grep alone will not distinguish these branches.
 
+**Oct 13, 21:55:23 — no change:** SpringBoard PID 1862 again returned
+`works=0 connection=1` with all seven names in `broken`, no transport
+error. This is a missing authenticated CraneSupport report, **not** a
+definitive dylib mapping test. Dopamine 2's `Disable Tweak Injection` is
+confirmed **OFF** by the user; do not keep suggesting that same toggle.
+
+### New roothide-only live injection probe (requires a newly built package)
+
+The constructor-only probes originally printed once during daemon startup,
+which usually happened **before** mobile launched `oslog`. A safer
+on-demand *positive* proof now uses Darwin notifications, with no helper
+XPC, filesystem writes, private memory inspection or added hooks:
+
+1. After injection, each minimal probe registers a callback for
+   `com.opa334.cranereconstruction.supportprobe.ping`.
+2. When the user attempts a non-default container launch, SpringBoard
+   posts that diagnostic ping, logging
+   `CraneSB: support probe ping status=<code>`.
+3. A live injected probe responds on
+   `com.opa334.cranereconstruction.supportprobe.reply.<variant>.<process>`.
+   SpringBoard registers 14 observers (2 variants × 7 daemons) on
+   initialization and logs
+   `CraneSB: support probe reply variant=plain process=securityd` or
+   `variant=flags1`, etc. **Positive replies prove the corresponding
+   probe's constructor ran and its callback is still alive.**
+
+To use this diagnostic, **first build/install the updated roothide package**,
+then reboot userspace once after installation so target daemons load the new
+probe revision. Begin an `oslog` session and trigger a non-default
+container launch; inspect:
+
+```sh
+oslog | grep -E 'CraneSB: support probe (ping|reply|listener)|CraneManager: helper insurance'
+```
+
+**Classification:** a `plain` reply but no `flags1` replies points
+toward `Flags=1` filtering; both variants responding from a daemon
+with missing CraneSupport health points away from global daemon tweak
+injection and toward **CraneSupport load/dependency or runtime-report
+failure**. No replies are **inconclusive**, not proof of injector failure:
+a sandbox may reject Darwin notify registration/delivery and the observer
+also logs any registration failure. Ping status zero only means SpringBoard
+posted a notification, not that the probe received it. These probes are
+diagnostic-only and **never** grant container access or override insurance.
+
 If this `ps` implementation lacks `lstart` on another device, use
 `ps -A -o pid,etime,comm` to compare elapsed runtime, or use the full
 `ps -A` output. These commands read current daemon state and do not
