@@ -857,6 +857,11 @@ static NSString *CRSupportInjectionBackendInventory(void)
     return [parts componentsJoinedByString:@","];
 }
 
+static BOOL CRRuntimeHasComponent(pid_t pid, NSString *process,
+                                  NSString *component);
+static BOOL CRRuntimeHasComponentInProcess(NSString *component,
+                                           NSString *process);
+
 static BOOL CRRunInjectionTool(NSString *toolPath, pid_t targetPid,
                                NSString *dylibPath, NSError **error)
 {
@@ -1017,6 +1022,30 @@ static BOOL CRFixupCraneSupportInPid(pid_t pid, NSString *process,
     @try {
         NSError *toolError = nil;
         if (!CRRunInjectionTool(toolPath, pid, dylibPath, &toolError)) {
+            BOOL timedOut = [toolError.domain isEqualToString:CRInjectionErrorDomain] &&
+                toolError.code == CRInjectionTimedOut;
+            if (timedOut) {
+                NSString *currentProcess = CRProcessNameForPid(pid);
+                if (![currentProcess isEqualToString:process]) {
+                    CRRecordInjectionFixupTransition(
+                        process, pid, currentProcess);
+                    NSLog(@"Crane helper: injection fixup process=%@ pid=%d timeoutDeferred=target_transition actual=%@",
+                          process, pid, currentProcess);
+                    return YES;
+                }
+
+                BOOL canInspect = NO;
+                BOOL mapped = CRPidMapsImageLeaf(
+                    pid, @"CraneSupport.dylib", &canInspect);
+                BOOL runtimeProof =
+                    CRRuntimeHasComponent(pid, process, @"CraneSupport");
+                if (mapped || runtimeProof) {
+                    NSLog(@"Crane helper: injection fixup process=%@ pid=%d timeoutRecovered=1 mapped=%d runtimeProof=%d inspect=%d",
+                          process, pid, mapped, runtimeProof, canInspect);
+                    return YES;
+                }
+            }
+
             if (error)
                 *error = toolError;
             return NO;

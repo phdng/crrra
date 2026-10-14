@@ -93,6 +93,15 @@ assert 'CRProcessPidsForNames(@[process])' in helper
 assert 'deferred=target_transition' in helper
 assert 'deferred=target_changed_before' in helper
 assert 'injectorExit=0 immediateMapped=%d inspect=%d' in helper
+assert 'timeoutRecovered=1 mapped=%d runtimeProof=%d inspect=%d' in helper
+assert 'timeoutDeferred=target_transition' in helper
+assert 'toolError.code == CRInjectionTimedOut' in helper
+assert 'CRRuntimeHasComponent(pid, process, @"CraneSupport")' in helper
+timeout_start = helper.index('if (timedOut) {')
+timeout_end = helper.index('\n            }\n\n            if (error)', timeout_start)
+timeout_body = helper[timeout_start:timeout_end]
+assert timeout_body.index('if (![currentProcess isEqualToString:process])') < timeout_body.index('CRPidMapsImageLeaf(')
+assert timeout_body.index('if (![currentProcess isEqualToString:process])') < timeout_body.index('CRRuntimeHasComponent(pid, process, @"CraneSupport")')
 assert '[NSDate timeIntervalSinceReferenceDate] + 2.0' not in helper
 
 # Independent model: unsupported is None, whereas a genuinely empty dump
