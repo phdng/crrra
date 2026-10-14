@@ -38,6 +38,7 @@
 #import "CRXPCDiagnostics.h"
 
 #include <notify.h>
+#include <limits.h>
 #include <stdlib.h>
 #include <xpc/xpc.h>
 
@@ -395,6 +396,37 @@ static NSMutableDictionary<NSNumber *, NSMutableDictionary *> *CRRuntimeRegistry
 
 typedef int (*CRProcNameFn)(int, void *, uint32_t);
 typedef int (*CRProcListPidsFn)(uint32_t, uint32_t, void *, int);
+typedef int (*CRProcPidInfoFn)(int, int, uint64_t, void *, int);
+typedef int (*CRProcRegionFilenameFn)(int, uint64_t, void *, uint32_t);
+
+/* Public XNU proc_regioninfo layout. Keep this private copy so the helper
+ * does not depend on private SDK headers just to perform a read-only
+ * diagnostic. PROC_PIDREGIONINFO == 7. */
+struct CRProcRegionInfo {
+    uint32_t pri_protection;
+    uint32_t pri_max_protection;
+    uint32_t pri_inheritance;
+    uint32_t pri_flags;
+    uint64_t pri_offset;
+    uint32_t pri_behavior;
+    uint32_t pri_user_wired_count;
+    uint32_t pri_user_tag;
+    uint32_t pri_pages_resident;
+    uint32_t pri_pages_shared_now_private;
+    uint32_t pri_pages_swapped_out;
+    uint32_t pri_pages_dirtied;
+    uint32_t pri_ref_count;
+    uint32_t pri_shadow_depth;
+    uint32_t pri_share_mode;
+    uint32_t pri_private_pages_resident;
+    uint32_t pri_shared_pages_resident;
+    uint32_t pri_obj_id;
+    uint32_t pri_depth;
+    uint64_t pri_address;
+    uint64_t pri_size;
+};
+_Static_assert(sizeof(struct CRProcRegionInfo) == 96,
+               "Unexpected proc_regioninfo ABI");
 
 static CRProcNameFn CRHelperProcNameFunction(void)
 {
@@ -429,12 +461,8 @@ static NSArray<NSString *> *CRCraneSupportProcessNames(void)
     return processes;
 }
 
-static NSArray<NSString *> *CRRunningCraneSupportProcesses(void)
+static CRProcListPidsFn CRHelperProcListPidsFunction(void)
 {
-    /* Original 0x1B45C receives broken daemons from cranehelperd, while the
-     * helper implementation itself is U-01. For reconstruction insurance,
-     * inspect only currently-running filter targets so an absent on-demand
-     * daemon does not become a false injection failure. This is read-only. */
     static CRProcListPidsFn procListPids;
     static dispatch_once_t once;
     dispatch_once(&once, ^{
@@ -442,6 +470,16 @@ static NSArray<NSString *> *CRRunningCraneSupportProcesses(void)
         procListPids = (CRProcListPidsFn)dlsym(
             handle ?: RTLD_DEFAULT, "proc_listpids");
     });
+    return procListPids;
+}
+
+static NSArray<NSString *> *CRRunningCraneSupportProcesses(void)
+{
+    /* Original 0x1B45C receives broken daemons from cranehelperd, while the
+     * helper implementation itself is U-01. For reconstruction insurance,
+     * inspect only currently-running filter targets so an absent on-demand
+     * daemon does not become a false injection failure. This is read-only. */
+    CRProcListPidsFn procListPids = CRHelperProcListPidsFunction();
     if (!procListPids || !CRHelperProcNameFunction())
         return nil;
 
@@ -475,6 +513,126 @@ static NSArray<NSString *> *CRRunningCraneSupportProcesses(void)
             [ordered addObject:name];
     }
     return ordered;
+}
+
+static CRProcPidInfoFn CRHelperProcPidInfoFunction(void)
+{
+    static CRProcPidInfoFn procPidInfo;
+    static dispatch_once_t once;
+    dispatch_once(&once, ^{
+        void *handle = dlopen("/usr/lib/libproc.dylib", RTLD_LAZY);
+        procPidInfo = (CRProcPidInfoFn)dlsym(
+            handle ?: RTLD_DEFAULT, "proc_pidinfo");
+    });
+    return procPidInfo;
+}
+
+static CRProcRegionFilenameFn CRHelperProcRegionFilenameFunction(void)
+{
+    static CRProcRegionFilenameFn procRegionFilename;
+    static dispatch_once_t once;
+    dispatch_once(&once, ^{
+        void *handle = dlopen("/usr/lib/libproc.dylib", RTLD_LAZY);
+        procRegionFilename = (CRProcRegionFilenameFn)dlsym(
+            handle ?: RTLD_DEFAULT, "proc_regionfilename");
+    });
+    return procRegionFilename;
+}
+
+static NSDictionary<NSString *, NSNumber *> *
+CRProcessPidsForNames(NSArray<NSString *> *names)
+{
+    CRProcListPidsFn procListPids = CRHelperProcListPidsFunction();
+    if (!procListPids || !CRHelperProcNameFunction() || names.count == 0)
+        return nil;
+
+    int required = procListPids(1, 0, NULL, 0);
+    if (required <= 0)
+        return nil;
+    int capacity = required + (int)(256 * sizeof(pid_t));
+    pid_t *pids = calloc(1, (size_t)capacity);
+    if (!pids)
+        return nil;
+    int bytes = procListPids(1, 0, pids, capacity);
+    if (bytes <= 0) {
+        free(pids);
+        return nil;
+    }
+
+    NSMutableDictionary<NSString *, NSNumber *> *result = [NSMutableDictionary new];
+    NSUInteger count = (NSUInteger)bytes / sizeof(pid_t);
+    for (NSUInteger i = 0; i < count; ++i) {
+        NSString *name = CRProcessNameForPid(pids[i]);
+        if (name.length && [names containsObject:name] && !result[name])
+            result[name] = @(pids[i]);
+    }
+    free(pids);
+    return [result copy];
+}
+
+static NSString *CRSupportMappedImageSummary(NSArray<NSString *> *processes)
+{
+    /* Diagnostic only. Never use this mapper as insurance proof: proc region
+     * visibility may be restricted independently of tweak injection. Positive
+     * image hits are direct evidence; inspection failure remains inconclusive. */
+    CRProcPidInfoFn procPidInfo = CRHelperProcPidInfoFunction();
+    CRProcRegionFilenameFn procRegionFilename =
+        CRHelperProcRegionFilenameFunction();
+    NSDictionary<NSString *, NSNumber *> *pidMap =
+        CRProcessPidsForNames(processes);
+    if (!procPidInfo || !procRegionFilename || !pidMap)
+        return @"inspection=unavailable";
+
+    NSMutableArray<NSString *> *parts = [NSMutableArray new];
+    for (NSString *process in processes) {
+        pid_t pid = (pid_t)[pidMap[process] intValue];
+        BOOL sawRegion = NO;
+        BOOL sawPath = NO;
+        BOOL support = NO;
+        BOOL flags = NO;
+        BOOL plain = NO;
+        uint64_t address = 0;
+
+        if (pid > 0) {
+            for (NSUInteger region = 0; region < 16384; ++region) {
+                struct CRProcRegionInfo info = {0};
+                int bytes = procPidInfo(pid, 7 /* PROC_PIDREGIONINFO */,
+                                        address, &info, (int)sizeof(info));
+                if (bytes < (int)sizeof(info) || info.pri_size == 0)
+                    break;
+                sawRegion = YES;
+
+                char path[PATH_MAX] = {0};
+                int length = procRegionFilename(
+                    pid, info.pri_address, path, (uint32_t)sizeof(path));
+                if (length > 0) {
+                    sawPath = YES;
+                    const char *leaf = strrchr(path, '/');
+                    leaf = leaf ? leaf + 1 : path;
+                    if (strcmp(leaf, "CraneSupport.dylib") == 0)
+                        support = YES;
+                    else if (strcmp(leaf, "CraneSupportProbeFlags.dylib") == 0)
+                        flags = YES;
+                    else if (strcmp(leaf, "CraneSupportProbePlain.dylib") == 0)
+                        plain = YES;
+                }
+                if (support && flags && plain)
+                    break;
+                if (UINT64_MAX - info.pri_address < info.pri_size)
+                    break;
+                uint64_t next = info.pri_address + info.pri_size;
+                if (next <= address)
+                    break;
+                address = next;
+            }
+        }
+
+        BOOL inspect = sawRegion && sawPath;
+        [parts addObject:[NSString stringWithFormat:
+            @"%@[pid=%d inspect=%d support=%d flags=%d plain=%d]",
+            process, pid, inspect, support, flags, plain]];
+    }
+    return [parts componentsJoinedByString:@"; "];
 }
 
 typedef struct {
@@ -754,11 +912,14 @@ static NSString *CRHandleHealthRequest(xpc_connection_t peer,
             runningSupport.count > 0 && brokenSupport.count == 0;
         NSString *brokenSupportString =
             [brokenSupport componentsJoinedByString:@", "];
+        NSString *supportImageMap = nil;
+        if (injectionVerified && !supportComplete && runningSupport.count > 0)
+            supportImageMap = CRSupportMappedImageSummary(runningSupport);
 
-        NSLog(@"Crane helper: insurance caller=%@ authorized=%d preflight=%d supportInspect=%d running=%lu supportComplete=%d broken=%@",
+        NSLog(@"Crane helper: insurance caller=%@ authorized=%d preflight=%d supportInspect=%d running=%lu supportComplete=%d broken=%@ images=%@",
               peerProcess, injectionVerified, preflight,
               supportInspectionAvailable, (unsigned long)runningSupport.count,
-              supportComplete, brokenSupportString);
+              supportComplete, brokenSupportString, supportImageMap);
 
         xpc_dictionary_set_bool(reply, "preflight_ok", preflight);
         xpc_dictionary_set_bool(reply, "injection_verified", injectionVerified);
@@ -770,6 +931,9 @@ static NSString *CRHandleHealthRequest(xpc_connection_t peer,
         if (brokenSupportString.length)
             xpc_dictionary_set_string(reply, "broken_daemons",
                                       brokenSupportString.UTF8String);
+        if (supportImageMap.length)
+            xpc_dictionary_set_string(reply, "support_image_map",
+                                      supportImageMap.UTF8String);
         xpc_dictionary_set_bool(reply, "works",
             preflight && injectionVerified && supportComplete);
         xpc_dictionary_set_bool(reply, "main_dylib_installed", installed);

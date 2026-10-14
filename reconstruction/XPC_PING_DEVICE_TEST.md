@@ -505,6 +505,55 @@ SpringBoard listeners log only on registration **failure**, so absence
 of a `listener failed` line is not an explicit registration-success log.
 Never bypass helper insurance due to a diagnostic ping or lack of reply.
 
+**2026-10-14 00:43–00:49 — fresh-daemon negative:** after the
+22:09 probe installation, the device's target processes were recreated:
+`cfprefsd` PID 385 at 00:43:35, `accountsd` PID 386 at 00:43:36,
+`lsd` PID 392 at 00:43:40, `securityd` PID 413 at 00:43:53,
+`apsd` PID 423 at 00:44:03, and `pkd` PID 445 at 00:44:21.
+At 00:49:41–00:49:42 SpringBoard PID 612 posted the support-probe ping
+twice with status 0, received **no plain/flags1 replies**, and helper
+insurance still returned all seven broken targets. This **rules out stale
+pre-install daemon lifetime** for the current probe build. It still does
+not distinguish an unmapped tweak image from Darwin-notification
+registration/delivery being restricted inside those system daemons.
+The user reports original Crane and other tweaks work normally on the
+same Dopamine 2 roothide environment, so a platform-wide injection outage
+is not a supported conclusion.
+
+### Read-only helper mapped-image diagnostic
+
+To eliminate the Darwin-notify ambiguity, the reconstruction helper now has
+a diagnostic-only VM-region inspector. On an authenticated failed insurance
+request it enumerates the already-running CraneSupport target PIDs with
+`proc_listpids/proc_name`, walks each PID's **read-only** region metadata
+using `proc_pidinfo(PROC_PIDREGIONINFO)`, and obtains file-backed region
+names with `proc_regionfilename`. It looks only for these exact leaf names:
+
+- `CraneSupport.dylib`
+- `CraneSupportProbeFlags.dylib`
+- `CraneSupportProbePlain.dylib`
+
+The helper returns the summary as `support_image_map`, and libcrane logs
+it from the requesting SpringBoard process:
+
+```text
+CraneManager: helper support image map cfprefsd[pid=... inspect=1 support=... flags=... plain=...]; ...
+```
+
+This diagnostic is **not part of the `works` expression** and cannot
+grant a non-default container. `inspect=1 support=0 flags=0 plain=0`
+is strong evidence those image files are not mapped in that PID.
+`support=1` with missing runtime health instead points to the
+CraneSupport libSandy/raw-XPC registration path. `inspect=0` remains
+inconclusive because the kernel can deny cross-process region-path
+inspection even to the helper.
+
+After building/installing this revision and rebooting userspace once, capture:
+
+```sh
+oslog | grep -E 'CraneManager: helper (support image map|insurance)'
+```
+
 **Classification:** a `plain` reply but no `flags1` replies points
 toward `Flags=1` filtering; both variants responding from a daemon
 with missing CraneSupport health points away from global daemon tweak

@@ -139,6 +139,17 @@ assert 'CRIsAuthenticatedCraneSBPeer(peerProcess, peerSigningID)' in peer_code
 assert 'CRRunningCraneSupportProcesses()' in peer_code
 assert 'proc_listpids' in helper
 assert 'CRCraneSupportProcessNames()' in helper
+# Read-only mapped-image diagnostics distinguish "not mapped" from
+# "mapped but runtime_report missing" without trusting daemon oslog/notify.
+assert 'dlsym(' in helper and '"proc_pidinfo"' in helper
+assert '"proc_regionfilename"' in helper
+assert 'struct CRProcRegionInfo' in helper
+assert '_Static_assert(sizeof(struct CRProcRegionInfo) == 96' in helper
+assert 'PROC_PIDREGIONINFO' in helper
+assert 'CRSupportMappedImageSummary(runningSupport)' in peer_code
+assert 'xpc_dictionary_set_string(reply, "support_image_map"' in peer_code
+assert 'CraneManager: helper support image map %@' in manager
+assert 'xpc_dictionary_get_string(response, "support_image_map")' in manager
 for process in ('cfprefsd', 'containermanagerd', 'securityd', 'pkd', 'lsd', 'accountsd', 'apsd'):
     assert f'@"{process}"' in helper, process
 assert 'CRRuntimeHasComponentInProcess(@"CraneSupport", process)' in peer_code
@@ -148,6 +159,17 @@ assert 'xpc_dictionary_set_bool(reply, "support_inspection_available"' in peer_c
 assert 'xpc_dictionary_set_bool(reply, "support_complete", supportComplete)' in peer_code
 assert 'xpc_dictionary_set_string(reply, "broken_daemons"' in peer_code
 assert 'preflight && injectionVerified && supportComplete' in peer_code
+# The image mapper is diagnostic only; it must not be a success condition.
+insurance_start = peer_code.index('if (strcmp(operation, "insurance") == 0)')
+insurance_end = peer_code.index(
+    '} else if (strcmp(operation, "component_loaded")', insurance_start)
+insurance_body = peer_code[insurance_start:insurance_end]
+works_start = insurance_body.index('xpc_dictionary_set_bool(reply, "works",')
+works_end = insurance_body.index(');', works_start) + 2
+works_expression = insurance_body[works_start:works_end]
+assert 'preflight && injectionVerified && supportComplete' in works_expression
+assert 'supportImageMap' not in works_expression
+assert 'support_image_map' not in works_expression
 assert 'Crane helper: insurance caller=%@ authorized=%d preflight=%d supportInspect=%d running=%lu supportComplete=%d broken=%@' in peer_code
 assert 'xpc_dictionary_set_bool(reply, "injection_verified", injectionVerified)' in peer_code
 assert 'xpc_dictionary_set_bool(reply, "preflight_ok", preflight)' in peer_code

@@ -331,6 +331,16 @@ static void CRManagerVerifyRuntimeComponent(NSString *component,
                     [broken addObject:@"CraneSupport verification"];
                 else
                     [broken addObject:@"CraneSupport"];
+
+                /* Reconstruction-only read-only helper diagnostic. This is
+                 * never consulted when calculating works; it only exposes
+                 * whether target PIDs actually map the three support images. */
+                const char *imageMapCString =
+                    xpc_dictionary_get_string(response, "support_image_map");
+                NSString *imageMap = imageMapCString
+                    ? [NSString stringWithUTF8String:imageMapCString] : nil;
+                if (imageMap.length)
+                    NSLog(@"CraneManager: helper support image map %@", imageMap);
             }
             if (!valid)
                 [broken addObject:@"cranehelperd"];
