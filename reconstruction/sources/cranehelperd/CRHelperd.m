@@ -468,6 +468,17 @@ static NSArray<NSString *> *CRCraneSupportProcessNames(void)
     return processes;
 }
 
+static NSArray<NSString *> *CRCrucialCraneSupportProcessNames(void)
+{
+    /* Recovered original _crucialCraneSupportDaemons at 0x10000A1B0. */
+    static NSArray<NSString *> *processes;
+    static dispatch_once_t once;
+    dispatch_once(&once, ^{
+        processes = @[@"cfprefsd", @"containermanagerd", @"securityd"];
+    });
+    return processes;
+}
+
 static CRProcListPidsFn CRHelperProcListPidsFunction(void)
 {
     static CRProcListPidsFn procListPids;
@@ -588,6 +599,7 @@ static BOOL gLastInjectionFixupSuccess = NO;
 static NSError *gLastInjectionFixupError = nil;
 static NSString *gLastInjectionFixupProcess = nil;
 static NSString *gLastInjectionFixupBackend = nil;
+static NSMutableArray<NSString *> *gLastInjectionFixupTransitions = nil;
 static NSTimeInterval gLastInjectionFixupTime = 0;
 
 static void CRBeginInjectionFixupAttempt(void)
@@ -598,6 +610,7 @@ static void CRBeginInjectionFixupAttempt(void)
         gLastInjectionFixupError = nil;
         gLastInjectionFixupProcess = nil;
         gLastInjectionFixupBackend = nil;
+        gLastInjectionFixupTransitions = [NSMutableArray new];
         gLastInjectionFixupTime = [NSDate timeIntervalSinceReferenceDate];
     }
 }
@@ -607,6 +620,20 @@ static void CRSetInjectionFixupContext(NSString *process, NSString *backend)
     @synchronized(CRInjectionErrorDomain) {
         gLastInjectionFixupProcess = [process copy];
         gLastInjectionFixupBackend = [backend copy];
+    }
+}
+
+static void CRRecordInjectionFixupTransition(NSString *process,
+                                               pid_t oldPid,
+                                               NSString *actualProcess)
+{
+    @synchronized(CRInjectionErrorDomain) {
+        if (!gLastInjectionFixupTransitions)
+            gLastInjectionFixupTransitions = [NSMutableArray new];
+        [gLastInjectionFixupTransitions addObject:
+            [NSString stringWithFormat:@"%@[%d->%@]",
+                process ?: @"<unknown>", oldPid,
+                actualProcess.length ? actualProcess : @"gone"]];
     }
 }
 
@@ -633,6 +660,9 @@ static NSDictionary *CRLastInjectionFixupSnapshot(void)
             snapshot[@"backend"] = gLastInjectionFixupBackend;
         if (gLastInjectionFixupError)
             snapshot[@"error"] = gLastInjectionFixupError;
+        if (gLastInjectionFixupTransitions.count)
+            snapshot[@"transitions"] =
+                [gLastInjectionFixupTransitions componentsJoinedByString:@","];
         return [snapshot copy];
     }
 }
@@ -925,13 +955,15 @@ static BOOL CRFixupCraneSupportInPid(pid_t pid, NSString *process,
 
     NSString *actualProcess = CRProcessNameForPid(pid);
     if (pid <= 0 || ![actualProcess isEqualToString:process]) {
-        if (error) {
-            *error = CRInjectionError(CRInjectionTargetChanged,
-                [NSString stringWithFormat:
-                    @"Target %@ changed before injection (pid=%d actual=%@)",
-                    process, pid, actualProcess]);
-        }
-        return NO;
+        /* Original _fixupInjectionIfNeededForDaemon:error: resolves the PID
+         * immediately before injection and returns NO without NSError when the
+         * daemon is not running. runInjectionFixUpIfNeededAndReply: only stops
+         * on NSError. Match that behavior: a target transition is deferred to
+         * later verification, not treated as a fatal injector failure. */
+        CRRecordInjectionFixupTransition(process, pid, actualProcess);
+        NSLog(@"Crane helper: injection fixup process=%@ pid=%d deferred=target_changed_before actual=%@",
+              process, pid, actualProcess);
+        return YES;
     }
 
     NSString *dylibPath = CRJailbreakRootPath(CRSupportDylibVirtualPath);
@@ -1000,13 +1032,15 @@ static BOOL CRFixupCraneSupportInPid(pid_t pid, NSString *process,
     do {
         NSString *currentProcess = CRProcessNameForPid(pid);
         if (![currentProcess isEqualToString:process]) {
-            if (error) {
-                *error = CRInjectionError(CRInjectionTargetChanged,
-                    [NSString stringWithFormat:
-                        @"Target %@ exited or changed during injection (pid=%d actual=%@)",
-                        process, pid, currentProcess]);
-            }
-            return NO;
+            /* Recovered original _injectDylib:intoProcessWithPid:error:
+             * returns success when the injector exits 0 and does not add a
+             * post-injection PID-stability error. Preserve our verification
+             * when the same PID survives, but do not abort the whole seven-
+             * daemon pass merely because a launchd-managed target transitioned. */
+            CRRecordInjectionFixupTransition(process, pid, currentProcess);
+            NSLog(@"Crane helper: injection fixup process=%@ pid=%d injectorExit=0 deferred=target_transition actual=%@",
+                  process, pid, currentProcess);
+            return YES;
         }
 
         BOOL canInspect = NO;
@@ -1049,17 +1083,20 @@ static BOOL CRRunCraneSupportInjectionFixup(NSError **error)
         return NO;
     }
 
-    NSDictionary<NSString *, NSNumber *> *pidMap =
-        CRProcessPidsForNames(targets);
-    if (!pidMap) {
-        if (error) {
-            *error = CRInjectionError(CRInjectionInspectionUnavailable,
-                @"Unable to enumerate CraneSupport target processes");
-        }
-        return NO;
-    }
-
     for (NSString *process in targets) {
+        /* Match original _fixupInjectionIfNeededForDaemon:error:: resolve each
+         * daemon immediately before its injection instead of carrying one PID
+         * snapshot across the entire multi-daemon pass. */
+        NSDictionary<NSString *, NSNumber *> *pidMap =
+            CRProcessPidsForNames(@[process]);
+        if (!pidMap) {
+            if (error) {
+                *error = CRInjectionError(CRInjectionInspectionUnavailable,
+                    [NSString stringWithFormat:
+                        @"Unable to enumerate CraneSupport target %@", process]);
+            }
+            return NO;
+        }
         pid_t pid = (pid_t)[pidMap[process] intValue];
         if (pid <= 0) {
             NSLog(@"Crane helper: injection fixup process=%@ skipped=not_running",
@@ -1509,8 +1546,19 @@ static NSString *CRHandleHealthRequest(xpc_connection_t peer,
             if (!CRRuntimeHasComponentInProcess(@"CraneSupport", process))
                 [brokenSupport addObject:process];
         }
-        /* An empty running-target set is not accepted as proof. At least one
-         * recovered CraneSupport target is expected on a live iOS system. */
+
+        /* Original helper insurance verifies its exact crucial set even when
+         * one of those daemons is currently absent; _execute:whileDaemon...
+         * pings an on-demand service before verification. Reconstruction does
+         * not yet reproduce that activation ping here, so fail closed instead
+         * of silently treating an absent crucial daemon as healthy. */
+        for (NSString *process in CRCrucialCraneSupportProcessNames()) {
+            if (![runningSupport containsObject:process] &&
+                ![brokenSupport containsObject:process]) {
+                [brokenSupport addObject:process];
+            }
+        }
+
         BOOL supportComplete = supportInspectionAvailable &&
             runningSupport.count > 0 && brokenSupport.count == 0;
         NSString *brokenSupportString =
@@ -1522,14 +1570,14 @@ static NSString *CRHandleHealthRequest(xpc_connection_t peer,
         NSDictionary *fixupState = CRLastInjectionFixupSnapshot();
         NSError *lastFixupError = fixupState[@"error"];
         NSString *backendInventory = CRSupportInjectionBackendInventory();
-        NSLog(@"Crane helper: insurance caller=%@ authorized=%d preflight=%d supportInspect=%d running=%lu supportComplete=%d broken=%@ images=%@ fixupAttempted=%d fixupSuccess=%d fixupProcess=%@ fixupBackend=%@ fixupError=%@ backends=%@",
+        NSLog(@"Crane helper: insurance caller=%@ authorized=%d preflight=%d supportInspect=%d running=%lu supportComplete=%d broken=%@ images=%@ fixupAttempted=%d fixupSuccess=%d fixupProcess=%@ fixupBackend=%@ fixupTransitions=%@ fixupError=%@ backends=%@",
               peerProcess, injectionVerified, preflight,
               supportInspectionAvailable, (unsigned long)runningSupport.count,
               supportComplete, brokenSupportString, supportImageMap,
               [fixupState[@"attempted"] boolValue],
               [fixupState[@"success"] boolValue],
               fixupState[@"process"], fixupState[@"backend"],
-              lastFixupError, backendInventory);
+              fixupState[@"transitions"], lastFixupError, backendInventory);
 
         xpc_dictionary_set_bool(reply, "preflight_ok", preflight);
         xpc_dictionary_set_bool(reply, "injection_verified", injectionVerified);
@@ -1554,6 +1602,9 @@ static NSString *CRHandleHealthRequest(xpc_connection_t peer,
         if ([fixupState[@"backend"] length])
             xpc_dictionary_set_string(reply, "fixup_backend",
                                       [fixupState[@"backend"] UTF8String]);
+        if ([fixupState[@"transitions"] length])
+            xpc_dictionary_set_string(reply, "fixup_transitions",
+                                      [fixupState[@"transitions"] UTF8String]);
         if (lastFixupError) {
             xpc_dictionary_set_int64(reply, "fixup_error_code",
                                      (int64_t)lastFixupError.code);

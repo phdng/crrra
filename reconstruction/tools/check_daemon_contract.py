@@ -153,10 +153,13 @@ assert 'xpc_dictionary_get_string(response, "support_image_map")' in manager
 assert 'xpc_dictionary_set_bool(reply, "fixup_attempted"' in peer_code
 assert 'xpc_dictionary_set_bool(reply, "fixup_success"' in peer_code
 assert 'xpc_dictionary_set_string(reply, "fixup_backend_inventory"' in peer_code
+assert 'xpc_dictionary_set_string(reply, "fixup_transitions"' in peer_code
 assert 'xpc_dictionary_get_bool(response, "fixup_attempted")' in manager
+assert 'xpc_dictionary_get_string(response, "fixup_transitions")' in manager
 assert 'xpc_dictionary_get_bool(response, "fixup_success")' in manager
 assert 'xpc_dictionary_get_string(response, "fixup_backend_inventory")' in manager
 assert 'CraneManager: helper injection fixup state attempted=%d success=%d' in manager
+assert 'transitions=%@' in manager
 for marker in (
     '"systemhook.dylib"',
     '"TweakLoader.dylib"',
@@ -178,6 +181,11 @@ assert '"CraneSupportProbeBare.dylib"' in helper
 assert 'bare=%d' in helper
 for process in ('cfprefsd', 'containermanagerd', 'securityd', 'pkd', 'lsd', 'accountsd', 'apsd'):
     assert f'@"{process}"' in helper, process
+assert 'CRCrucialCraneSupportProcessNames(void)' in helper
+assert 'processes = @[@"cfprefsd", @"containermanagerd", @"securityd"];' in helper
+assert 'for (NSString *process in CRCrucialCraneSupportProcessNames())' in peer_code
+assert '![runningSupport containsObject:process]' in peer_code
+assert '![brokenSupport containsObject:process]' in peer_code
 assert 'CRRuntimeHasComponentInProcess(@"CraneSupport", process)' in peer_code
 assert 'BOOL supportComplete = supportInspectionAvailable &&' in peer_code
 assert 'runningSupport.count > 0 && brokenSupport.count == 0;' in peer_code

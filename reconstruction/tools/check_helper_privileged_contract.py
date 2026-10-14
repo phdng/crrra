@@ -81,8 +81,14 @@ assert 'CRSupportFixupTargets(' in helper
 assert 'CRPidMapsImageLeaf(pid, @"CraneSupport.dylib"' in helper
 assert 'CRSupportInjectionBackendInventory(void)' in helper
 assert 'CRLastInjectionFixupSnapshot(void)' in helper
+assert 'CRRecordInjectionFixupTransition(' in helper
+assert 'gLastInjectionFixupTransitions' in helper
+assert 'fixup_transitions' in helper
 assert 'fixup_backend_inventory' in helper
 assert 'fixup_error_description' in helper
+assert 'CRProcessPidsForNames(@[process])' in helper
+assert 'deferred=target_transition' in helper
+assert 'deferred=target_changed_before' in helper
 
 # Independent model: unsupported is None, whereas a genuinely empty dump
 # would be {} and a genuine vendor-ID read would be a nonempty string.

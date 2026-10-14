@@ -322,6 +322,8 @@ static void CRManagerVerifyRuntimeComponent(NSString *component,
                     xpc_dictionary_get_string(response, "fixup_process");
                 const char *fixupBackendCString =
                     xpc_dictionary_get_string(response, "fixup_backend");
+                const char *fixupTransitionsCString =
+                    xpc_dictionary_get_string(response, "fixup_transitions");
                 const char *fixupErrorCString =
                     xpc_dictionary_get_string(response, "fixup_error_description");
                 const char *backendInventoryCString =
@@ -330,15 +332,18 @@ static void CRManagerVerifyRuntimeComponent(NSString *component,
                     ? [NSString stringWithUTF8String:fixupProcessCString] : nil;
                 NSString *fixupBackend = fixupBackendCString
                     ? [NSString stringWithUTF8String:fixupBackendCString] : nil;
+                NSString *fixupTransitions = fixupTransitionsCString
+                    ? [NSString stringWithUTF8String:fixupTransitionsCString] : nil;
                 NSString *fixupError = fixupErrorCString
                     ? [NSString stringWithUTF8String:fixupErrorCString] : nil;
                 NSString *backendInventory = backendInventoryCString
                     ? [NSString stringWithUTF8String:backendInventoryCString] : nil;
                 int64_t fixupErrorCode =
                     xpc_dictionary_get_int64(response, "fixup_error_code");
-                NSLog(@"CraneManager: helper injection fixup state attempted=%d success=%d process=%@ backend=%@ errorCode=%lld error=%@ backends=%@",
+                NSLog(@"CraneManager: helper injection fixup state attempted=%d success=%d process=%@ backend=%@ transitions=%@ errorCode=%lld error=%@ backends=%@",
                       fixupAttempted, fixupSuccess, fixupProcess, fixupBackend,
-                      fixupErrorCode, fixupError, backendInventory);
+                      fixupTransitions, fixupErrorCode, fixupError,
+                      backendInventory);
             }
 
             NSMutableArray *broken = [NSMutableArray new];
