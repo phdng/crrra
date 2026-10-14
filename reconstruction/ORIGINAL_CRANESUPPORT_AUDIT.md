@@ -102,26 +102,120 @@ Separately, opa334's public SliceFixup project explicitly names
 iOS 15 and says SliceFixup is intended to run from package `postinst`.
 Native package/linkage/arm64e verification remains required while validating the newly implemented helper fix-up on iOS 15.
 
+## 2026-10-14 device-debug closure: problem, causes, fixes, proof
+
+The apparent "CraneSupport never loads into daemons" failure was not one bug.
+The debugging sequence exposed several reconstruction-specific differences
+around the recovered helper fix-up path:
+
+1. **Cold-helper startup race (06:29).** SpringBoard called
+   `cranehelperdConnectionWorks` twice on its main thread around helper
+   startup. The reconstructed main-thread check is cache-only, so the second
+   call could observe the first probe still in flight and skip the recovered
+   `runInjectionFixUpIfNeededAndReply:` request entirely. The fix keeps the
+   original startup intent but performs bounded readiness checks on a worker
+   before sending the async fix-up request.
+2. **PID transition treated too strictly (07:07).** Live injection succeeded
+   for `cfprefsd`, then a launchd-managed target changed/disappeared. The
+   reconstruction originally converted that into fatal error 1107. Direct
+   original-helper analysis showed injector exit 0 is accepted and the outer
+   pass stops on `NSError`, not on an added post-injection PID-stability
+   requirement. The reconstruction now records a transition and defers later
+   verification instead of aborting the seven-daemon pass.
+3. **Post-inject polling was not original behavior (08:23).** A two-second
+   mapped-image wait stretched the sequential pass and made an active pass look
+   failed in a concurrent insurance snapshot. It was removed. A diagnostic
+   immediate sample remains, while real health is decided later by insurance.
+   The diagnostic state gained explicit `inProgress` so
+   `success=0/error=null` cannot be mistaken for a completed failure.
+4. **`opainject` timeout false-negative (08:55).** Insurance already reported
+   `works=1 connection=1 broken=`, proving every required CraneSupport runtime
+   attestation was healthy, while the wrapper still reported error 1104 for
+   `pkd`. The Roothide injector had completed the useful load/report work but
+   did not exit before the reconstruction's bounded child timeout. Timeout
+   handling now first verifies that the PID still belongs to the same daemon;
+   it then accepts an already-mapped `CraneSupport.dylib` or exact-PID runtime
+   proof. A disappeared/reused PID is recorded as a deferred transition, never
+   salvaged as the old target.
+
+The rebuilt device test at **10:20 on 2026-10-14** closed this issue:
+
+```text
+CraneManager: helper injection fixup authorized=1 success=1 error=(null)
+CraneManager: helper injection fixup state attempted=1 inProgress=0 success=1 process=pkd backend=opainject transitions=(null) errorCode=0 error=(null)
+CraneManager: helper insurance works=1 connection=1 broken= error=(null)
+```
+
+This proves the reconstructed live fix-up completed and the independent
+insurance gate accepted all required CraneSupport proofs. The earlier
+`success=0/errorCode=1104` state is therefore closed as a wrapper
+false-negative, not a remaining daemon-injection failure.
+
+## Post-debug cleanup and parity decisions
+
+Temporary loader diagnostics are no longer production payload:
+
+- `CraneSupportProbeFlags`, `CraneSupportProbePlain`, and
+  `CraneSupportProbeBare` remain in source only as an archived manual
+  diagnostic harness. Normal Roothide packages no longer build/stage them.
+- SpringBoard no longer installs probe Darwin-notification observers or sends
+  probe pings on redirected launches.
+- `cranehelperd` no longer scans/reports `flags/plain/bare` probe images.
+  The generic failure-only mapped-image summary remains diagnostic and is not
+  part of the insurance success expression.
+- The temporary seven-daemon `support health` matrix after every successful
+  app launch was removed; insurance already owns that decision.
+- The temporary app-side same-peer runtime-report `ping` acknowledgment was
+  removed; the persistent authenticated `runtime_report` transport remains.
+- Constructor-only diagnosis logs were removed from CraneSB/CraneSupport.
+- Unused fix-up timestamp state, obsolete 1106/1107 enum values, and two unreferenced helper predicates (`CRIsCraneSBProcess` / `CRIsCraneSupportProcess`) were removed.
+- Injector candidates now have one shared source of truth. Rootful selection is again exactly the recovered `libsyringe/cynject/cynject.old` set, while `opainject` is explicitly a **Roothide-only platform adaptation**; backend discovery and diagnostic inventory can no longer drift apart.
+
+### Intentional reconstruction differences that remain
+
+These are not accidental debug leftovers and must not be removed without
+recovering the corresponding original implementation:
+
+- The authenticated raw-XPC runtime registry and `runtime_report` are
+  reconstruction-specific because the original helper protocol remains U-01.
+- CraneSupport explicitly applies its libSandy profile before raw-XPC
+  attestation. The original invokes the same profile from the manager's
+  unsandbox handler, but the reconstructed transport needs the explicit gate.
+- Roothide prefers `opainject`; the original binary only names
+  `libsyringe/cynject/cynject.old`. This is required by the observed Roothide
+  environment and is isolated from rootful builds.
+- The injector child has a bounded timeout with same-PID recovery. This is a
+  reconstruction safety wrapper around the recovered "exit 0 means success"
+  behavior.
+- SpringBoard uses an off-main bounded helper-readiness retry because the
+  reconstructed connection check has cache semantics that the original proxy
+  path did not expose.
+- Insurance still uses reconstruction runtime attestations and fails closed
+  when a crucial daemon is absent. The original helper appears able to activate
+  an on-demand service before verification; that activation routine is not yet
+  reconstructed.
+- Fix-up state/backend inventory and the generic mapped-image summary are
+  observability only. Contracts ensure none of them can make `works=1`.
+
 ## What is *not* proved
 
-- Whether the three diagnostic dylibs are mapped into post-reboot system daemons.
-- Whether an injected CraneSupport constructor ran and failed to apply
-  libSandy or its runtime-report XPC was rejected.
-- Whether roothide rewrites the original direct libSandy load command to
-  an accessible jbroot path; local host lacks native Theos/otool and the
-  original input tree does not include a `libsandy.dylib` linker stub.
-- Exact original `cranehelperd` insurance implementation: only its Mach-O
-  and selector evidence survives, not a matched IDA pseudocode export.
+- Exact original `cranehelperd` insurance implementation: its selector/Mach-O
+  evidence survives, but no matched helper pseudocode export is available.
+- Exact original on-demand crucial-daemon activation semantics.
+- Exact direct libSandy linkage behavior under Roothide; reconstruction still
+  resolves the jbroot library dynamically for its raw-XPC path.
+- Feature-level correctness inside securityd/pkd/accountsd/apsd. The global
+  CraneSupport injection path is proven healthy, but each isolation feature
+  still needs its own device behavior test.
 
 ## Safe next verification
 
-1. Run native Theos roothide CI, inspect `linkage.txt` especially
-   `CraneSupport.dylib`, `libcrane.dylib`, and libSandy linkage. Do not
-   declare a native build passed merely from Python static checks.
-2. For device diagnosis use a genuinely independent *passive* way to
-   determine if Support/probe images are mapped or collect persistent
-   constructor status, rather than repeating post-reboot live
-   `oslog | grep` and treating missing messages as proof of no injection.
-3. Keep fail-closed insurance enabled; do not port `patchfindSecurityd`
-   while `CraneSupport` runtime proof is absent. Preserve every
-   `DEFAULT`/non-default Chrome container and its on-disk contents.
+1. Stop treating daemon injection as the active blocker unless insurance
+   regresses from `works=1` or returns a non-empty broken list.
+2. Continue with non-default app/container tests: active container lookup,
+   preferences isolation/cache coherence, then securityd keychain behavior.
+3. For F-07, inspect the now-reachable securityd hook/symbol path before
+   deciding whether the original private-symbol fallback (`0x11C08`) is
+   actually needed.
+4. Keep fail-closed insurance enabled and preserve all existing
+   `DEFAULT`/non-default container data during tests.

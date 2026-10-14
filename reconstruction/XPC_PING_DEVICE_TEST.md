@@ -147,6 +147,8 @@ not read/write Chrome's profile files.
 
 ## Chrome PID 3100: container supplied, runtime proof missing (2026-10-13)
 
+> **Historical diagnostic record.** The same-peer app `ping` described below was temporary instrumentation and has been removed from production after runtime-report transport was device-proven. Keep these observations for provenance; do not expect the current build to emit `app_runtime_probe` logs.
+
 The latest Roothide 15.8.8 device log conclusively shows Chrome accepted
 `CRANE_CONTAINER_IDENTIFIER=1947F19D-7E24-40BF-9E8F-2EA7C70B65B9`.
 The app logged `protection=0 spoof=0` and `hooks=0`, which is **expected**:
@@ -243,6 +245,8 @@ containerProof=1` follows and later lookups for that live PID report
 the caller-side equivalent and remains visible even when helperd's own NSLog is
 not surfaced by the device log tool. If lookups remain unproven after the app
 proof, the cache-coherence adapter is not working.
+
+> **Historical F-07 investigation.** The 0/7/probe/userspace-reboot steps below document how the injection blocker was isolated. They are superseded by the 2026-10-14 10:20 `success=1` / `works=1` closure later in this file; current production builds do not ship the probe tweaks or run the per-launch seven-daemon health matrix.
 
 For F-07, device evidence on 2026-10-13 first showed `CraneSB: support health
 process=securityd loaded=0` while the app PID/container proof was healthy. The
@@ -627,6 +631,10 @@ The insurance reply also carries reconstruction-only **last fix-up state** so a 
 **2026-10-14 08:23 — snapshot was taken mid-fix-up, not after failure:** insurance showed `process=pkd`, `transitions=securityd[413->gone]`, `success=0 error=(null)`, while the same image map already had `cfprefsd support=1`, a restarted `containermanagerd pid=3582 support=1` with all three probes loaded, and `pkd support=1`. Nine seconds later a new `lsd[4294]` logged `CraneSupport: init process=lsd xpcUnsandbox=1`. Therefore the 08:23:44 insurance sample occurred while the sequential fix-up was still advancing; `success=0/error=null` was just the initialized active state. The mapper/runtime proof also shows separate timing: `pkd` could already map CraneSupport while still appearing in the broken list until its runtime report was accepted. Reconstruction now exposes explicit `inProgress=1/0` to distinguish this state. In addition, the reconstructed post-inject 2-second map poll has been removed from the fix-up path: original `_injectDylib:intoProcessWithPid:error:` treats injector exit 0 as success and leaves health verification to later insurance. Reconstruction keeps one immediate map sample for logging only, reducing the window in which an app launch can race an unnecessarily long fix-up pass.
 
 **2026-10-14 08:55 — insurance is fully healthy despite an injector timeout:** helper reported `attempted=1 inProgress=0 success=0 process=pkd backend=opainject errorCode=1104`, but in the same sample insurance returned `works=1`, `connection=1`, and an empty broken list. This is decisive: all required live CraneSupport runtime proofs were present, so the `opainject timed out` status is a false-negative of the reconstruction fix-up wrapper, not a functional Crane failure. The likely sequence is that `opainject` completed the actual remote load/runtime registration but remained alive long enough to hit the reconstruction's 8-second child timeout. Timeout handling now salvages this exact case after terminating only the injector child: it first confirms the PID still resolves to the same daemon, then checks both mapped `CraneSupport.dylib` and exact-PID runtime proof; if either exists, the timeout is logged as recovered and fix-up continues/succeeds. If the PID disappeared or now belongs to another process, the timeout is recorded as a deferred transition before any recovery check. Error 1104 remains fatal only when the original PID still exists with neither image nor runtime proof. Insurance remains authoritative and unchanged.
+
+**2026-10-14 10:20 — fix-up and insurance both pass; injection blocker closed:** the rebuilt device logged `helper injection fixup authorized=1 success=1 error=(null)`, followed by the completed snapshot `attempted=1 inProgress=0 success=1 process=pkd backend=opainject transitions=(null) errorCode=0 error=(null)`. The same run returned `helper insurance works=1 connection=1 broken= error=(null)` twice. This is the expected final state: the recovered startup fix-up is executing, the reconstruction wrapper no longer leaves a false 1104 failure, and the independent insurance gate sees every required CraneSupport proof. Further work should move to app/container feature behavior rather than daemon-injection debugging unless `works` regresses or `broken` becomes non-empty.
+
+**Post-debug production cleanup:** the temporary `CraneSupportProbeFlags`, `CraneSupportProbePlain`, and `CraneSupportProbeBare` sources are retained only as an archived manual diagnostic harness; normal Roothide packages no longer build or stage them. SpringBoard no longer registers/sends probe notifications, the helper no longer reports `flags/plain/bare`, the seven-daemon health matrix is no longer queried after every successful app launch, and the app runtime-report path no longer sends an extra diagnostic ping. Rootful injector discovery has also been restored to the recovered `libsyringe/cynject/cynject.old` set; `opainject` is restricted to Roothide builds.
 
 The mapper has now been extended to report the surrounding injection stack
 without changing insurance: exact `systemhook.dylib`, TweakLoader/TweakInject,

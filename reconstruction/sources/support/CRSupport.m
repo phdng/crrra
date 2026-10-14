@@ -168,12 +168,6 @@ static void CRInitFunc(void)
         ignoredProcesses = @[@"watchdogd", @"com.apple.springboard"];
 
         NSString *process = CRGetProcessName();
-        /* Reconstruction-only earliest daemon-injection diagnostic. Keep this
-         * before libSandy/profile/XPC work so a missing later log can be
-         * separated from a dylib that never entered the target process. */
-        NSLog(@"CraneSupport: constructor process=%@ platform=%@",
-              process, CRGetInjectionPlatform() ?: @"<unknown>");
-
         /* Original 0x6C5C installs global block stru_206B0 into CraneManager;
          * its invoke target 0x6E44 applies libSandy profile "CraneSupport".
          * Preserve the original callback registration BEFORE daemon hooks.

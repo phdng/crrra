@@ -47,18 +47,12 @@ for piece in (
     assert piece in verification, piece
 
 assert verification.index('if (actualContainer.length)') < verification.index('if (connectionWorks == YES && attempt < 2)')
-# After a real app proof, query the already-existing authenticated component
-# registry for every executable in the recovered CraneSupport filter. This is
-# diagnostic only and must stay on the success path; it never substitutes for
-# the app proof itself. The matrix separates securityd-only injection failure
-# from global CraneSupport injection/report failure.
-assert '@selector(verifySupportLoadedIntoProcessNamed:reply:)' in verification
-for process in ('cfprefsd', 'containermanagerd', 'securityd', 'pkd', 'lsd', 'accountsd', 'apsd'):
-    assert f'@"{process}"' in verification, process
-assert 'for (NSString *supportProcess in supportProcesses)' in verification
-assert '[proxy verifySupportLoadedIntoProcessNamed:supportProcess' in verification
-assert 'CraneSB: support health process=%@ loaded=%d appPid=%d' in verification
-assert verification.index('if (actualContainer.length)') < verification.index('NSArray<NSString *> *supportProcesses') < verification.index('if (connectionWorks == YES && attempt < 2)')
+# The temporary seven-daemon health matrix used during injection diagnosis
+# must not run on every successful app launch now that insurance/fix-up is
+# device-proven. Native 0x19608 stops once it has a nonnil app proof.
+assert 'supportProcesses' not in verification
+assert 'verifySupportLoadedIntoProcessNamed:supportProcess' not in verification
+assert 'CraneSB: support health process=' not in verification
 assert verification.index('(pid_t)((int (*)(id, SEL))objc_msgSend)(launched, @selector(pid)) != pid') < verification.index('if (actualContainer.length)')
 assert verification.index('if (connectionWorks == YES && attempt < 2)') < verification.index('CRPresentMainDylibNotLoadedError(processName);')
 assert verification.index('NSError *lookupError = [CraneManager.sharedManager getLastError];') < verification.index('dispatch_async(dispatch_get_main_queue(), ^{')

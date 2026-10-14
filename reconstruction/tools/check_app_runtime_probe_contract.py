@@ -1,12 +1,12 @@
-"""App-side runtime report transport probe and helper PID-proof contracts.
+"""App-side runtime-report transport and helper PID-proof contracts.
 
-Chrome logged app init and app environment ready for a nondefault container,
-while SpringBoard's lookup of the SAME PID returned no proof. A one-way
-runtime_report cannot reveal whether sandbox Mach lookup failed. Queue an
-already-existing authenticated read-only ping on the SAME long-lived XPC
-peer after the initial report. The async reply diagnoses connection health
-without inventing injection proof. Source tests only, not device testing.
+The temporary same-peer ping added while diagnosing one-way runtime-report
+delivery is no longer needed after on-device helper/runtime proof succeeded.
+The production reconstruction keeps the persistent authenticated runtime_report
+transport and reconnect/replay semantics, but must not send a second diagnostic
+ping for every app registration.
 """
+
 from pathlib import Path
 
 root = Path(__file__).resolve().parents[1]
@@ -23,24 +23,26 @@ for token in (
     'xpc_connection_set_event_handler(created,',
     'xpc_connection_resume(created);',
     'xpc_connection_send_message(created, replay);',
-    'if ([name isEqualToString:@"Crane"] && value != NSNull.null)',
-    'Crane: app runtime_report queued pid=%d',
-    'xpc_dictionary_set_string(probe, "operation", "ping");',
-    'xpc_dictionary_set_string(probe, "protocol",',
-    'xpc_connection_send_message_with_reply(created, probe,',
-    'CRHelperXPCEventError(response, @"app_runtime_probe")',
-    'Crane: app runtime_report transport probe error pid=%d',
-    'Crane: app runtime_report transport probe pid=%d alive=%d compatible=%d',
-    'strcmp(protocol, CR_HELPERD_PING_PROTOCOL_V1) == 0;',
+    '"operation", "runtime_report"',
+    'xpc_connection_send_message(connection, report);',
 ):
     assert token in report, token
 
-assert report.index('xpc_connection_resume(created);') < report.index('xpc_connection_send_message(created, replay);')
-assert report.index('xpc_connection_send_message(created, replay);') < report.index('xpc_connection_send_message_with_reply(created, probe,')
-assert report.index('if ([name isEqualToString:@"Crane"]') < report.index('xpc_connection_send_message_with_reply(created, probe,')
-assert '"operation", "runtime_report"' in report
+assert report.index('xpc_connection_resume(created);') < report.index(
+    'xpc_connection_send_message(created, replay);'
+)
 assert '"operation", "lookup_pid"' not in report
 assert 'reply(YES' not in report
+
+# The diagnosis-only acknowledgment must stay removed from production.
+for forbidden in (
+    'Crane: app runtime_report queued pid=%d',
+    'app_runtime_probe',
+    'runtime_report transport probe',
+    'xpc_connection_send_message_with_reply(created, probe,',
+):
+    assert forbidden not in report, forbidden
+
 assert 'CRReportRuntimeInjection(@"Crane", _crActiveContainerIdentifier);' in main
 
 assert 'CRRegisterRuntime(peerPid, peerProcess, component, containerID,' in helper
@@ -66,25 +68,21 @@ assert 'Crane: app environment ready container=%@ hooks=%u' in init
 # claim is snapshotted/hidden, but before filesystem/HOME work, minimizing the
 # first-daemon-request window without changing native 0x65D0 setup ordering.
 assert init.count('CRReportRuntimeInjection(@"Crane", _crActiveContainerIdentifier);') == 1
-assert init.index('unsetenv(CR_ENV_CONTAINER_IDENTIFIER.UTF8String);') < init.index('CRPrepareAppRuntimeMachLookup();')
-assert init.index('CRPrepareAppRuntimeMachLookup();') < init.index('CRReportRuntimeInjection(@"Crane", _crActiveContainerIdentifier);')
-assert init.index('CRReportRuntimeInjection(@"Crane", _crActiveContainerIdentifier);') < init.index('CRCreateDirectoryIfNotExists(container);')
-assert init.index('CRReportRuntimeInjection(@"Crane", _crActiveContainerIdentifier);') < init.index('setenv(CR_ENV_HOME.UTF8String, container.UTF8String, 1);')
+assert init.index('unsetenv(CR_ENV_CONTAINER_IDENTIFIER.UTF8String);') < init.index(
+    'CRPrepareAppRuntimeMachLookup();'
+)
+assert init.index('CRPrepareAppRuntimeMachLookup();') < init.index(
+    'CRReportRuntimeInjection(@"Crane", _crActiveContainerIdentifier);'
+)
+assert init.index('CRReportRuntimeInjection(@"Crane", _crActiveContainerIdentifier);') < init.index(
+    'CRCreateDirectoryIfNotExists(container);'
+)
+assert init.index('CRReportRuntimeInjection(@"Crane", _crActiveContainerIdentifier);') < init.index(
+    'setenv(CR_ENV_HOME.UTF8String, container.UTF8String, 1);'
+)
 assert 'It does not claim that the remaining 0x65D0 environment setup is done.' in init
 assert 'removeItemAtPath:' not in init
 
-def probe_outcome(reply_kind, alive, version_ok):
-    if reply_kind == "error":
-        return "transport-error"
-    if reply_kind != "dictionary" or not alive or not version_ok:
-        return "invalid-reply"
-    return "connection-reachable"
-
-assert probe_outcome("error", False, False) == "transport-error"
-assert probe_outcome("dictionary", True, True) == "connection-reachable"
-assert probe_outcome("dictionary", False, True) == "invalid-reply"
-assert probe_outcome("dictionary", True, False) == "invalid-reply"
-assert probe_outcome("none", False, False) == "invalid-reply"
 assert "check_app_runtime_probe_contract.py" in workflow
 
-print("Crane app-to-helper runtime probe and data-preservation contracts: PASS (device unverified)")
+print("Crane app-to-helper runtime-report contracts: PASS (device transport proven)")

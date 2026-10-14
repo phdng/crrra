@@ -1,18 +1,12 @@
-"""Roothide-only CraneSupport daemon injection probe contract.
+"""Archived Roothide CraneSupport daemon-injection probe contract.
 
-The production CraneSupport constructor never runs on the iOS 15.8.8 device.
-Two temporary Theos tweaks share the exact seven daemon Executables list: one
-preserves the recovered Flags=1 and one omits Flags. They deliberately use the
-same tweak pipeline as CraneSupport while keeping their constructor bodies free
-of Crane/Foundation/keychain logic. Device outcomes:
+The flags/plain/bare probes were temporary diagnostics used while the real
+CraneSupport loader/fix-up path was unknown. Device validation on 2026-10-14
+proved the production helper fix-up and insurance path healthy, so the probes
+must remain OUT of normal package, SpringBoard and helper wiring.
 
-A positive on-demand SpringBoard-notified reply proves a live probe is
-mapped into that daemon. Lack of replies alone is inconclusive because Darwin
-notify registration or delivery can itself be sandbox-restricted.
-
-- plain replies but flags1 does not -> investigate Flags=1 loader semantics
-- both reply but CraneSupport registry is absent -> investigate its Mach-O,
-  libSandy transport and runtime report separately
+Keep their sources as a reusable manual diagnostic harness. This contract
+preserves their safety/shape while preventing accidental production shipping.
 """
 
 from pathlib import Path
@@ -45,22 +39,18 @@ bare = plistlib.loads(
     (root / "sources/supportprobe-bare/CraneSupportProbeBare.plist").read_bytes()
 )
 
+# Archived harness still mirrors the exact target set used during diagnosis.
 assert flags == {"Filter": {"Executables": processes, "Flags": 1}}
 assert plain == {"Filter": {"Executables": processes}}
 assert bare == {"Filter": {"Executables": processes}}
-assert "ifeq ($(THEOS_PACKAGE_SCHEME),roothide)" in master
-assert "SUBPROJECTS += sources/supportprobe sources/supportprobe-bare" in master
-assert master.index("ifeq ($(THEOS_PACKAGE_SCHEME),roothide)") < master.index(
-    "SUBPROJECTS += sources/supportprobe"
-)
 assert "TWEAK_NAME = CraneSupportProbeFlags CraneSupportProbePlain" in probe_mk
 assert "include $(THEOS_MAKE_PATH)/tweak.mk" in probe_mk
 assert "include $(THEOS_MAKE_PATH)/library.mk" not in probe_mk
 assert "LIBRARY_NAME = CraneSupportProbeBare" in bare_mk
-assert "CraneSupportProbeBare_INSTALL_PATH = /Library/MobileSubstrate/DynamicLibraries" in bare_mk
 assert "include $(THEOS_MAKE_PATH)/library.mk" in bare_mk
 assert "include $(THEOS_MAKE_PATH)/tweak.mk" not in bare_mk
-assert "CraneSupportProbeBare_LIBRARIES" not in bare_mk
+
+# The bare discriminator remains dependency-free and side-effect-free.
 assert "#include" not in bare_source
 for forbidden in (
     "notify_register", "notify_post(", "os_log(", "getprogname(",
@@ -68,16 +58,8 @@ for forbidden in (
 ):
     assert forbidden not in bare_source, forbidden
 assert "CRSupportProbeBareInit" in bare_source
-assert "CraneSupportProbeBare.dylib" in helper
-assert "bare=%d" in helper
-assert "pkg/Library/MobileSubstrate/DynamicLibraries/CraneSupportProbeBare.dylib" in workflow
-for name in ("CraneSupportProbeFlags", "CraneSupportProbePlain"):
-    assert name in probe_mk
-    assert f"{name}_LIBRARIES = substrate" in probe_mk
-    assert f"{name}_CFLAGS = -fvisibility=hidden -fblocks" in probe_mk
-    assert f"CraneSupportProbe: variant=" in (flags_source + plain_source)
-    assert f"pkg/Library/MobileSubstrate/DynamicLibraries/{name}.dylib" in workflow
 
+# flags/plain remain constructor-only diagnostics, not Crane product logic.
 for source, variant in ((flags_source, "flags1"), (plain_source, "plain")):
     assert "#include <os/log.h>" in source
     assert "#include <Foundation" not in source
@@ -91,38 +73,54 @@ for source, variant in ((flags_source, "flags1"), (plain_source, "plain")):
     assert "notify_post(reply);" in source
     assert f'"%s.{variant}.%s"' in source
     assert "getprogname()" in source
-    assert "CraneSupportProbe: variant=" in source
     assert "remove(" not in source
     assert "unlink(" not in source
 
 assert '"com.opa334.cranereconstruction.supportprobe.ping"' in wire
 assert '"com.opa334.cranereconstruction.supportprobe.reply"' in wire
-assert '#include "../supportprobe/CRSupportProbeProtocol.h"' in springboard
-assert 'static int gSupportProbeReplyTokens[14];' in springboard
-assert "static void CRRegisterSupportProbeReplies(void)" in springboard
-assert "static void CRRequestSupportProbeReplies(void)" in springboard
-assert "notify_register_dispatch(" in springboard
-assert "notify_post(CR_SUPPORT_PROBE_PING)" in springboard
-assert 'CraneSB: support probe reply variant=%@ process=%@' in springboard
-assert 'CraneSB: support probe ping status=%u' in springboard
-# Observer registration happens early in SpringBoard, then each non-default
-# launch requests a ping. Only CraneSupport's authenticated runtime report
-# can influence insurance; probe notifications must NEVER grant containers.
-assert springboard.index("CRRegisterSupportProbeReplies();") < springboard.index(
-    'CRReportRuntimeInjection(@"CraneSB", nil);',
-    springboard.index("static void CRInitFunc(void)")
-)
-assert "CRRequestSupportProbeReplies();" in springboard
-assert 'if (insuranceOK)' in springboard
-assert 'CRReportRuntimeInjection(@"CraneSupport", nil);' not in springboard
-assert "_FRAMEWORKS" not in probe_mk
-for forbidden in ("libcrane", "bsm.0", "Foundation", "CoreFoundation", "Security"):
-    assert forbidden not in probe_mk
 
-# CI must prove the bare discriminator has no jailbreak-library dependency,
-# and roothide-linked tweak dependencies use its @loader_path/.jbroot rule.
-assert "Bare probe unexpectedly links a jailbreak library" in workflow
+# Production wiring must stay clean now that real fix-up is device-proven.
+for forbidden in (
+    "SUBPROJECTS += sources/supportprobe",
+    "CraneSupportProbeFlags.plist",
+    "CraneSupportProbePlain.plist",
+    "CraneSupportProbeBare.plist",
+):
+    assert forbidden not in master, forbidden
+
+for forbidden in (
+    '#include "../supportprobe/CRSupportProbeProtocol.h"',
+    "gSupportProbeReplyTokens",
+    "CRRegisterSupportProbeReplies",
+    "CRRequestSupportProbeReplies",
+    "support probe reply",
+    "support probe ping",
+):
+    assert forbidden not in springboard, forbidden
+
+for forbidden in (
+    "CraneSupportProbeFlags.dylib",
+    "CraneSupportProbePlain.dylib",
+    "CraneSupportProbeBare.dylib",
+    "flags=%d",
+    "plain=%d",
+    "bare=%d",
+):
+    assert forbidden not in helper, forbidden
+
+for forbidden in (
+    "CraneSupportProbeFlags.dylib",
+    "CraneSupportProbePlain.dylib",
+    "CraneSupportProbeBare.dylib",
+    "Missing daemon injection probe",
+    "Bare probe unexpectedly links a jailbreak library",
+):
+    assert forbidden not in workflow, forbidden
+
+# Keep the real Roothide linkage check for production Crane payloads.
 assert "Invalid roothide jailbreak dependency load path" in workflow
 assert "@loader_path/.jbroot/" in workflow
+assert "'pkg/Library/MobileSubstrate/DynamicLibraries/CraneSB.dylib'" in workflow
+assert "'pkg/Library/MobileSubstrate/DynamicLibraries/CraneSupport.dylib'" in workflow
 
-print("Crane roothide daemon injection probe contracts: PASS (device diagnostic pending)")
+print("Crane archived roothide daemon probe contract: PASS (not shipped)")

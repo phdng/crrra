@@ -370,7 +370,7 @@ static void CRManagerVerifyRuntimeComponent(NSString *component,
 
                 /* Reconstruction-only read-only helper diagnostic. This is
                  * never consulted when calculating works; it only exposes
-                 * whether target PIDs actually map the three support images. */
+                 * the mapped CraneSupport/injection stack when insurance fails. */
                 const char *imageMapCString =
                     xpc_dictionary_get_string(response, "support_image_map");
                 NSString *imageMap = imageMapCString

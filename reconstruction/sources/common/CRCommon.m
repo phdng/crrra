@@ -263,38 +263,6 @@ void CRReportRuntimeInjection(NSString *component, NSString *containerID)
                 if (value != NSNull.null)
                     xpc_dictionary_set_string(replay, "container_id", [(NSString *)value UTF8String]);
                 xpc_connection_send_message(created, replay);
-                if ([name isEqualToString:@"Crane"] && value != NSNull.null) {
-                    /* Diagnostic acknowledgment on the SAME peer, ordered
-                     * behind the one-way app runtime_report. This uses the
-                     * existing read-only ping operation, not an invented
-                     * helper command or an authorization bypass. A ping
-                     * response means the connection can carry requests;
-                     * helper's own report log still proves registration. */
-                    NSLog(@"Crane: app runtime_report queued pid=%d", getpid());
-                    xpc_object_t probe = xpc_dictionary_create(NULL, NULL, 0);
-                    if (probe) {
-                        xpc_dictionary_set_string(probe, "operation", "ping");
-                        xpc_dictionary_set_string(probe, "protocol",
-                                                  CR_HELPERD_PING_PROTOCOL_V1);
-                        xpc_connection_send_message_with_reply(created, probe,
-                            dispatch_get_global_queue(QOS_CLASS_UTILITY, 0),
-                            ^(xpc_object_t response) {
-                                if (xpc_get_type(response) == XPC_TYPE_ERROR) {
-                                    NSLog(@"Crane: app runtime_report transport probe error pid=%d: %@",
-                                          getpid(), CRHelperXPCEventError(response, @"app_runtime_probe"));
-                                } else {
-                                    BOOL alive = xpc_get_type(response) == XPC_TYPE_DICTIONARY &&
-                                        xpc_dictionary_get_bool(response, "alive");
-                                    const char *protocol = alive
-                                        ? xpc_dictionary_get_string(response, "protocol") : NULL;
-                                    BOOL valid = protocol &&
-                                        strcmp(protocol, CR_HELPERD_PING_PROTOCOL_V1) == 0;
-                                    NSLog(@"Crane: app runtime_report transport probe pid=%d alive=%d compatible=%d",
-                                          getpid(), alive, valid);
-                                }
-                            });
-                    }
-                }
             }
             return;
         }

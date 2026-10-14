@@ -79,10 +79,39 @@ assert 'CRFinishInjectionFixupAttempt(success, fixError);' in fixup_raw
 assert 'gLastInjectionFixupInProgress = YES;' in helper
 assert 'gLastInjectionFixupInProgress = NO;' in helper
 assert '@"inProgress": @(gLastInjectionFixupInProgress)' in helper
+assert 'gLastInjectionFixupTime' not in helper
+assert 'CRInjectionVerificationFailed' not in helper
+assert 'CRInjectionTargetChanged' not in helper
 assert '@"/Library/MobileSubstrate/DynamicLibraries/CraneSupport.dylib"' in helper
 assert 'CRSupportFixupTargets(' in helper
 assert 'CRPidMapsImageLeaf(pid, @"CraneSupport.dylib"' in helper
 assert 'CRSupportInjectionBackendInventory(void)' in helper
+assert 'CRSupportInjectionBinaryCandidates(void)' in helper
+candidate_start = helper.index('CRSupportInjectionBinaryCandidates(void)')
+candidate_end = helper.index('#endif', candidate_start)
+candidate_block = helper[candidate_start:candidate_end]
+roothide_block, rootful_block = candidate_block.split('#else', 1)
+assert '@"/basebin/opainject"' in roothide_block
+assert '@"/usr/bin/opainject"' in roothide_block
+assert '@"/usr/local/bin/opainject"' in roothide_block
+for roothide_only_backend in (
+    '@"/basebin/opainject"',
+    '@"/usr/bin/opainject"',
+    '@"/usr/local/bin/opainject"',
+):
+    assert roothide_only_backend not in rootful_block
+for original_backend in (
+    '@"/usr/libexec/libhooker/libsyringe"',
+    '@"/usr/bin/cynject"',
+    '@"/usr/bin/cynject.old"',
+):
+    assert original_backend in rootful_block
+find_start = helper.index('CRFindSupportInjectionBinary(void)')
+find_end = helper.index('static NSString *CRSupportInjectionBackendInventory', find_start)
+inventory_start = helper.index('CRSupportInjectionBackendInventory(void)')
+inventory_end = helper.index('static BOOL CRRuntimeHasComponent', inventory_start)
+assert 'CRSupportInjectionBinaryCandidates()' in helper[find_start:find_end]
+assert 'CRSupportInjectionBinaryCandidates()' in helper[inventory_start:inventory_end]
 assert 'CRLastInjectionFixupSnapshot(void)' in helper
 assert 'CRRecordInjectionFixupTransition(' in helper
 assert 'gLastInjectionFixupTransitions' in helper

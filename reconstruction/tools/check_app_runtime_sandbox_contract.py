@@ -184,8 +184,7 @@ for needle in (
 ):
     assert needle in unsandbox, needle
 constructor_support = support[support.index("static void CRInitFunc(void)"):]
-assert 'CraneSupport: constructor process=%@ platform=%@' in constructor_support
-assert constructor_support.index('CraneSupport: constructor process=%@ platform=%@') < constructor_support.index('[manager _setXPCUnsandboxHandler:^BOOL{')
+assert 'CraneSupport: constructor process=%@ platform=%@' not in constructor_support
 assert '[manager _setXPCUnsandboxHandler:^BOOL{' in constructor_support
 # Original 0x6C5C dispatches daemon hooks immediately after registering
 # the unsandbox handler. Attestation is reconstruction-only: reporting before
@@ -212,7 +211,8 @@ assert any(x.get("mach_name") == "com.opa334.cranehelperd.xpc"
 
 assert 'CR_HELPERD_MACH_SERVICE.UTF8String, NULL, XPC_CONNECTION_MACH_SERVICE_PRIVILEGED' in common
 assert 'xpc_connection_send_message(created, replay);' in common
-assert 'xpc_connection_send_message_with_reply(created, probe,' in common
+assert 'xpc_connection_send_message_with_reply(created, probe,' not in common
+assert 'app_runtime_probe' not in common
 assert 'CRRuntimeComponentAllowed(component, peerProcess, peerSigningID)' in helper
 assert 'CRRegisterRuntime(peerPid, peerProcess, component, containerID,' in helper
 assert 'CRRuntimeContainerForPid(targetPid, targetProcess)' in helper

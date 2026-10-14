@@ -601,7 +601,6 @@ static NSError *gLastInjectionFixupError = nil;
 static NSString *gLastInjectionFixupProcess = nil;
 static NSString *gLastInjectionFixupBackend = nil;
 static NSMutableArray<NSString *> *gLastInjectionFixupTransitions = nil;
-static NSTimeInterval gLastInjectionFixupTime = 0;
 
 static void CRBeginInjectionFixupAttempt(void)
 {
@@ -613,7 +612,6 @@ static void CRBeginInjectionFixupAttempt(void)
         gLastInjectionFixupProcess = nil;
         gLastInjectionFixupBackend = nil;
         gLastInjectionFixupTransitions = [NSMutableArray new];
-        gLastInjectionFixupTime = [NSDate timeIntervalSinceReferenceDate];
     }
 }
 
@@ -645,7 +643,6 @@ static void CRFinishInjectionFixupAttempt(BOOL success, NSError *error)
         gLastInjectionFixupInProgress = NO;
         gLastInjectionFixupSuccess = success;
         gLastInjectionFixupError = error;
-        gLastInjectionFixupTime = [NSDate timeIntervalSinceReferenceDate];
     }
 }
 
@@ -656,7 +653,6 @@ static NSDictionary *CRLastInjectionFixupSnapshot(void)
             @"attempted": @(gLastInjectionFixupAttempted),
             @"inProgress": @(gLastInjectionFixupInProgress),
             @"success": @(gLastInjectionFixupSuccess),
-            @"time": @(gLastInjectionFixupTime),
         } mutableCopy];
         if (gLastInjectionFixupProcess.length)
             snapshot[@"process"] = gLastInjectionFixupProcess;
@@ -680,8 +676,6 @@ typedef NS_ENUM(NSInteger, CRInjectionErrorCode) {
     CRInjectionSpawnFailed = 1103,
     CRInjectionTimedOut = 1104,
     CRInjectionToolFailed = 1105,
-    CRInjectionVerificationFailed = 1106,
-    CRInjectionTargetChanged = 1107,
 };
 
 static NSError *CRInjectionError(CRInjectionErrorCode code,
@@ -785,10 +779,10 @@ static BOOL CRPidMapsImageLeaf(pid_t pid, NSString *leaf,
     return NO;
 }
 
-static NSString *CRFindSupportInjectionBinary(void)
+static NSArray<NSString *> *CRSupportInjectionBinaryCandidates(void)
 {
 #if CRANE_ROOTHIDE
-    NSArray<NSString *> *candidates = @[
+    return @[
         @"/basebin/opainject",
         @"/usr/bin/opainject",
         @"/usr/local/bin/opainject",
@@ -797,18 +791,20 @@ static NSString *CRFindSupportInjectionBinary(void)
         @"/usr/bin/cynject.old",
     ];
 #else
-    NSArray<NSString *> *candidates = @[
+    /* Exact recovered rootful backend set. opainject is a Roothide-only
+     * platform adaptation and must not change rootful selection semantics. */
+    return @[
         @"/usr/libexec/libhooker/libsyringe",
         @"/usr/bin/cynject",
         @"/usr/bin/cynject.old",
-        @"/basebin/opainject",
-        @"/usr/bin/opainject",
-        @"/usr/local/bin/opainject",
     ];
 #endif
+}
 
+static NSString *CRFindSupportInjectionBinary(void)
+{
     NSFileManager *fm = NSFileManager.defaultManager;
-    for (NSString *virtualPath in candidates) {
+    for (NSString *virtualPath in CRSupportInjectionBinaryCandidates()) {
         NSString *path = CRJailbreakRootPath(virtualPath);
         BOOL directory = NO;
         if (path.length &&
@@ -822,29 +818,9 @@ static NSString *CRFindSupportInjectionBinary(void)
 
 static NSString *CRSupportInjectionBackendInventory(void)
 {
-#if CRANE_ROOTHIDE
-    NSArray<NSString *> *candidates = @[
-        @"/basebin/opainject",
-        @"/usr/bin/opainject",
-        @"/usr/local/bin/opainject",
-        @"/usr/libexec/libhooker/libsyringe",
-        @"/usr/bin/cynject",
-        @"/usr/bin/cynject.old",
-    ];
-#else
-    NSArray<NSString *> *candidates = @[
-        @"/usr/libexec/libhooker/libsyringe",
-        @"/usr/bin/cynject",
-        @"/usr/bin/cynject.old",
-        @"/basebin/opainject",
-        @"/usr/bin/opainject",
-        @"/usr/local/bin/opainject",
-    ];
-#endif
-
     NSFileManager *fm = NSFileManager.defaultManager;
     NSMutableArray<NSString *> *parts = [NSMutableArray new];
-    for (NSString *virtualPath in candidates) {
+    for (NSString *virtualPath in CRSupportInjectionBinaryCandidates()) {
         NSString *path = CRJailbreakRootPath(virtualPath);
         BOOL directory = NO;
         BOOL exists = path.length &&
@@ -1142,9 +1118,6 @@ static NSString *CRSupportMappedImageSummary(NSArray<NSString *> *processes)
         BOOL sawRegion = NO;
         BOOL sawPath = NO;
         BOOL support = NO;
-        BOOL flags = NO;
-        BOOL plain = NO;
-        BOOL bare = NO;
         BOOL systemhook = NO;
         BOOL tweakLoader = NO;
         BOOL injector = NO;
@@ -1172,12 +1145,6 @@ static NSString *CRSupportMappedImageSummary(NSArray<NSString *> *processes)
                     leaf = leaf ? leaf + 1 : path;
                     if (strcmp(leaf, "CraneSupport.dylib") == 0)
                         support = YES;
-                    else if (strcmp(leaf, "CraneSupportProbeFlags.dylib") == 0)
-                        flags = YES;
-                    else if (strcmp(leaf, "CraneSupportProbePlain.dylib") == 0)
-                        plain = YES;
-                    else if (strcmp(leaf, "CraneSupportProbeBare.dylib") == 0)
-                        bare = YES;
 
                     if (strcmp(leaf, "systemhook.dylib") == 0)
                         systemhook = YES;
@@ -1200,9 +1167,6 @@ static NSString *CRSupportMappedImageSummary(NSArray<NSString *> *processes)
                     NSString *leafName = [NSString stringWithUTF8String:leaf];
                     if (tweakDirectory &&
                         strcmp(leaf, "CraneSupport.dylib") != 0 &&
-                        strcmp(leaf, "CraneSupportProbeFlags.dylib") != 0 &&
-                        strcmp(leaf, "CraneSupportProbePlain.dylib") != 0 &&
-                        strcmp(leaf, "CraneSupportProbeBare.dylib") != 0 &&
                         leafName.length) {
                         [otherTweaks addObject:leafName];
                     }
@@ -1243,11 +1207,10 @@ static NSString *CRSupportMappedImageSummary(NSArray<NSString *> *processes)
                 NSMakeRange(0, MIN((NSUInteger)4, sortedJB.count))]
                 componentsJoinedByString:@"+"] : @"-";
         [parts addObject:[NSString stringWithFormat:
-            @"%@[pid=%d inspect=%d systemhook=%d loader=%d injector=%d ellekit=%d substrate=%d jb=%lu jbSample=%@ other=%lu sample=%@ support=%d flags=%d plain=%d bare=%d]",
+            @"%@[pid=%d inspect=%d systemhook=%d loader=%d injector=%d ellekit=%d substrate=%d jb=%lu jbSample=%@ other=%lu sample=%@ support=%d]",
             process, pid, inspect, systemhook, tweakLoader, injector, ellekit,
             substrate, (unsigned long)jailbreakImages.count, jbSample,
-            (unsigned long)otherTweaks.count, sample,
-            support, flags, plain, bare]];
+            (unsigned long)otherTweaks.count, sample, support]];
     }
     return [parts componentsJoinedByString:@"; "];
 }
@@ -1294,12 +1257,6 @@ static NSString *CRSigningIdentifierForPeer(xpc_connection_t peer)
     return result;
 }
 
-static BOOL CRIsCraneSBProcess(NSString *process)
-{
-    return [process isEqualToString:@"SpringBoard"] ||
-           [process isEqualToString:@"runningboardd"];
-}
-
 static BOOL CRIsAuthenticatedCraneSBPeer(NSString *process, NSString *signingID)
 {
     if ([process isEqualToString:@"SpringBoard"])
@@ -1312,11 +1269,6 @@ static BOOL CRIsAuthenticatedCraneSBPeer(NSString *process, NSString *signingID)
                [signingID isEqualToString:@"com.apple.runningboard"];
     }
     return NO;
-}
-
-static BOOL CRIsCraneSupportProcess(NSString *process)
-{
-    return [CRCraneSupportProcessNames() containsObject:process];
 }
 
 static BOOL CRIsAuthenticatedCraneSupportPeer(NSString *process, NSString *signingID)
