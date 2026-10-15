@@ -45,6 +45,15 @@ assert "originalPaths" in source and "applicationGroups" in source
 assert "containedContainers" in source
 assert "Keychain.plist" in source and "Metadata.plist" in source
 assert "payload_crc_verified" in source and "keychain_contents_read" in source
+assert "_verify_non_keychain_payloads(" in source
+assert "MAX_VERIFY_BYTES" in source and "VERIFY_CHUNK_BYTES" in source
+assert "name in keychain_names or item.is_dir()" in source
+assert "if total_to_read > MAX_VERIFY_BYTES:" in source
+assert "stream.read(VERIFY_CHUNK_BYTES)" in source
+assert "verify_payload: bool = False" in source
+assert '"--verify-payload"' in source
+assert "non_keychain_payload_crc_verified" in source
+assert "payload_crc_verified\": verify_payload and not keychain_names" in source
 assert "unsupported_not_validated" in source
 assert "structural_pass_not_verified" in source
 assert "test_single_schema_is_structural_only_and_read_only" in test_source
@@ -53,6 +62,11 @@ assert "test_reject_traversal_and_weird_member_names" in test_source
 assert "test_reject_symlink_and_special_files" in test_source
 assert "test_reject_oversized_plist_and_compression_bombs" in test_source
 assert "test_missing_or_mismatched_multi_records" in test_source
+assert "test_opt_in_stream_crc_for_non_keychain_files" in test_source
+assert "test_opt_in_crc_skips_keychain_bytes_and_reports_incomplete" in test_source
+assert "test_opt_in_rejects_local_header_filename_mismatch" in test_source
+assert "test_opt_in_crc_budget_is_enforced_before_streaming" in test_source
+assert "test_cli_opt_in_crc_flag_and_no_file_mutations" in test_source
 assert "test_crane_backup_inspector.py" in workflow
 assert "check_backup_inspector_contract.py" in workflow
 

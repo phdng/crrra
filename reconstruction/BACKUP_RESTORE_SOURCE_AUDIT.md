@@ -132,4 +132,27 @@ python3 reconstruction/tools/crane_backup_inspector.py /path/to/sample.cranebk
 
 **LƯU Ý:** các fixture được sinh từ schema decompile, **chưa có fixture `.cranect`/`.cranebk` thật từ ứng dụng dùng thử Crane gốc**. PASS tại giai đoạn A không đồng nghĩa binary compatibility. Kế tiếp: kiểm tra đối chiếu archive gốc không chứa dữ liệu riêng tư và đánh giá mọi sai lệch schema trước khi định nghĩa writer.
 
+## 8. G-11 giai đoạn A2 — kiểm tra CRC có giới hạn (2026-10-15)
+
+Bổ sung chức năng **tùy chọn** vào inspector tại `tools/crane_backup_inspector.py`. Không thêm backend ghi/restore vào Preferences hoặc helper.
+
+```sh
+# Nhanh, chỉ kiểm tra ZIP index và plist cấu trúc
+python3 reconstruction/tools/crane_backup_inspector.py sample.cranect
+
+# Đọc tuần tự các payload không phải Keychain (giới hạn 256 MiB),
+# bắt lỗi CRC và local-header không khớp; tuyệt đối không giải nén
+python3 reconstruction/tools/crane_backup_inspector.py sample.cranebk --verify-payload
+```
+
+- **`non_keychain_payload_crc_verified`:** `true` chỉ khi tất cả các entry không phải Keychain được đọc hết bằng chunk 1 MiB và CRC từ ZIP reader không báo lỗi.
+- **`payload_crc_verified`:** `true` chỉ khi tùy chọn `--verify-payload` hoàn tất **và backup không chứa `Keychain.plist`**. Có Keychain thì vẫn `false`, kể cả khi các tệp khác hợp lệ.
+- **`keychain_contents_read`:** luôn `false`. Không kiểm CRC hoặc kiểm chứng nội dung Keychain trong công cụ này. `crc_checked_bytes` cho biết số byte **không phải Keychain** đã kiểm; không phải số byte restore.
+- **Ngưỡng tùy chọn:** `MAX_VERIFY_BYTES=256 MiB` cho tổng các tệp không phải Keychain. Vượt giới hạn => `unsupported_not_validated` (exit 2) **trước khi bắt đầu streaming**.
+- **Phát hiện sửa đổi:** CLI chế độ mặc định không xác minh mọi payload; opt-in CRC có thể phát hiện corruption hoặc local ZIP header lệch so với central index. CRC không phải chữ ký mật mã, nên **không chứng minh tính chân thực hay khả năng khôi phục**.
+- **Kiểm thử:** thêm 5 bài unittest độc lập (CRC của file bị sửa, Keychain bị sửa nhưng bỏ qua như đã cam kết, local ZIP header mismatch, verify budget, CLI không thay đổi file). Tổng fixture synthetic hiện 17 bài; contract source bảo vệ `--verify-payload` và skip Keychain. CI đang chạy suite bằng discovery nên tự bao gồm các ca mới.
+- **Fixture thực:** đã kiểm tra workspace nhưng không tìm thấy `.cranect` hoặc `.cranebk` thật. Chưa thể kết luận byte-level compatibility, đặc biệt encryption và ZIP symlink semantics.
+
+**Còn khóa:** Root Backup/Restore vẫn hiển thị unavailable; không sửa `CRManager`, `cranehelperd`, injection hoặc code vận hành trên iPhone.
+
 **Nguồn kiểm toán tại workspace:** `analysis/objc_classes.json`, bản decompile `0x20E64`, `0x211A8`, `0x2614C`, `0x2619C`, `0x25A8C`, `0x24CF8`, `0x257AC`, `0x29504`, `0x2B9B0`, `0x2ADA0`, `0x2B31C`, và các helpers/blocks chỉ rõ trong mục 2-3; đối chiếu với `sources/prefs/CRPreferences.m`, `sources/libcrane/CRManager.m`, `sources/cranehelperd/CRHelperd.m`.

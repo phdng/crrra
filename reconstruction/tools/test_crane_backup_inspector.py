@@ -18,6 +18,9 @@ import tempfile
 import unittest
 import warnings
 import zipfile
+from unittest import mock
+
+import crane_backup_inspector as inspector
 
 from crane_backup_inspector import (
     InvalidArchive, UnsupportedArchive, inspect_archive,
@@ -230,6 +233,83 @@ class InspectorTest(unittest.TestCase):
                                  capture_output=True, text=True, check=False)
         self.assertEqual(missing.returncode, 1)
         self.assertEqual(json.loads(missing.stdout)["status"], "invalid")
+
+    @staticmethod
+    def tamper_member(data: bytes, target: str, *, header: bool = False) -> bytes:
+        """Mutate one local filename/payload byte without changing ZIP index."""
+        raw = bytearray(data)
+        with zipfile.ZipFile(io.BytesIO(data), "r") as zf:
+            entry = zf.getinfo(target)
+            start = entry.header_offset
+            name_len, extra_len = struct.unpack_from("<HH", raw, start + 26)
+            start += 30
+            if header:
+                index = start + max(0, name_len - 1)
+            else:
+                index = start + name_len + extra_len
+            raw[index] ^= 1
+        return bytes(raw)
+
+    def test_opt_in_stream_crc_for_non_keychain_files(self):
+        entries = [part for part in single_entries()
+                   if part[0] != "Keychain.plist"]
+        path = self.write(entries, compression=zipfile.ZIP_STORED)
+        result = inspect_archive(path, verify_payload=True)
+        self.assertTrue(result["payload_crc_verified"])
+        self.assertTrue(result["non_keychain_payload_crc_verified"])
+        self.assertGreater(result["crc_checked_bytes"], 0)
+        self.assertFalse(result["keychain_contents_read"])
+        self.assertFalse(result["extracted"])
+
+        broken = self.tamper_member(path.read_bytes(),
+                                    f"{APP}/Library/Preferences/test.plist")
+        path.write_bytes(broken)
+        # Structural-only inspection deliberately cannot certify payload CRC.
+        self.assertFalse(inspect_archive(path)["payload_crc_verified"])
+        with self.assertRaises(InvalidArchive):
+            inspect_archive(path, verify_payload=True)
+
+    def test_opt_in_crc_skips_keychain_bytes_and_reports_incomplete(self):
+        path = self.write(single_entries(), compression=zipfile.ZIP_STORED)
+        path.write_bytes(self.tamper_member(path.read_bytes(), "Keychain.plist"))
+        result = inspect_archive(path, verify_payload=True)
+        self.assertTrue(result["non_keychain_payload_crc_verified"])
+        self.assertFalse(result["payload_crc_verified"])
+        self.assertFalse(result["keychain_contents_read"])
+        self.assertFalse(result["extracted"])
+        self.assertTrue(result["containers"][0]["has_keychain"])
+
+    def test_opt_in_rejects_local_header_filename_mismatch(self):
+        path = self.write(single_entries(), compression=zipfile.ZIP_STORED)
+        path.write_bytes(self.tamper_member(path.read_bytes(),
+            f"{APP}/Library/Preferences/test.plist", header=True))
+        self.assertEqual(inspect_archive(path)["status"],
+                         "structural_pass_not_verified")
+        with self.assertRaises(InvalidArchive):
+            inspect_archive(path, verify_payload=True)
+
+    def test_opt_in_crc_budget_is_enforced_before_streaming(self):
+        path = self.write(single_entries())
+        with mock.patch.object(inspector, "MAX_VERIFY_BYTES", 1):
+            with self.assertRaisesRegex(UnsupportedArchive, "CRC inspection budget"):
+                inspect_archive(path, verify_payload=True)
+        self.assertEqual(inspect_archive(path)["status"],
+                         "structural_pass_not_verified")
+
+    def test_cli_opt_in_crc_flag_and_no_file_mutations(self):
+        path = self.write(single_entries())
+        original_bytes = path.read_bytes()
+        cli = Path(__file__).with_name("crane_backup_inspector.py")
+        response = subprocess.run([sys.executable, str(cli), str(path),
+                                   "--verify-payload"],
+                                  capture_output=True, text=True, check=False)
+        self.assertEqual(response.returncode, 0, response.stderr)
+        parsed = json.loads(response.stdout)
+        self.assertTrue(parsed["non_keychain_payload_crc_verified"])
+        self.assertFalse(parsed["payload_crc_verified"])
+        self.assertNotIn("SECRET_KEYCHAIN_MUST_NEVER_BE_READ", response.stdout)
+        self.assertEqual(path.read_bytes(), original_bytes)
+        self.assertEqual([p.name for p in self.root.iterdir()], ["fixture.cranect"])
 
     def test_unknown_extension_and_bad_zip(self):
         with self.assertRaises(InvalidArchive):

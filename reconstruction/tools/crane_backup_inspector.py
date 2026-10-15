@@ -1,10 +1,11 @@
 #!/usr/bin/env python3
 """Read-only structural inspector for original Crane .cranect/.cranebk backups.
 
-G-11 phase A only: NO extract(), extractall(), ZIP creation, restore, or calls to
-CraneManager/helperd. Performs bounded ZIP metadata inspection and reads ONLY
-small Info.plist/Metadata.plist records. Keychain.plist contents and app data
-are never loaded, printed, or written to disk.
+G-11 read-only inspection only: NO extract(), extractall(), ZIP creation,
+restore, or calls to CraneManager/helperd. By default only small Info.plist/
+Metadata.plist records are read. With --verify-payload, non-Keychain data
+is streamed (never stored/printed) under a 256 MiB budget for ZIP CRC checks.
+Keychain.plist contents are NEVER opened/read or printed.
 
 The original binary is the source of the schema, but without real original
 fixtures passing this inspector is NOT proof of backup compatibility.
@@ -19,6 +20,7 @@ import plistlib
 import re
 import stat
 import sys
+import zlib
 import zipfile
 from typing import Any
 
@@ -29,6 +31,10 @@ MAX_COMPRESSION_RATIO = 1_000
 MAX_PLIST_BYTES = 2 * 1024 ** 2
 MAX_NAME_LENGTH = 1024
 MAX_DEPTH = 32
+# Optional deeper consistency check; it reads (never extracts) non-Keychain
+# file contents in chunks and lets zipfile verify their CRC at EOF.
+MAX_VERIFY_BYTES = 256 * 1024 ** 2
+VERIFY_CHUNK_BYTES = 1024 ** 2
 
 class InvalidArchive(Exception):
     """Archive violates a structural or schema invariant."""
@@ -108,12 +114,12 @@ def _read_small_plist(zf: zipfile.ZipFile, item: zipfile.ZipInfo) -> dict:
     try:
         with zf.open(item, "r") as handle:
             data = handle.read(MAX_PLIST_BYTES + 1)
-    except (RuntimeError, OSError, EOFError, zipfile.BadZipFile) as exc:
+    except (RuntimeError, OSError, EOFError, zipfile.BadZipFile, zlib.error) as exc:
         raise InvalidArchive(f"unreadable plist: {item.filename}") from exc
     _require(len(data) <= MAX_PLIST_BYTES, "plist exceeded byte limit")
     try:
         parsed = plistlib.loads(data)
-    except (ValueError, TypeError, OSError, OverflowError) as exc:
+    except (ValueError, TypeError, OSError, OverflowError, RecursionError) as exc:
         raise InvalidArchive(f"invalid property list: {item.filename}") from exc
     _require(isinstance(parsed, dict), f"plist is not a dictionary: {item.filename}")
     return parsed
@@ -169,7 +175,45 @@ def _check_payload(zf: zipfile.ZipFile,
     }
 
 
-def inspect_archive(path: str | os.PathLike[str]) -> dict[str, Any]:
+def _verify_non_keychain_payloads(
+    zf: zipfile.ZipFile,
+    members: dict[str, zipfile.ZipInfo],
+    keychain_names: set[str],
+) -> int:
+    """Opt-in bounded CRC validation, WITHOUT reading Keychain.plist data.
+
+    Count the budget BEFORE reading so an oversized archive never gets a
+    misleading partially-verified status. ZIP readers check each CRC on EOF.
+    """
+    total_to_read = sum(item.file_size for name, item in members.items()
+                        if name not in keychain_names and not item.is_dir())
+    if total_to_read > MAX_VERIFY_BYTES:
+        raise UnsupportedArchive("non-Keychain payload exceeds CRC inspection budget")
+    checked = 0
+    for name, item in members.items():
+        if name in keychain_names or item.is_dir():
+            continue
+        try:
+            with zf.open(item, "r") as stream:
+                length = 0
+                while True:
+                    chunk = stream.read(VERIFY_CHUNK_BYTES)
+                    if not chunk:
+                        break
+                    length += len(chunk)
+                    if length > item.file_size or checked + length > MAX_VERIFY_BYTES:
+                        raise InvalidArchive("ZIP payload exceeded advertised byte count")
+                _require(length == item.file_size,
+                         "ZIP member length differs from central directory")
+                checked += length
+        except (zipfile.BadZipFile, EOFError, RuntimeError,
+                OSError, ValueError, zlib.error) as exc:
+            raise InvalidArchive("corrupted ZIP payload or local header") from exc
+    return checked
+
+
+def inspect_archive(path: str | os.PathLike[str],
+                    *, verify_payload: bool = False) -> dict[str, Any]:
     archive = Path(path)
     extension = archive.suffix.lower()
     _require(extension in (".cranect", ".cranebk"),
@@ -281,13 +325,28 @@ def inspect_archive(path: str | os.PathLike[str]) -> dict[str, Any]:
                     _require(any(name.startswith(prefix) for prefix in expected_prefixes),
                              f"ZIP entry outside multi index: {name}")
 
-            # This is structural metadata only. No full member reads/CRC pass,
-            # no author authenticity or device compatibility assertion.
+            # Keychain contents must never be opened/read by this tool.
+            keychain_names = (
+                ({"Keychain.plist"} if "Keychain.plist" in names else set())
+                if kind == "single" else {
+                    f"{item['application_identifier']}/{item['container_identifier']}/Keychain.plist"
+                    for item in results
+                    if f"{item['application_identifier']}/{item['container_identifier']}/Keychain.plist"
+                    in names
+                }
+            )
+            inspected_bytes = (_verify_non_keychain_payloads(
+                zf, names, keychain_names) if verify_payload else 0)
+
+            # Even an opt-in CRC pass is NOT an authenticity/restore proof.
+            # With Keychain present, "payload_crc_verified" must stay false.
             return {"status": "structural_pass_not_verified", "kind": kind,
                     "containers": results, "member_count": len(members),
                     "uncompressed_bytes_claimed": total,
-                    "payload_crc_verified": False, "keychain_contents_read": False,
-                    "extracted": False}
+                    "payload_crc_verified": verify_payload and not keychain_names,
+                    "non_keychain_payload_crc_verified": verify_payload,
+                    "crc_checked_bytes": inspected_bytes,
+                    "keychain_contents_read": False, "extracted": False}
     except (zipfile.BadZipFile, zipfile.LargeZipFile) as exc:
         raise InvalidArchive("not a readable ZIP central directory") from exc
 
@@ -296,9 +355,11 @@ def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(
         description="Read-only Crane archive structure inspection (NO restore/extraction)")
     parser.add_argument("archive", help="Original .cranect / .cranebk backup file")
+    parser.add_argument("--verify-payload", action="store_true",
+                        help="Stream/check CRC for non-Keychain members (max 256 MiB); never extract")
     args = parser.parse_args(argv)
     try:
-        result = inspect_archive(args.archive)
+        result = inspect_archive(args.archive, verify_payload=args.verify_payload)
         code = 0
     except UnsupportedArchive as exc:
         result, code = {"status": "unsupported_not_validated", "reason": str(exc)}, 2
