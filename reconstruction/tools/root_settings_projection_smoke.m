@@ -43,18 +43,20 @@ int main(void)
             @{@"key": @"showTitle"},
             @{@"key": @"after"}];
         NSArray *keys = Keys(rows);
+        /* C assert is a single-argument macro: parenthesize expressions
+         * containing comma-separated Objective-C array literals. */
         assert([Keys(Visible(rows, @{})) isEqual:keys]);
-        assert([Keys(Visible(rows, @{@"applicationShortcutEnabled": @NO}))
+        assert(([Keys(Visible(rows, @{@"applicationShortcutEnabled": @NO}))
             isEqual:@[@"applicationShortcutEnabled", @"other",
-                      @"notificationsSupportEnabled", @"showTitle", @"after"]]);
-        assert([Keys(Visible(rows, @{@"notificationsSupportEnabled": @NO}))
+                      @"notificationsSupportEnabled", @"showTitle", @"after"]]));
+        assert(([Keys(Visible(rows, @{@"notificationsSupportEnabled": @NO}))
             isEqual:@[@"applicationShortcutEnabled", @"launch", @"expand",
                       @"new", @"onlyIf", @"badge", @"other",
-                      @"notificationsSupportEnabled", @"after"]]);
-        assert([Keys(Visible(rows, @{@"applicationShortcutEnabled": @NO,
+                      @"notificationsSupportEnabled", @"after"]]));
+        assert(([Keys(Visible(rows, @{@"applicationShortcutEnabled": @NO,
                                      @"notificationsSupportEnabled": @NO}))
             isEqual:@[@"applicationShortcutEnabled", @"other",
-                      @"notificationsSupportEnabled", @"after"]]);
+                      @"notificationsSupportEnabled", @"after"]]));
         assert([Keys(Visible(rows, @{@"applicationShortcutEnabled": @YES,
                                      @"notificationsSupportEnabled": @YES}))
             isEqual:keys]);
@@ -65,12 +67,12 @@ int main(void)
             @{@"key": @"grandchild"},
             @{@"key": @"sibling"},
             @{@"key": @"tail"}];
-        assert([Keys(Visible(nested, @{}))
-            isEqual:@[@"parent", @"inner", @"sibling", @"tail"]]);
-        assert([Keys(Visible(nested, @{@"inner": @YES}))
-            isEqual:@[@"parent", @"inner", @"grandchild", @"sibling", @"tail"]]);
-        assert([Keys(Visible(nested, @{@"parent": @NO, @"inner": @YES}))
-            isEqual:@[@"parent", @"tail"]]);
+        assert(([Keys(Visible(nested, @{}))
+            isEqual:@[@"parent", @"inner", @"sibling", @"tail"]]));
+        assert(([Keys(Visible(nested, @{@"inner": @YES}))
+            isEqual:@[@"parent", @"inner", @"grandchild", @"sibling", @"tail"]]));
+        assert(([Keys(Visible(nested, @{@"parent": @NO, @"inner": @YES}))
+            isEqual:@[@"parent", @"tail"]]));
 
         /* Invalid metadata cannot skip the next group or the last row. */
         NSArray *malformed = @[

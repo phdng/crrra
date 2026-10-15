@@ -79,6 +79,10 @@ for scenario in (
 ):
     assert scenario in smoke, scenario
 assert "tools/root_settings_projection_smoke.m" in flow
+# C assert(x) treats commas inside Objective-C @[] as extra macro args unless
+# the entire expression is protected by an extra pair of parentheses.
+assert smoke.count("assert(([Keys(Visible(") == 6
+assert "assert([Keys(Visible(nested," not in smoke
 assert "check_root_settings_contract.py" in flow
 
 # Original 0x2220C performs application reload + registration reset, which
