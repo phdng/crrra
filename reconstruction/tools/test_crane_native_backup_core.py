@@ -12,6 +12,7 @@ import struct
 import tempfile
 import unittest
 import zipfile
+import zlib
 
 import native_backup_reader_fixture as gen
 from test_crane_original_archive_audit import ORIGINAL_FIXTURE
@@ -43,6 +44,30 @@ class NativeCoreFixtureTests(unittest.TestCase):
                              gen.INFO["originalPaths"])
             self.assertEqual(decoded["deviceIdentifierForVendor"],
                              gen.INFO["deviceIdentifierForVendor"])
+
+    def test_valid_zip64_descriptor_and_raw_deflate_stream_complete(self):
+        archive = self.paths[0]
+        raw = archive.read_bytes()
+        with zipfile.ZipFile(archive, "r") as zf:
+            member = zf.infolist()[0]
+            self.assertEqual(member.filename, "Info.plist")
+            name_len, extra_len = struct.unpack_from("<HH", raw, 26)
+            offset = 30 + name_len + extra_len
+            compressed = raw[offset:offset + member.compress_size]
+            stream = zlib.decompressobj(-zlib.MAX_WBITS)
+            payload = stream.decompress(compressed) + stream.flush()
+            self.assertTrue(stream.eof)
+            self.assertEqual(stream.unused_data, b"")
+            self.assertEqual(len(payload), member.file_size)
+            self.assertEqual(zlib.crc32(payload), member.CRC)
+            descriptor_offset = offset + member.compress_size
+            descriptor = raw[descriptor_offset:descriptor_offset + 24]
+            self.assertEqual(descriptor[:4], b"PK\x07\x08")
+            self.assertEqual(
+                struct.unpack_from("<IQQ", descriptor, 4),
+                (member.CRC, member.compress_size, member.file_size))
+            self.assertEqual(raw[descriptor_offset + 24:
+                                 descriptor_offset + 28], b"PK\x03\x04")
 
     def test_bad_crc_descriptor_rejected_by_native_test_vector(self):
         good, bad, _ = self.paths

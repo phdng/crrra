@@ -22,6 +22,11 @@ int main(int argc, const char **argv)
         NSError *error = nil;
         NSDictionary *info = [CRBackupNativeCore
             readSingleBackupInfoAtPath:path error:&error];
+        if (!info || error) {
+            /* Fixed numeric stage only, never path / app ID / plist payload. */
+            NSLog(@"native G-11 reader rejected synthetic ZIP at stage %ld",
+                  (long)error.code);
+        }
         Check(info != nil && error == nil, @"valid first-entry ZIP64 Info rejected");
         Check([info[@"applicationIdentifier"] isEqual:@"com.example.crane.native"],
               @"incorrect fake app identifier");

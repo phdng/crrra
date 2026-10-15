@@ -129,7 +129,10 @@ static NSData *CRInflate(const uint8_t *source, size_t length,
     }
     if (method != 8)
         return nil;
-    NSMutableData *buffer = [NSMutableData dataWithLength:MAX(targetSize, (NSUInteger)1)];
+    /* Leave one byte of output headroom: raw zlib streams can need to
+     * finish reading an end-of-block marker after producing exactly the
+     * advertised output. Still reject ANY excess uncompressed byte. */
+    NSMutableData *buffer = [NSMutableData dataWithLength:targetSize + 1];
     z_stream strm = {0};
     strm.next_in = (Bytef *)source;
     strm.avail_in = (uInt)length;
@@ -147,14 +150,17 @@ static NSData *CRInflate(const uint8_t *source, size_t length,
     return buffer;
 }
 
-static NSDictionary<NSString *, id> *CRReadInfoFromFD(int fd)
+static NSDictionary<NSString *, id> *CRReadInfoFromFD(int fd,
+                                                 NSInteger *failureStage)
 {
+    if (failureStage) *failureStage = 10;
     struct stat fileStat;
     if (fstat(fd, &fileStat) != 0 || !S_ISREG(fileStat.st_mode) ||
         fileStat.st_size < 30 || (uint64_t)fileStat.st_size > CRArchiveLimit)
         return nil;
 
     const uint64_t size = (uint64_t)fileStat.st_size;
+    if (failureStage) *failureStage = 20;
     uint8_t header[30];
     if (!CRRead(fd, 0, header, sizeof(header), size) ||
         CR32(header) != 0x04034b50)
@@ -171,6 +177,7 @@ static NSDictionary<NSString *, id> *CRReadInfoFromFD(int fd)
     if (nameLength != 10 || extraLength > 1024 ||
         headerBytes > size)
         return nil;
+    if (failureStage) *failureStage = 30;
     uint8_t name[10];
     if (!CRRead(fd, 30, name, sizeof(name), size) ||
         memcmp(name, "Info.plist", sizeof(name)) != 0)
@@ -179,6 +186,7 @@ static NSDictionary<NSString *, id> *CRReadInfoFromFD(int fd)
     uint64_t compressed = CR32(header + 18);
     uint64_t uncompressed = CR32(header + 22);
     BOOL zip64 = compressed == UINT32_MAX || uncompressed == UINT32_MAX;
+    if (failureStage) *failureStage = 40;
     if (zip64) {
         if (extraLength < 20)
             return nil;
@@ -208,6 +216,7 @@ static NSDictionary<NSString *, id> *CRReadInfoFromFD(int fd)
         compressed > size - headerBytes)
         return nil;
 
+    if (failureStage) *failureStage = 50;
     NSMutableData *compressedData = [NSMutableData dataWithLength:(NSUInteger)compressed];
     if (!CRRead(fd, headerBytes, compressedData.mutableBytes,
                 (size_t)compressed, size))
@@ -218,6 +227,7 @@ static NSDictionary<NSString *, id> *CRReadInfoFromFD(int fd)
     if (!plistBytes)
         return nil;
 
+    if (failureStage) *failureStage = 60;
     uint32_t wantedCRC = CR32(header + 14);
     if (generalFlags & 0x0008) {
         uint64_t after = headerBytes + compressed;
@@ -235,11 +245,13 @@ static NSDictionary<NSString *, id> *CRReadInfoFromFD(int fd)
             descriptorUncompressed != uncompressed)
             return nil;
     }
+    if (failureStage) *failureStage = 70;
     uint32_t crc = (uint32_t)crc32(0L, Z_NULL, 0);
     crc = (uint32_t)crc32(crc, plistBytes.bytes, (uInt)plistBytes.length);
     if (crc != wantedCRC)
         return nil;
 
+    if (failureStage) *failureStage = 80;
     NSPropertyListFormat format = NSPropertyListBinaryFormat_v1_0;
     NSError *parseError = nil;
     id propertyList = [NSPropertyListSerialization
@@ -251,6 +263,7 @@ static NSDictionary<NSString *, id> *CRReadInfoFromFD(int fd)
         !CRValidInfo(propertyList))
         return nil;
 
+    if (failureStage) *failureStage = 90;
     struct stat endStat;
     if (fstat(fd, &endStat) != 0 ||
         endStat.st_dev != fileStat.st_dev ||
@@ -283,13 +296,14 @@ static NSDictionary<NSString *, id> *CRReadInfoFromFD(int fd)
         return nil;
     }
     NSDictionary *result = nil;
+    NSInteger failureStage = 10;
     @try {
-        result = CRReadInfoFromFD(fd);
+        result = CRReadInfoFromFD(fd, &failureStage);
     } @finally {
         close(fd);
     }
     if (!result)
-        CRFail(error, 3);
+        CRFail(error, failureStage);
     return result;
 }
 

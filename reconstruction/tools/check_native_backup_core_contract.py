@@ -40,6 +40,9 @@ for marker in (
     "CR64(extra + cursor)", "UINT32_MAX",
     "(generalFlags & ~(uint16_t)0x0808)",
     "inflateInit2(&strm, -MAX_WBITS)",
+    "dataWithLength:targetSize + 1",
+    "CRReadInfoFromFD(fd, &failureStage)",
+    "CRFail(error, failureStage)",
     "CR32(descriptor) != 0x08074b50",
     "crc32(0L, Z_NULL, 0)", "crc != wantedCRC",
     "NSPropertyListBinaryFormat_v1_0",
@@ -71,6 +74,8 @@ assert "writableMetadataAttributes:" in smoke
 assert "force_zip64=True" in fixtures and "PK\\x07\\x08" in fixtures
 assert "test_zip64_local_first_info_binary_plist" in tests
 assert "test_bad_crc_descriptor_rejected_by_native_test_vector" in tests
+assert "test_valid_zip64_descriptor_and_raw_deflate_stream_complete" in tests
+assert "reader rejected synthetic ZIP at stage %ld" in smoke
 assert "test_original_single_local_zip64_descriptor_matches_native_contract" in tests
 assert "@unittest.skipUnless(ORIGINAL_FIXTURE.is_file()" in tests
 assert "check_native_backup_core_contract.py" in workflow
