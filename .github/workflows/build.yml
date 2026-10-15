@@ -139,6 +139,9 @@ jobs:
       - name: Verify safe Game Center account manager UI
         run: python3 reconstruction/tools/check_gamecenter_accounts_ui_contract.py
 
+      - name: Verify Game Center unused-account delete guards
+        run: python3 reconstruction/tools/check_gamecenter_unused_delete_contract.py
+
       - name: Verify optional Choicy integration (tracked native evidence)
         run: CRANE_CHOICY_SKIP_NATIVE_EXPORT=1 python3 reconstruction/tools/check_choicy_integration_contract.py
 

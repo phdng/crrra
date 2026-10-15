@@ -68,4 +68,36 @@ static inline NSString *CRGameCenterResolvedActiveAccount(NSArray<NSDictionary *
         ? (NSString *)stored : @"DEFAULT";
 }
 
+/* Read-only removal preflight: a registered Game Center account must not be
+ * removed while an app container still references it. Malformed settings are
+ * unknown, never interpreted as "unreferenced". */
+static inline BOOL CRGameCenterAccountReferencedInSettings(id appSettings,
+                                                            NSString *identifier,
+                                                            BOOL *valid)
+{
+    if (valid)
+        *valid = NO;
+    if (![identifier isKindOfClass:NSString.class] ||
+        ![appSettings isKindOfClass:NSDictionary.class])
+        return NO;
+    id containers = appSettings[@"Containers"];
+    if (![containers isKindOfClass:NSArray.class])
+        return NO;
+    for (id item in (NSArray *)containers) {
+        if (![item isKindOfClass:NSDictionary.class])
+            return NO;
+        id account = item[@"associatedGameCenterAccount"];
+        if (account && ![account isKindOfClass:NSString.class])
+            return NO;
+        if ([account isEqualToString:identifier]) {
+            if (valid)
+                *valid = YES;
+            return YES;
+        }
+    }
+    if (valid)
+        *valid = YES;
+    return NO;
+}
+
 #endif /* CR_GAME_CENTER_ACCOUNTS_H */

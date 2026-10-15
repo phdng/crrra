@@ -565,6 +565,91 @@
     [self presentViewController:alert animated:YES completion:nil];
 }
 
+/* Original 0x1502C removes an accountsd database before saving the list.
+ * That path is irreversible in a running daemon. Until the full transaction
+ * can be proven on device, only allow pruning metadata for a never-used UUID:
+ * no selected active account, no container reference and no on-disk account
+ * database or SQLite sidecar. Inability to inspect any dependency denies. */
+- (BOOL)canRemoveUnusedAccountWithIdentifier:(NSString *)identifier
+{
+    if (![identifier isKindOfClass:NSString.class] ||
+        ![[NSUUID alloc] initWithUUIDString:identifier] ||
+        [identifier isEqualToString:CR_DEFAULT_CONTAINER_IDENTIFIER])
+        return NO;
+
+    CraneManager *manager = CraneManager.sharedManager;
+    id native = [manager preferenceValueForKey:@"gameCenterAccounts"];
+    id stored = native ?: [manager preferenceValueForKey:
+        @"crane_gameCenter.availableAccounts"];
+    if (!CRGameCenterAccountsAreValidForWrite(stored) ||
+        ![self dictionaryForAccountWithIdentifier:identifier] ||
+        [[manager gameCenter_activeAccount] isEqualToString:identifier])
+        return NO;
+
+    NSArray *keys = CFBridgingRelease(CFPreferencesCopyKeyList(
+        (__bridge CFStringRef)CR_PREFS_DOMAIN,
+        kCFPreferencesCurrentUser, kCFPreferencesAnyHost));
+    if (![keys isKindOfClass:NSArray.class])
+        return NO;
+    for (id key in keys) {
+        if (![key isKindOfClass:NSString.class] ||
+            ![key hasPrefix:@"appSettings_"])
+            continue;
+        id settings = [manager preferenceValueForKey:key];
+        BOOL valid = NO;
+        BOOL referenced = CRGameCenterAccountReferencedInSettings(
+            settings, identifier, &valid);
+        if (!valid || referenced)
+            return NO;
+    }
+
+    NSFileManager *fm = NSFileManager.defaultManager;
+    NSString *directory = @"/var/mobile/Library/Accounts/Crane";
+    NSDictionary *attrs = [fm attributesOfItemAtPath:directory error:NULL];
+    if (![attrs[NSFileType] isEqualToString:NSFileTypeDirectory] ||
+        ![fm isReadableFileAtPath:directory])
+        return NO;
+    NSError *listError = nil;
+    NSArray<NSString *> *names = [fm contentsOfDirectoryAtPath:directory
+                                                         error:&listError];
+    if (!names || listError)
+        return NO;
+    NSString *prefix = [identifier stringByAppendingString:@"."];
+    for (NSString *name in names) {
+        if (![name isKindOfClass:NSString.class] || [name hasPrefix:prefix])
+            return NO;
+    }
+    return YES;
+}
+
+/* Prune only unused metadata. Never call _removeAccountsDatabase... from the
+ * UI; if an account has ever acquired a database the preflight rejects it. */
+- (BOOL)removeUnusedAccountWithIdentifier:(NSString *)identifier
+{
+    CraneManager *manager = CraneManager.sharedManager;
+    @synchronized(manager) {
+        if (![self canRemoveUnusedAccountWithIdentifier:identifier])
+            return NO;
+        NSMutableArray *accounts =
+            [[manager gameCenter_availableAccounts] mutableCopy];
+        NSUInteger index = [accounts indexOfObjectPassingTest:
+            ^BOOL(NSDictionary *entry, NSUInteger idx, BOOL *stop) {
+                (void)idx; (void)stop;
+                return [entry[@"identifier"] isEqualToString:identifier];
+            }];
+        if (index == NSNotFound)
+            return NO;
+        [accounts removeObjectAtIndex:index];
+        [manager gameCenter_setAvailableAccounts:accounts];
+        if (CRGameCenterAccountIdentifierExists(
+                [manager gameCenter_availableAccounts], identifier))
+            return NO;
+    }
+    [self reloadListInParentController];
+    [self scheduleAccountListReload];
+    return YES;
+}
+
 /* Original 0x15F90 opens a rename alert for non-DEFAULT accounts. */
 - (void)accountPressed:(PSSpecifier *)specifier
 {
@@ -589,6 +674,31 @@
         [weakSelf renameAccountWithIdentifier:identifier
                                        toName:alert.textFields.firstObject.text];
     }]];
+    /* Only never-used accounts are eligible. Confirm and check again after
+     * the alert is dismissed; no database files are ever deleted. */
+    if ([self canRemoveUnusedAccountWithIdentifier:identifier]) {
+        [alert addAction:[UIAlertAction actionWithTitle:CRLocalize(@"DELETE")
+            style:UIAlertActionStyleDestructive handler:^(__unused UIAlertAction *action) {
+            dispatch_async(dispatch_get_main_queue(), ^{
+                if (![weakSelf canRemoveUnusedAccountWithIdentifier:identifier])
+                    return;
+                NSString *detail = [NSString stringWithFormat:
+                    CRLocalize(@"GAME_CENTER_ACCOUNT_DELETE_CONFIRMATION_MESSAGE"),
+                    account[@"name"]];
+                UIAlertController *confirm = [UIAlertController alertControllerWithTitle:
+                    CRLocalize(@"GAME_CENTER_ACCOUNT_DELETE_CONFIRMATION_TITLE")
+                    message:detail preferredStyle:UIAlertControllerStyleAlert];
+                [confirm addAction:[UIAlertAction actionWithTitle:
+                    CRLocalize(@"CANCEL") style:UIAlertActionStyleCancel handler:nil]];
+                [confirm addAction:[UIAlertAction actionWithTitle:
+                    CRLocalize(@"DELETE") style:UIAlertActionStyleDestructive
+                    handler:^(__unused UIAlertAction *confirmAction) {
+                    [weakSelf removeUnusedAccountWithIdentifier:identifier];
+                }]];
+                [weakSelf presentViewController:confirm animated:YES completion:nil];
+            });
+        }]];
+    }
     [self presentViewController:alert animated:YES completion:nil];
 }
 

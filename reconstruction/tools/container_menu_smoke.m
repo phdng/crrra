@@ -105,6 +105,33 @@ int main(void)
         assert([CRGameCenterResolvedActiveAccount(validGames, @42)
             isEqual:CR_DEFAULT_CONTAINER_IDENTIFIER]);
 
+        /* Unused-account removal must not mistake a container reference or
+         * a malformed registry for an unused Game Center database. */
+        BOOL gcValid = NO;
+        NSDictionary *unreferencedSettings = @{@"Containers":
+            @[@{@"identifier": @"DEFAULT"},
+              @{@"identifier": @"C1", @"associatedGameCenterAccount": @"B2"}]};
+        assert(CRGameCenterAccountReferencedInSettings(
+            unreferencedSettings, @"B2", &gcValid));
+        assert(gcValid);
+        gcValid = NO;
+        assert(!CRGameCenterAccountReferencedInSettings(
+            unreferencedSettings, @"A1", &gcValid));
+        assert(gcValid);
+        gcValid = YES;
+        assert(!CRGameCenterAccountReferencedInSettings(
+            @{@"Containers": @[@{@"associatedGameCenterAccount": NSNull.null}]},
+            @"A1", &gcValid));
+        assert(!gcValid);
+        gcValid = YES;
+        assert(!CRGameCenterAccountReferencedInSettings(
+            @{@"Containers": @"invalid"}, @"A1", &gcValid));
+        assert(!gcValid);
+        gcValid = YES;
+        assert(!CRGameCenterAccountReferencedInSettings(
+            @{@"Containers": @[NSNull.null]}, @"A1", &gcValid));
+        assert(!gcValid);
+
         NSFileManager *fm = NSFileManager.defaultManager;
         NSString *root = [NSTemporaryDirectory() stringByAppendingPathComponent:
             [NSString stringWithFormat:@"crane-menu-smoke-%@", NSUUID.UUID.UUIDString]];
