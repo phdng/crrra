@@ -404,4 +404,25 @@ python3 reconstruction/tools/crane_restore_fixture_materializer.py \
 
 **Kiểm thử/CI:** `test_crane_restore_fixture_materializer.py` có 15 ca thử nghiệm với file thật tổng hợp: single, multi, subset, file zero-byte/empty directory, gián đoạn staging 2 điểm, từ chối đích đã tồn tại, staging orphan, marker sai, archive/inventory ngoài root, target active/existing data, Keychain presence, path traversal, Windows special filename, CLI privacy và bất biến input. `check_restore_fixture_materializer_contract.py` kiểm source guard và Root UI fail-closed; CI thêm 2 bước. Không có ZIP Crane gốc được dùng trong thử nghiệm.
 
+## 17. G-11 D5 — verifier read-only cho D4 quarantine output (2026-10-15)
+
+**Mới:** `reconstruction/tools/crane_restore_quarantine_verify.py` kiểm tra **chỉ đọc** dữ liệu giả lập đã được D4 publish vào `restore-materialize-lab/published/batch`. Nó KHÔNG khôi phục gì thêm, không sửa/xóa/copy file, không áp dụng Metadata, không đọc Keychain, không gọi `CraneManager` hoặc daemon, không xác thực file ZIP gốc.
+
+**Giao diện:** nhận `--fixture-root` (phải là child OS temp có hai markers D4), `--archive` chỉ trong `<fixture-root>/output`, `--inventory` đúng `<fixture-root>/inventory.json`. Phải có batch D4 đã publish, `staging/` rỗng, `published/` không chứa gì khác ngoài `batch/` và marker `.crane-stage` đúng bytes. Công cụ chạy lại `plan_restore(..., verify_payload=True)` gồm D0/D3 và CRC ngoài Keychain. Nếu preflight có cảnh báo (Keychain, app mismatch, active/existing target, Metadata sai, thiếu dung lượng) thì **không kiểm chứng**.
+
+**So sánh:** tái tạo chính xác ánh xạ thư mục số `container-N/associated-N/` theo từng mapping source D0 từ ZIP Info.plist, chỉ dùng các tên portable D4 đã cho phép. Liệt kê toàn bộ thư mục/file quarantine bằng `os.walk(..., followlinks=False)` với tối đa 8.000 entry, chặn symlink, special file và hardlink. Không đọc nội dung file thừa. Bắt file/thư mục thiếu hoặc ngoài danh sách; đọc file có sẵn với `os.open(O_NOFOLLOW)` khi hỗ trợ, kiểm inode/size/mtime và băm SHA-256 theo từng khối; băm tương ứng từ `ZipFile.open` theo chunk (zipfile còn kiểm CRC). Nếu hash không khớp, size thay đổi, file ngoài danh sách hoặc cấu trúc bất thường, kết quả là mismatch hoặc input invalid chứ KHÔNG tự sửa.
+
+**Đầu ra:** `fixture_verified_read_only` (exit 0), `fixture_integrity_mismatch` (exit 1), `fixture_verify_invalid_or_unavailable` (exit 2). JSON chỉ có các thống kê, số lượng mismatch và reason codes cố định; KHÔNG đưa digest, nội dung file, tên file, đường dẫn, app/container/group ID hoặc raw error. Các cờ **luôn** `restore_executable:false`, `original_compatibility_proven:false`, `real_rollback_implemented:false`, `filesystem_writes:false`, `device_data_touched:false`, `keychain_contents_read:false` ở kết quả có đủ dữ liệu.
+
+```sh
+python3 reconstruction/tools/crane_restore_quarantine_verify.py \
+  --fixture-root /actual/os/temp/disposable-fixture \
+  --archive /actual/os/temp/disposable-fixture/output/sample.cranect \
+  --inventory /actual/os/temp/disposable-fixture/inventory.json
+```
+
+**Test/CI:** `test_crane_restore_quarantine_verify.py` gồm 21 ca tổng hợp dùng fixture D4: single/multi/subset, file đúng và file 0 byte, file sửa cùng kích thước, file bị cắt/thiếu, file/thư mục ngoài ZIP, thư mục rỗng bị xóa, symlink file/thư mục, hardlink, stage marker bị sửa, chưa publish, published chứa mục thừa, preflight blocked, archive ngoài root, thay đổi archive trong lúc hash, không gọi mutator và CLI status/redaction. `check_restore_quarantine_verify_contract.py` kiểm tra chỉ đọc, chỉ hoạt động trong lab, và Root Backup/Restore không được bật; CI thêm 2 bước.
+
+**Giới hạn:** so SHA-256 của payload sau publish chỉ chứng minh fixture hiện tại giống ZIP đã nhập trong lượt kiểm. Không chứng minh nguồn ZIP đáng tin, không giải quyết attacker race, native iOS permissions/group mapping, Keychain, rollback, crash/power loss; chưa kiểm chứng với backup Crane gốc từ disposable app hoặc macOS native CI. Không dùng công cụ này trên container thật.
+
 **Nguồn kiểm toán tại workspace:** `analysis/objc_classes.json`, bản decompile `0x20E64`, `0x211A8`, `0x2614C`, `0x2619C`, `0x25A8C`, `0x24CF8`, `0x257AC`, `0x29504`, `0x2B9B0`, `0x2ADA0`, `0x2B31C`, và các helpers/blocks chỉ rõ trong mục 2-3; đối chiếu với `sources/prefs/CRPreferences.m`, `sources/libcrane/CRManager.m`, `sources/cranehelperd/CRHelperd.m`.
