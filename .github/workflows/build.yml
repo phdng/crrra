@@ -196,6 +196,18 @@ jobs:
       - name: Test synthetic restore journal interruption and recovery
         run: python3 -m unittest discover -s reconstruction/tools -p test_crane_restore_journal_lab.py -v
 
+      - name: Verify read-only Crane restore ZIP work plan
+        run: python3 reconstruction/tools/check_restore_work_plan_contract.py
+
+      - name: Test read-only Crane archive restore work manifests
+        run: python3 -m unittest discover -s reconstruction/tools -p test_crane_restore_work_plan.py -v
+
+      - name: Verify synthetic-only Crane restore quarantine materializer
+        run: python3 reconstruction/tools/check_restore_fixture_materializer_contract.py
+
+      - name: Test disposable Crane ZIP file materialization and staging rollback
+        run: python3 -m unittest discover -s reconstruction/tools -p test_crane_restore_fixture_materializer.py -v
+
       - name: Verify optional Choicy integration (tracked native evidence)
         run: CRANE_CHOICY_SKIP_NATIVE_EXPORT=1 python3 reconstruction/tools/check_choicy_integration_contract.py
 

@@ -347,4 +347,61 @@ python3 reconstruction/tools/crane_restore_journal_lab.py \
 
 **Test/CI:** `test_crane_restore_journal_lab.py` tạo fixtures dưới `tempfile.TemporaryDirectory`, kiểm tra commit/rollback token 1/2 slots, faultpoints, restart sau rollback dở, crash sau commit, symlink và root marker, corrupted backup/journal, preflight blocked, CLI privacy và cleanup. `check_restore_journal_lab_contract.py` khoá marker/temp-only, tên file token, không dùng API restore/native và giữ Root Backup/Restore fail-closed; hai bước CI mới.
 
+## 15. G-11 giai đoạn D3 — kế hoạch xử lý Restore read-only từ ZIP (2026-10-15)
+
+**Mới:** `reconstruction/tools/crane_restore_work_plan.py`. Công cụ kết hợp `inspect_archive` (kiểm ZIP, block traversal/symlink/duplicate), `crane_restore_preflight` D0 (source→target 1:1 từ inventory JSON giả lập), `Info.plist` và `Metadata.plist` từng nguồn để lập thống kê công việc. Nó không giải nén, đọc nội dung file ứng dụng, lấy Keychain, truy cập thiết bị, tạo file hay gọi `CraneManager`. **Không chứa target filesystem path hoặc lệnh thực thi restore**.
+
+**CLI:**
+
+```sh
+python3 reconstruction/tools/crane_restore_work_plan.py \
+  --archive /path/to/disposable.cranebk \
+  --inventory /path/to/test-inventory.json
+
+# Tùy chọn kiểm CRC non-Keychain có giới hạn 256 MiB từ inspector:
+python3 reconstruction/tools/crane_restore_work_plan.py \
+  --archive /path/to/disposable.cranect \
+  --inventory /path/to/test-inventory.json --verify-payload
+```
+
+**Báo cáo đã ẩn danh:** số container được chọn/bỏ qua, số file/empty file/explicit directory, dung lượng claimed của file payload được chọn (không phải dung lượng cần restore thực tế), số associated IDs, số record Metadata và trường hợp Metadata path không xuất hiện trong ZIP; loại thuộc tính không biết hoặc sai kiểu; cảnh báo bit quyền setuid/setgid/world-writable. Không in bundle ID, container ID, group ID, `originalPaths`, tên file, metadata values, Keychain contents hay lỗi có thể chứa đường dẫn riêng tư. Các mục `Keychain.plist`, `Info.plist`, `Metadata.plist` không được tính vào dữ liệu app payload.
+
+**Luật block/review:** lấy nguyên reason codes từ D0 (app mismatch, target active, missing group, Keychain, space, existingData không có rollback), bổ sung `associated_data_absent_from_archive`, `metadata_paths_without_zip_entries`, `metadata_unknown_attributes`, `metadata_invalid_attributes`, `metadata_privileged_or_world_writable`. Với Multi cho phép lập plan cho subset nguồn, không yêu cầu tất cả container phải được chọn. Chặn input symlink; kiểm tra stat dev/inode/size/mtime trước và sau scan như một cảnh báo TOCTOU cơ bản, **không là bảo đảm trước attacker đang sửa input liên tục**.
+
+**Trạng thái:** `work_plan_advisory_only` (exit 0), `work_plan_blocked_or_review_required` (exit 1) hoặc `work_plan_invalid_or_unavailable` (exit 2); **mọi nhánh hợp lệ luôn `restore_executable:false`, `original_compatibility_proven:false`, `rollback_implemented:false`, `device_target_paths_verified:false`, `wrote_files:false`, `extracted:false`, `keychain_contents_read:false`**. Nếu dùng `--verify-payload`, chỉ trường `non_keychain_crc_verified` có thể true: đây không phải bảo đảm dữ liệu Keychain hoặc authenticity.
+
+**Test/CI:** `test_crane_restore_work_plan.py` kiểm tra single/multi subset, số lượng và dung lượng, Metadata orphan/unknown/sai kiểu, quyền bất thường, missing associated data, Keychain và bad ZIP/CRC, preflight blocker, tình huống đổi archive giữa các lần đọc, redaction CLI và xác minh không gọi `ZipFile.extract/extractall` hoặc mở payload. `check_restore_work_plan_contract.py` ràng buộc read-only, original source và UI Root fail-closed; CI thêm 2 bước chạy contract và unittest.
+
+**Giới hạn lớn chưa giải quyết:** archive Crane gốc chưa có fixture thử nghiệm, device inventory chỉ là JSON giả lập, chưa có backend Keychain/snapshot+rollback thật, không xác minh path replacement của `CraneManager`, chưa chạy trên macOS/device. Kết quả PASS của D3 **không cho phép bật Restore**.
+
+## 16. G-11 D4 — materialize dữ liệu ZIP fixture vào vùng quarantine TEMP (2026-10-15)
+
+**Mới:** `reconstruction/tools/crane_restore_fixture_materializer.py`, một lab **ghi file thật nhưng chỉ trên dữ liệu tổng hợp dùng một lần** dưới `tempfile.gettempdir()`. Không phải trình Restore của tweak; KHÔNG dùng trên archive người dùng, container iOS, `CraneManager`, Keychain hoặc dữ liệu riêng tư. Công cụ lấy kết quả D3 `plan_restore(..., verify_payload=True)` và chỉ cho phép chạy nếu `work_plan_advisory_only`, không có blocker, tối đa 2 mapping/200 file/16 MiB payload.
+
+**Thư mục bắt buộc:** Python OS temporary root + sentinel `.crane-disposable-fixture` đúng `CRANE_DISPOSABLE_FIXTURE_V1\n`, có sẵn `output/` (ZIP fixture tạo bằng writer), `inventory.json` (D0 JSON thử nghiệm), `restore-materialize-lab/` với marker `.crane-materialize-lab` đúng `CRANE_DISPOSABLE_MATERIALIZE_LAB_V1\n` và hai thư mục rỗng `staging/`, `published/`. Không chấp nhận thư mục không được đánh dấu, ngoài OS temp, input zip ngoài `root/output`, inventory khác `root/inventory.json`, symlink/hardlink, output đã tồn tại hay staging mồ côi. **Các marker không xác thực provenance của ZIP**: chỉ đặt backup synthetic/không nhạy cảm vào khu vực này.
+
+**Luồng test có ghi:** sau khi inspector kiểm ZIP cấu trúc và CRC ngoài Keychain, D0/D3 kiểm tra app/group/metadata/quyền, D4 mở từng file payload qua `ZipFile.open` và đọc theo chunk tối đa 1 MiB; không đọc `Keychain.plist`. Mỗi container và associated identifier được ánh xạ sang thư mục số `container-N/associated-N/` **không sử dụng đường dẫn gốc để ghi lên host**. Chỉ chấp nhận thành phần tên file portable ASCII, tránh thiết bị đặc biệt Windows/`../`/symlink; ghi độc quyền `O_EXCL` và `O_NOFOLLOW` khi OS hỗ trợ. Cả multi nguồn được vật hóa trong **một** `staging/batch` có marker riêng, sau khi hoàn tất thì publish bằng **một lần rename thư mục** sang `published/batch`. Chưa áp dụng Metadata.plist attributes/UID/GID, chưa rewrite Preferences, chưa làm Keychain restore.
+
+**Rollback mô phỏng có file payload thật:** `--inject-failure after_first_file` hoặc `--inject-failure before_publish` gây lỗi trước publish; công cụ kiểm stage vẫn nằm trong lab, không có symlink/hardlink rồi xóa **chỉ staging/batch do chính lần chạy tạo**, giữ nguyên ZIP/inventory/source và published. Không tự dọn staging mồ côi từ lần chạy trước, không xóa/ghi đè published. Đổi tên thư mục publish chỉ bảo đảm nguyên tử theo ngữ nghĩa hệ thống file phù hợp **trong cùng filesystem**, không chứng minh chống mất điện, không chống dữ liệu bị sửa bởi tác nhân đồng thời; đây không phải transaction journal D2 và cũng không rollback được dữ liệu thật.
+
+**Chạy thử từ fixture đã tạo đầy đủ:**
+
+```sh
+python3 reconstruction/tools/crane_restore_fixture_materializer.py \
+  --fixture-root /actual/os/temp/disposable-fixture \
+  --archive /actual/os/temp/disposable-fixture/output/sample.cranect \
+  --inventory /actual/os/temp/disposable-fixture/inventory.json
+
+# fault injection (staging bị xóa, không publish):
+python3 reconstruction/tools/crane_restore_fixture_materializer.py \
+  --fixture-root /actual/os/temp/disposable-fixture \
+  --archive /actual/os/temp/disposable-fixture/output/sample.cranect \
+  --inventory /actual/os/temp/disposable-fixture/inventory.json \
+  --inject-failure before_publish
+```
+
+**CLI JSON:** `fixture_materialized_not_restore` (exit 0), `fixture_stage_rolled_back` (exit 3) hoặc `fixture_invalid_or_unsafe` (exit 2). Không in bundle/container/group ID, tên file nguồn, `originalPaths` hoặc nội dung file. Trạng thái thành công vẫn `restore_executable:false`, `device_data_touched:false`, `real_rollback_implemented:false`, `keychain_contents_read:false`. Đừng dùng `--fixture-root` trỏ về bất kỳ thư mục container thiết bị nào.
+
+**Kiểm thử/CI:** `test_crane_restore_fixture_materializer.py` có 15 ca thử nghiệm với file thật tổng hợp: single, multi, subset, file zero-byte/empty directory, gián đoạn staging 2 điểm, từ chối đích đã tồn tại, staging orphan, marker sai, archive/inventory ngoài root, target active/existing data, Keychain presence, path traversal, Windows special filename, CLI privacy và bất biến input. `check_restore_fixture_materializer_contract.py` kiểm source guard và Root UI fail-closed; CI thêm 2 bước. Không có ZIP Crane gốc được dùng trong thử nghiệm.
+
 **Nguồn kiểm toán tại workspace:** `analysis/objc_classes.json`, bản decompile `0x20E64`, `0x211A8`, `0x2614C`, `0x2619C`, `0x25A8C`, `0x24CF8`, `0x257AC`, `0x29504`, `0x2B9B0`, `0x2ADA0`, `0x2B31C`, và các helpers/blocks chỉ rõ trong mục 2-3; đối chiếu với `sources/prefs/CRPreferences.m`, `sources/libcrane/CRManager.m`, `sources/cranehelperd/CRHelperd.m`.
