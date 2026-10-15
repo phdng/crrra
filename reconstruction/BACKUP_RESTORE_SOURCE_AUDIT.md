@@ -210,4 +210,25 @@ python3 reconstruction/tools/crane_backup_fixture_writer.py \
 
 **Còn thiếu trước khi dùng cho dữ liệu thật:** fixture xuất từ Crane gốc, so schema/metadata/ZIP method/behavior; thiết kế backup snapshot consistency, giao tiếp Keychain helper có trạng thái lỗi, UI container selection và transactional restore có rollback. Trước các điều kiện đó **không bật các selectors Backup/Restore trên iPhone**.
 
+## 10. G-11 giai đoạn C — đối chiếu định dạng original vs writer (read-only, 2026-10-15)
+
+Thêm CLI `reconstruction/tools/crane_backup_shape_compare.py`. Nó kiểm tra độc lập từng archive bằng `crane_backup_inspector.py`, rồi xuất **chỉ chênh lệch về hình dạng ZIP/plist**, không đọc app payload/Keychain hoặc giải nén, không sửa dữ liệu.
+
+```sh
+python3 reconstruction/tools/crane_backup_shape_compare.py \
+  --reference /path/to/disposable-original.cranect \
+  --candidate /path/to/fixture-writer-output.cranect
+
+# Tùy chọn đọc tuần tự kiểm CRC ngoài Keychain (< 256 MiB mỗi archive)
+python3 reconstruction/tools/crane_backup_shape_compare.py \
+  --reference /path/to/disposable-original.cranebk \
+  --candidate /path/to/fixture-writer-output.cranebk --verify-payload
+```
+
+- **Đối chiếu:** single/multi, container count, root `containedContainers`, binary/XML Info và Metadata plist, danh sách **khóa đã biết** (không giá trị), số khóa lạ, số originalPaths, số mục Metadata và các loại writable attributes đã biết, ZIP compression method, thư mục, file, file rỗng, lượng mục và sự hiện diện Keychain.
+- **Ẩn dữ liệu nhạy cảm:** không đưa bundle/container ID, tên file, `originalPaths`, `containerName`, vendor ID, nội dung file hoặc Keychain vào JSON; thông báo lỗi CLI chung, không in exception gốc có thể chứa ZIP member name. Với backup nhiều container, chữ ký cấu trúc được sắp xếp ổn định, không dựa vào tên container.
+- **Kết quả:** exit 0 `structural_shape_match_not_proven`, exit 1 `structural_differences_found`, exit 2 `unsupported_not_validated` hoặc `unavailable_or_invalid`. Luôn trả `original_compatibility_proven:false`, `restore_safe:false`, `keychain_contents_read:false` và `extracted:false`. Cấu trúc trùng **không đủ chứng minh archive gốc tương thích, restore được hoặc có giá trị bảo mật**.
+- **Kiểm thử:** 11 ca tổng hợp trong `test_crane_backup_shape_compare.py` (single/multi, XML/binary, metadata, compression, Keychain presence, trường hợp path nhạy cảm, invalid archive, giữ nguyên file nguồn). Contract `check_backup_shape_compare_contract.py` và hai CI steps mới khóa công cụ ở chế độ chỉ đọc.
+- **Tồn đọng:** workspace chưa có ZIP gốc từ Crane trên disposable app, nên hiện chỉ thử nghiệm bằng fixture tổng hợp. Cần cặp archive thật và synthetic cùng điều kiện đầu vào trước khi so kết quả và xác định chi tiết cần sửa ở writer.
+
 **Nguồn kiểm toán tại workspace:** `analysis/objc_classes.json`, bản decompile `0x20E64`, `0x211A8`, `0x2614C`, `0x2619C`, `0x25A8C`, `0x24CF8`, `0x257AC`, `0x29504`, `0x2B9B0`, `0x2ADA0`, `0x2B31C`, và các helpers/blocks chỉ rõ trong mục 2-3; đối chiếu với `sources/prefs/CRPreferences.m`, `sources/libcrane/CRManager.m`, `sources/cranehelperd/CRHelperd.m`.
