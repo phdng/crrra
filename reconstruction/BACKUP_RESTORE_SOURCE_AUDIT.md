@@ -155,4 +155,59 @@ python3 reconstruction/tools/crane_backup_inspector.py sample.cranebk --verify-p
 
 **Còn khóa:** Root Backup/Restore vẫn hiển thị unavailable; không sửa `CRManager`, `cranehelperd`, injection hoặc code vận hành trên iPhone.
 
+## 9. G-11 giai đoạn B — writer ZIP **chỉ cho fixture tách biệt** (2026-10-15)
+
+**Đã triển khai:** `reconstruction/tools/crane_backup_fixture_writer.py`, một CLI Python chỉ phục vụ **dữ liệu thử nghiệm giả lập**, không phải chức năng Backup của Crane trên iPhone và **chưa xác nhận tương thích file Crane gốc**. Nguyên tắc: không backup Keychain, không mã hóa, không giải nén/restore, không động tới `CraneManager`/helperd; dữ liệu đầu vào phải nằm bên trong fixture root đã đánh dấu.
+
+**Cấu trúc thư mục ví dụ (dữ liệu test, không dùng dữ liệu người dùng thật):**
+
+```text
+my-disposable-fixture/
+├── .crane-disposable-fixture        # đúng bytes: CRANE_DISPOSABLE_FIXTURE_V1 + '\n'
+├── manifest.json
+├── first/
+│   ├── app/                        # chỉ file thường/thư mục thường
+│   └── group/
+└── output/                          # phải tồn tại sẵn, chỉ ghi file mới
+```
+
+**Manifest (đây là ảnh xạ metadata mô phỏng, không được dùng để truy cập path /private/var):**
+
+```json
+{
+  "containers": [
+    {
+      "applicationIdentifier": "com.example.fixture",
+      "containerIdentifier": "A66C8935-FB19-46A3-A6BD-1100DCA90301",
+      "containerName": "Disposable Fixture",
+      "originalPaths": {
+        "com.example.fixture": "/private/var/mobile/Containers/Data/Application/DUMMY",
+        "group.com.example.fixture": "/private/var/mobile/Containers/Shared/AppGroup/DUMMY"
+      },
+      "sourceDirectories": {
+        "com.example.fixture": "first/app",
+        "group.com.example.fixture": "first/group"
+      }
+    }
+  ]
+}
+```
+
+**CLI:**
+
+```sh
+python3 reconstruction/tools/crane_backup_fixture_writer.py \
+  --fixture-root /path/to/my-disposable-fixture \
+  --manifest manifest.json --output fixture.cranect
+# Với manifest chứa >=1 container, dùng tên output kết thúc .cranebk để tạo multi archive
+```
+
+**Cách hoạt động:** sau khi bắt buộc xác nhận byte marker và source nằm trong root, script kiểm tra tất cả source directories và file thường, chặn symlink/hardlink/special files, kiểm tra tối đa 5.000 entry / 32 MiB mỗi file / 128 MiB tổng, tạo binary `Info.plist`, `Metadata.plist` (hiện chỉ POSIX permissions), dữ liệu app/group theo `<associatedID>/...` và `Info.plist` root `containedContainers` cho multi. File nguồn stream theo khối 1 MiB; dùng `O_NOFOLLOW` nếu OS hỗ trợ và so inode/size/mtime trước/sau mở. ZIP được dựng trong một staging file tên ngẫu nhiên, kiểm tra lại bằng inspector với CRC và **chỉ publish thành file mới bằng hard-link no-replace**; nếu lỗi thì xóa staging của lần gọi, không xóa/ghi đè target trước đó.
+
+**Giới hạn quan trọng:** chưa so sánh với **archive gốc**; `Metadata.plist` chưa có full owner/group/time metadata; không xử lý symlink gốc (cố ý từ chối); `ZIP_DEFLATED` không có password/AES; không hỗ trợ Keychain/SEP; không hứa tái tạo byte-identical ZIP của `SSZipArchive`. Kiểm tra an toàn filesystem thực tế giữa lúc scan và lúc open có thể khác theo OS; writer không phải công cụ bảo vệ dữ liệu mật trước source bị race bởi attacker. Chỉ chạy trên thư mục fixture không có dữ liệu nhạy cảm, tuyệt đối không hướng `--fixture-root` vào container của thiết bị.
+
+**Kiểm thử:** `test_crane_backup_fixture_writer.py` có 13 bài kiểm thử, gồm single/multi tạo→inspector `--verify-payload`→CRC, binary plist, thư mục rỗng, file 0-byte, full originalPaths synthetic, metadata permission, trường hợp input/target nguy hiểm, symlink, tên định danh bị trùng `Info.plist`, no-overwrite và cleanup khi lỗi. `check_backup_fixture_writer_contract.py` và các bước mới trong `.github/workflows/build.yml` giữ phạm vi tách biệt.
+
+**Còn thiếu trước khi dùng cho dữ liệu thật:** fixture xuất từ Crane gốc, so schema/metadata/ZIP method/behavior; thiết kế backup snapshot consistency, giao tiếp Keychain helper có trạng thái lỗi, UI container selection và transactional restore có rollback. Trước các điều kiện đó **không bật các selectors Backup/Restore trên iPhone**.
+
 **Nguồn kiểm toán tại workspace:** `analysis/objc_classes.json`, bản decompile `0x20E64`, `0x211A8`, `0x2614C`, `0x2619C`, `0x25A8C`, `0x24CF8`, `0x257AC`, `0x29504`, `0x2B9B0`, `0x2ADA0`, `0x2B31C`, và các helpers/blocks chỉ rõ trong mục 2-3; đối chiếu với `sources/prefs/CRPreferences.m`, `sources/libcrane/CRManager.m`, `sources/cranehelperd/CRHelperd.m`.

@@ -160,6 +160,12 @@ jobs:
       - name: Test Crane single/multi backup schema with isolated ZIP fixtures
         run: python3 -m unittest discover -s reconstruction/tools -p test_crane_backup_inspector.py -v
 
+      - name: Verify offline disposable-only Crane backup writer contract
+        run: python3 reconstruction/tools/check_backup_fixture_writer_contract.py
+
+      - name: Smoke-test synthetic Crane backup writer and inspector roundtrip
+        run: python3 -m unittest discover -s reconstruction/tools -p test_crane_backup_fixture_writer.py -v
+
       - name: Verify optional Choicy integration (tracked native evidence)
         run: CRANE_CHOICY_SKIP_NATIVE_EXPORT=1 python3 reconstruction/tools/check_choicy_integration_contract.py
 
