@@ -18,7 +18,9 @@ workflow = (root.parent / ".github/workflows/build.yml").read_text(encoding="utf
 classes = json.loads((root.parent / "analysis/objc_classes.json").read_text(
     encoding="utf-8"))["CranePrefs"]
 
-assert "CRPreferences.m CRCredits.m CRChoicyEditor.m" in make
+assert "CranePrefs_FILES" in make
+for compiled_file in ("CRPreferences.m", "CRCredits.m", "CRChoicyEditor.m"):
+    assert compiled_file in make, compiled_file
 assert "check_credits_contract.py" in workflow
 assert '#import "CRCommon.h"' in source
 assert "CRCreditsLocalizedRows(self, @\"Credits\", YES)" in source

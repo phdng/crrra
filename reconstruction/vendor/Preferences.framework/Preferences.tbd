@@ -10,6 +10,8 @@ exports:
                        '_OBJC_METACLASS_$_PSListController',
                        '_OBJC_CLASS_$_PSListItemsController',
                        '_OBJC_METACLASS_$_PSListItemsController',
+                       '_OBJC_CLASS_$_PSTableCell',
+                       '_OBJC_METACLASS_$_PSTableCell',
                        '_OBJC_CLASS_$_PSSpecifier',
                        '_OBJC_METACLASS_$_PSSpecifier' ]
 ...

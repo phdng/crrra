@@ -42,6 +42,7 @@
 - (void)setSpecifier:(id)specifier;
 - (id)specifier;
 - (void)tableView:(UITableView *)tableView didSelectRowAtIndexPath:(NSIndexPath *)indexPath;
+- (void)tableView:(UITableView *)tableView accessoryButtonTappedForRowWithIndexPath:(NSIndexPath *)indexPath;
 - (NSArray *)loadSpecifiersFromPlistName:(NSString *)name target:(id)target;
 - (id)specifierAtIndex:(NSUInteger)index;
 - (NSInteger)indexForIndexPath:(NSIndexPath *)indexPath;
@@ -67,6 +68,7 @@
 - (NSString *)name;
 - (void)setName:(NSString *)name;
 - (void)setButtonAction:(SEL)action;
+- (NSString *)identifier;
 - (void)setTitleDictionary:(id)value;
 - (void)setShortTitleDictionary:(id)value;
 - (void)setValues:(id)value;
@@ -77,6 +79,11 @@
 /* ------------------------------------------------------------------------- */
 /* CRPRootListController                                                       */
 /* ------------------------------------------------------------------------- */
+
+@interface CRPRootPageSuggestionProvider : NSObject
++ (NSArray *)suggestionSpecifiers;
++ (UIAlertController *)alertControllerForSpecifierIdentifier:(NSString *)identifier;
+@end
 
 @interface CRPRootListController : PSListController
 @property (nonatomic, strong) NSArray *craneRootSpecifiers;
@@ -136,6 +143,22 @@
         [rootRows insertObject:apps atIndex:1];
         NSLog(@"CranePrefs: APPLICATIONS group and link installed at root start; rows=%lu",
               (unsigned long)rootRows.count);
+        /* Original Root 0x1FF44/0x2005C substitutes this placeholder with
+         * one optional suggestion group and info rows. */
+        NSUInteger markerIndex = NSNotFound;
+        for (NSUInteger i = 0; i < rootRows.count; ++i) {
+            PSSpecifier *row = rootRows[i];
+            if ([row.name isEqualToString:@"REPLACE_WITH_SUGGESTIONS"] ||
+                [[row propertyForKey:@"label"] isEqualToString:@"REPLACE_WITH_SUGGESTIONS"]) {
+                markerIndex = i;
+                break;
+            }
+        }
+        if (markerIndex != NSNotFound) {
+            NSArray *suggestions = [CRPRootPageSuggestionProvider suggestionSpecifiers];
+            [rootRows replaceObjectsInRange:NSMakeRange(markerIndex, 1)
+                       withObjectsFromArray:suggestions];
+        }
         self.craneRootSpecifiers = rootRows;
         /* Avoid a direct _specifiers ivar reference: the private framework's
          * ivar-offset symbol is not exported by the SDK linker stub. KVC
@@ -151,6 +174,23 @@
     @try { [self setValue:self.craneRootSpecifiers forKey:@"_specifiers"]; }
     @catch (NSException *exception) { NSLog(@"CranePrefs: root backing refresh failed: %@", exception); }
     return self.craneRootSpecifiers;
+}
+
+/* Native 0x1FE80: tap the info accessory for the matching alert. */
+- (void)tableView:(UITableView *)tableView
+    accessoryButtonTappedForRowWithIndexPath:(NSIndexPath *)indexPath
+{
+    NSInteger index = [self indexForIndexPath:indexPath];
+    if (index >= 0 && (NSUInteger)index != NSNotFound) {
+        PSSpecifier *row = [self specifierAtIndex:(NSUInteger)index];
+        UIAlertController *alert = [CRPRootPageSuggestionProvider
+            alertControllerForSpecifierIdentifier:[row identifier]];
+        if (alert) {
+            [self presentViewController:alert animated:YES completion:nil];
+            return;
+        }
+    }
+    [super tableView:tableView accessoryButtonTappedForRowWithIndexPath:indexPath];
 }
 
 @end
