@@ -13,6 +13,7 @@
  */
 #import <UIKit/UIKit.h>
 #import "CRCommon.h"
+#import "CRCreditsLinks.h"
 
 /* Minimal declarations; private Preferences.framework provides the classes.
  * These definitions are local to this compilation unit and do not instantiate
@@ -44,7 +45,7 @@ static void CRCreditsOpenURL(NSString *urlString)
 
 /* Native 0x16F9C prefers the Twitter app and falls back to its web profile.
  * The usernames below are all recovered literals, not user-controlled data. */
-static void CRCreditsOpenTwitter(NSString *username)
+void CRCreditsOpenTwitter(NSString *username)
 {
     if (![username isKindOfClass:NSString.class] || !username.length)
         return;

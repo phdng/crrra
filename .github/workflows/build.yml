@@ -151,6 +151,9 @@ jobs:
       - name: Verify Root Settings nested preferences
         run: python3 reconstruction/tools/check_root_settings_contract.py
 
+      - name: Verify Root localized rows and safe plist actions
+        run: python3 reconstruction/tools/check_root_actions_contract.py
+
       - name: Verify optional Choicy integration (tracked native evidence)
         run: CRANE_CHOICY_SKIP_NATIVE_EXPORT=1 python3 reconstruction/tools/check_choicy_integration_contract.py
 

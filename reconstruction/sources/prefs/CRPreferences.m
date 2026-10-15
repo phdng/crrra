@@ -31,6 +31,7 @@
 #import "CRRootSettingsProjection.h"
 #import "CRCommon.h"
 #import "CRChoicyEditor.h"
+#import "CRCreditsLinks.h"
 
 /* AltList and the Preferences framework are linked by the original. They are
  * declared minimally here so the file can be read without their headers; the
@@ -91,6 +92,7 @@
 @property (nonatomic, strong) NSArray *craneAllRootSpecifiers;
 @property (nonatomic, assign) BOOL craneRootReloadScheduled;
 - (void)scheduleRootSettingsReload;
+- (void)localizeSpecifiers:(NSArray *)specifiers;
 @end
 
 @implementation CRPRootListController
@@ -163,6 +165,9 @@
             [rootRows replaceObjectsInRange:NSMakeRange(markerIndex, 1)
                        withObjectsFromArray:suggestions];
         }
+        /* Original 0x1FF44 invokes 0x16DA0 after replacing Suggestions and
+         * before caching the unfiltered Root rows. */
+        [self localizeSpecifiers:rootRows];
         /* Retain full source order so toggling a parent can restore hidden children. */
         self.craneAllRootSpecifiers = [rootRows copy];
     }
@@ -181,6 +186,59 @@
         NSLog(@"CranePrefs: root backing refresh failed: %@", exception);
     }
     return self.craneRootSpecifiers;
+}
+
+/* Original CRPListController 0x16DA0 localizes row names and footer text
+ * once after expanding Root.plist. CRLocalize retains the literal text if
+ * a translation is absent, and preserves valid intentionally empty strings. */
+- (void)localizeSpecifiers:(NSArray *)specifiers
+{
+    for (PSSpecifier *row in specifiers) {
+        NSString *name = [row name];
+        if ([name isKindOfClass:NSString.class]) {
+            NSString *localized = CRLocalize(name);
+            if (localized)
+                [row setName:localized];
+        }
+        id footer = [row propertyForKey:@"footerText"];
+        if ([footer isKindOfClass:NSString.class]) {
+            NSString *localizedFooter = CRLocalize(footer);
+            if (localizedFooter)
+                [row setProperty:localizedFooter forKey:@"footerText"];
+        }
+    }
+}
+
+/* Original 0x213CC passes the literal opa334dev username to the shared
+ * Twitter app/web fallback used by the Credits screen (0x16F9C). */
+- (void)openTwitter
+{
+    CRCreditsOpenTwitter(@"opa334dev");
+}
+
+/* Original 0x20E64/0x211A8 actions invoke a backup/restore controller.
+ * Until G-11 reconstructs and verifies its archive format, bind the
+ * Root.plist actions to explicitly non-mutating, informative handlers. */
+- (void)presentUnavailableBackupAction:(NSString *)titleKey
+{
+    UIAlertController *alert = [UIAlertController
+        alertControllerWithTitle:CRLocalize(titleKey)
+        message:@"Backup and restore are not available in this reconstruction yet. No data has been changed."
+        preferredStyle:UIAlertControllerStyleAlert];
+    [alert addAction:[UIAlertAction
+        actionWithTitle:CRLocalize(@"CLOSE")
+        style:UIAlertActionStyleCancel handler:nil]];
+    [self presentViewController:alert animated:YES completion:nil];
+}
+
+- (void)createMultiBackupTapped
+{
+    [self presentUnavailableBackupAction:@"CREATE_MULTI_CONTAINER_BACKUP"];
+}
+
+- (void)restoreMultiBackupTapped
+{
+    [self presentUnavailableBackupAction:@"RESTORE_MULTI_CONTAINER_BACKUP"];
 }
 
 /* Original 0x2074C reads CraneManager's global preference, falling
