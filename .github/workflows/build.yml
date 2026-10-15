@@ -190,6 +190,12 @@ jobs:
       - name: Fault-inject synthetic single/multi restore transactions
         run: python3 -m unittest discover -s reconstruction/tools -p test_crane_restore_transaction_model.py -v
 
+      - name: Verify temp-only restore filesystem journal contract
+        run: python3 reconstruction/tools/check_restore_journal_lab_contract.py
+
+      - name: Test synthetic restore journal interruption and recovery
+        run: python3 -m unittest discover -s reconstruction/tools -p test_crane_restore_journal_lab.py -v
+
       - name: Verify optional Choicy integration (tracked native evidence)
         run: CRANE_CHOICY_SKIP_NATIVE_EXPORT=1 python3 reconstruction/tools/check_choicy_integration_contract.py
 

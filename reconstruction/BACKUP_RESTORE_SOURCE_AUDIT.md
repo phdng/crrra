@@ -318,4 +318,33 @@ python3 reconstruction/tools/crane_restore_transaction_model.py \
 
 **Để biến thành restore thực:** cần xác thực archive gốc disposable app, kiểm CRC/extract an toàn, chụp snapshot dữ liệu thực cho tất cả app/group containers, transaction journal bền vững qua process crash, atomic move với error propagation, restore permissions/Preferences path/Keychain với undo rõ ràng, lifecycle handling và device-based inventory. Những hạng mục đó **chưa được triển khai**.
 
+## 14. G-11 giai đoạn D2 — filesystem journal *lab*, dữ liệu token giả lập (2026-10-15)
+
+Đã thêm `reconstruction/tools/crane_restore_journal_lab.py` để thử nghiệm **transaction có file journal và recovery giữa các lần gọi process**. Đây là công cụ **khác** với Restore thật và mô hình D1 trong RAM: D2 có tạo/ghi/rename/xóa **chỉ những file test token cố định** trong **thư mục con của OS temporary directory**, tuyệt đối không đụng tới container iOS, App Group, dữ liệu ứng dụng, Keychain, `CraneManager`, daemon, hoặc ZIP payload.
+
+**Ràng buộc bảo vệ bắt buộc (fail closed):** root phải là thư mục con của `tempfile.gettempdir()` sau resolve, phải chứa `/.crane-disposable-fixture` với đúng bytes `CRANE_DISPOSABLE_FIXTURE_V1\n`, và thư mục `transaction-lab/` phải có sentinel thứ hai `.crane-transaction-lab` đúng `CRANE_TRANSACTION_LAB_V1\n`. Thư mục `transaction-lab/slots`, `incoming`, `journal` phải có sẵn, không được là symlink. Chỉ dùng file tên cố định `slot-1.txt`, `slot-2.txt`, nội dung chính xác `CRANE_LAB_OLD_SLOT_<i>\n` và `CRANE_LAB_NEW_SLOT_<i>\n`. Không cho path tùy chọn từ inventory; không mở/đọc/ghi tệp ngoài lab. Số lượng slot chỉ 1 hoặc 2 để kiểm thử đơn/multi.
+
+**Giao thức test:** CLI khi bắt đầu yêu cầu archive và inventory giả lập của D0, và D0 phải báo `preflight_advisory_only` (không được cấp phép restore thật). Snapshot các token OLD vào `journal/backup-N.txt`, ghi `staged-N.txt` token NEW, fsync file, cập nhật `journal/state.json` bằng file `.tmp` + atomic rename sang `phase=prepared` **trước khi đổi slots**. Sau đó rename lần lượt staged→slot, kiểm nội dung token, ghi `phase=committed`, và xóa journal được phép. Thử `os.fsync` thư mục trên POSIX khi filesystem hỗ trợ; một số filesystem/macOS có thể từ chối (`EINVAL`/`ENOTSUP`), Windows không có directory fsync qua Python stdlib. Do đó **không khẳng định durability khi mất điện**.
+
+**Fault injection:** `after_journal`, `after_first_swap`, `after_all_swaps`, `after_commit_record`. Lỗi giả lập không tự rollback: để lại journal và trạng thái token đang dở, sau đó gọi `--recover` ở **process khác**. Nếu `phase=prepared`, phục hồi mọi slot về OLD (kể cả khi một phần rollback đã làm xong và bị ngắt); nếu `phase=committed`, giữ NEW và tiếp tục cleanup. Không có journal nhưng có backup orphan, thiếu backup cần thiết, journal sửa hỏng hoặc `.tmp` còn treo => **từ chối thay vì tự xóa**. Đây là quyết định thận trọng để tránh mất dữ liệu khi mẫu khôi phục chưa chứng minh.
+
+**Cách gọi mẫu (chỉ trong thư mục temp tự tạo với hai markers, 2 cặp token và journal folder):** Đường dẫn `/tmp` chỉ minh họa; phải lấy thư mục tạm thực tế từ Python `tempfile.gettempdir()` (trên macOS có thể là `/var/folders/.../T`).
+
+```sh
+python3 reconstruction/tools/crane_restore_journal_lab.py \
+  --fixture-root /tmp/disposable-lab-example \
+  --archive /tmp/disposable-lab-example/output/test.cranebk \
+  --inventory /tmp/disposable-lab-example/inventory.json \
+  --inject-failure after_first_swap
+
+python3 reconstruction/tools/crane_restore_journal_lab.py \
+  --fixture-root /tmp/disposable-lab-example --recover
+```
+
+**Trạng thái JSON:** `fixture_committed`, `fixture_interrupted_requires_recovery`, `fixture_rolled_back`, `fixture_commit_preserved`, `fixture_lab_invalid_or_unsafe`. Không in đường dẫn hay app/container IDs. Kết quả đều nêu `real_restore_supported:false` và **`real_rollback_implemented:false`**. Không có thao tác restore dữ liệu iPhone, không giải nén ZIP.
+
+**Giới hạn bắt buộc nhớ:** thực nghiệm này không chứng minh crash safety khi mất điện, lỗi đĩa, fsync directory trên Windows, rename nhiều file atomic cùng lúc, concurrent writer/race, hoặc Keychain/vendorID/preferences restore. Atomic từng file + journal không tương đương atomic multi-container filesystem. Không được dùng D2 cho bất kỳ dữ liệu thật nào và không được nối với Root UI / `CRManager wipe`.
+
+**Test/CI:** `test_crane_restore_journal_lab.py` tạo fixtures dưới `tempfile.TemporaryDirectory`, kiểm tra commit/rollback token 1/2 slots, faultpoints, restart sau rollback dở, crash sau commit, symlink và root marker, corrupted backup/journal, preflight blocked, CLI privacy và cleanup. `check_restore_journal_lab_contract.py` khoá marker/temp-only, tên file token, không dùng API restore/native và giữ Root Backup/Restore fail-closed; hai bước CI mới.
+
 **Nguồn kiểm toán tại workspace:** `analysis/objc_classes.json`, bản decompile `0x20E64`, `0x211A8`, `0x2614C`, `0x2619C`, `0x25A8C`, `0x24CF8`, `0x257AC`, `0x29504`, `0x2B9B0`, `0x2ADA0`, `0x2B31C`, và các helpers/blocks chỉ rõ trong mục 2-3; đối chiếu với `sources/prefs/CRPreferences.m`, `sources/libcrane/CRManager.m`, `sources/cranehelperd/CRHelperd.m`.
