@@ -196,6 +196,18 @@ jobs:
       - name: Test original-observed 8-field schema with entirely fictitious fixture values
         run: python3 -m unittest discover -s reconstruction/tools -p test_crane_original_metadata_shape.py -v
 
+      - name: Verify original Crane ZIP envelope evidence and fixture-only layout
+        run: python3 reconstruction/tools/check_backup_zip_envelope_contract.py
+
+      - name: Test single-archive SSZipArchive envelope characteristics offline
+        run: python3 -m unittest discover -s reconstruction/tools -p test_crane_backup_zip_envelope.py -v
+
+      - name: Verify native non-destructive Crane Backup Info/Restore Reader contract
+        run: python3 reconstruction/tools/check_native_backup_core_contract.py
+
+      - name: Test synthetic ZIP64 local-Info native reader inputs
+        run: python3 -m unittest discover -s reconstruction/tools -p test_crane_native_backup_core.py -v
+
       - name: Verify read-only Crane restore mapping preflight safety
         run: python3 reconstruction/tools/check_restore_preflight_contract.py
 
@@ -279,6 +291,21 @@ jobs:
             echo "THEOS=${THEOS:-unset}"
             echo '~~~'
           } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Smoke-test native Crane single Backup Info builder and read-only ZIP64 reader
+        working-directory: reconstruction
+        run: |
+          set -euo pipefail
+          python3 tools/native_backup_reader_fixture.py --output-dir "$RUNNER_TEMP"
+          clang -fobjc-arc -fblocks -Wall -Wextra -Werror \
+            -I sources/prefs \
+            sources/prefs/CRBackupNativeCore.m tools/native_backup_core_smoke.m \
+            -framework Foundation -framework CoreFoundation -lz \
+            -o "$RUNNER_TEMP/native_backup_core_smoke"
+          "$RUNNER_TEMP/native_backup_core_smoke" \
+            "$RUNNER_TEMP/crane-native-valid.cranect" \
+            "$RUNNER_TEMP/crane-native-bad-crc.cranect" \
+            "$RUNNER_TEMP/crane-native-invalid-info.cranect"
 
       - name: Smoke-test Clang XPC protocol metadata with Foundation
         working-directory: reconstruction

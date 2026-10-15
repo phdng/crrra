@@ -215,8 +215,25 @@ def _plist_bytes(value: dict) -> bytes:
     return content
 
 
+def _zip_entry(name: str, *, is_directory: bool,
+               zip_layout: str) -> str | zipfile.ZipInfo:
+    """Opt-in only: preserve observed method and macOS ZIP creator.
+
+    Python's zipfile cannot promise original SSZipArchive flag/ZIP64 layout.
+    Do not set unverified flags or spoof full original compatibility.
+    """
+    if zip_layout != "original-observed-structure":
+        return name
+    info = zipfile.ZipInfo(name)
+    info.create_system = 19
+    info.compress_type = (zipfile.ZIP_STORED if is_directory
+                          else zipfile.ZIP_DEFLATED)
+    return info
+
+
 def _write_file(zf: zipfile.ZipFile, name: str, source: Path,
-                expected_size: int, root: Path) -> None:
+                expected_size: int, root: Path,
+                zip_layout: str = "standard") -> None:
     # Open with O_NOFOLLOW where supported; fstat before/after to reject
     # source swapping or concurrent modifications during the experiment.
     _verify_regular(root, source.relative_to(root), False)
@@ -231,7 +248,9 @@ def _write_file(zf: zipfile.ZipFile, name: str, source: Path,
         _ensure(stat.S_ISREG(opened.st_mode) and opened.st_nlink <= 1,
                 "opened fixture file is unsafe")
         with os.fdopen(fd, "rb", closefd=False) as reader:
-            with zf.open(name, "w", force_zip64=False) as destination:
+            with zf.open(_zip_entry(name, is_directory=False,
+                                    zip_layout=zip_layout), "w",
+                         force_zip64=False) as destination:
                 amount = 0
                 while True:
                     data = reader.read(CHUNK)
@@ -252,7 +271,8 @@ def _write_file(zf: zipfile.ZipFile, name: str, source: Path,
 
 def write_fixture(root_path: str | os.PathLike[str], *,
                   manifest_name: str, output_name: str,
-                  metadata_profile: str = "host-stat") -> dict:
+                  metadata_profile: str = "host-stat",
+                  zip_layout: str = "standard") -> dict:
     root = _fixture_root(root_path)
     _ensure(isinstance(output_name, str) and
             0 < len(output_name) <= 255 and
@@ -262,7 +282,11 @@ def write_fixture(root_path: str | os.PathLike[str], *,
             all(32 <= ord(c) != 127 for c in output_name) and
             output_name.endswith((".cranect", ".cranebk")),
             "output must be a simple .cranect or .cranebk filename")
+    _ensure(zip_layout in ("standard", "original-observed-structure"),
+            "unsupported ZIP fixture layout")
     multi = output_name.endswith(".cranebk")
+    _ensure(zip_layout != "original-observed-structure" or not multi,
+            "observed ZIP envelope only applies to original single backups")
     containers = _load_manifest(root, manifest_name)
     _ensure(multi or len(containers) == 1,
             "single container filename requires exactly one container")
@@ -286,17 +310,29 @@ def write_fixture(root_path: str | os.PathLike[str], *,
                 info = {field: container[field] for field in (
                     "applicationIdentifier", "containerIdentifier",
                     "containerName", "originalPaths")}
-                zf.writestr(prefix + "Info.plist", _plist_bytes(info))
-                if metas[idx]:
+                zf.writestr(_zip_entry(prefix + "Info.plist",
+                                       is_directory=False,
+                                       zip_layout=zip_layout),
+                            _plist_bytes(info))
+                if metas[idx] and zip_layout != "original-observed-structure":
                     zf.writestr(prefix + "Metadata.plist",
                                 _plist_bytes(metas[idx]))
             for name, path, size in entries:
                 if path is None:
-                    zf.writestr(name, b"")
+                    zf.writestr(_zip_entry(name, is_directory=True,
+                                           zip_layout=zip_layout), b"")
                 elif size == 0:
-                    zf.writestr(name, b"")
+                    zf.writestr(_zip_entry(name, is_directory=False,
+                                           zip_layout=zip_layout), b"")
                 else:
-                    _write_file(zf, name, path, size, root)
+                    _write_file(zf, name, path, size, root,
+                                zip_layout=zip_layout)
+            if zip_layout == "original-observed-structure" and metas[0]:
+                # Confirmed on user-provided original single .cranect:
+                # Info first, payload next, Metadata last (not on multi).
+                zf.writestr(_zip_entry("Metadata.plist", is_directory=False,
+                                       zip_layout=zip_layout),
+                            _plist_bytes(metas[0]))
             if multi:
                 index = {"containedContainers": [
                     {key: container[key] for key in (
@@ -318,6 +354,8 @@ def write_fixture(root_path: str | os.PathLike[str], *,
                   "containers": len(containers), "members": checked["member_count"],
                   "verified_bytes": checked["crc_checked_bytes"],
                   "metadata_profile": metadata_profile,
+                  "zip_layout": zip_layout,
+                  "original_zip_envelope_proven": False,
                   "original_compatibility_proven": False,
                   "output": str(target)}
         return result
@@ -339,6 +377,10 @@ def main(argv: list[str] | None = None) -> int:
                         help="fixture-relative JSON manifest")
     parser.add_argument("--output", required=True,
                         help="basename inside pre-existing fixture/output/ directory")
+    parser.add_argument("--zip-layout", default="standard",
+                        choices=("standard", "original-observed-structure"),
+                        help="Experimental single-container ZIP ordering/methods/creator; "
+                             "SSZipArchive ZIP64/flags parity NOT proven")
     parser.add_argument("--metadata-profile", default="host-stat",
                         choices=("host-stat", "synthetic-original-eight-field"),
                         help="EXPLICIT fake 8-key schema for disposable fixture only; "
@@ -348,7 +390,8 @@ def main(argv: list[str] | None = None) -> int:
         result = write_fixture(args.fixture_root,
                                manifest_name=args.manifest,
                                output_name=args.output,
-                               metadata_profile=args.metadata_profile)
+                               metadata_profile=args.metadata_profile,
+                               zip_layout=args.zip_layout)
     except (FixtureError, OSError, ValueError, RuntimeError, zipfile.BadZipFile) as exc:
         print(json.dumps({"status": "fixture_failed", "reason": str(exc)}))
         return 1
