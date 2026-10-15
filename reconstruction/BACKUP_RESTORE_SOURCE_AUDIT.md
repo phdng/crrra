@@ -425,4 +425,59 @@ python3 reconstruction/tools/crane_restore_quarantine_verify.py \
 
 **Giới hạn:** so SHA-256 của payload sau publish chỉ chứng minh fixture hiện tại giống ZIP đã nhập trong lượt kiểm. Không chứng minh nguồn ZIP đáng tin, không giải quyết attacker race, native iOS permissions/group mapping, Keychain, rollback, crash/power loss; chưa kiểm chứng với backup Crane gốc từ disposable app hoặc macOS native CI. Không dùng công cụ này trên container thật.
 
+## 18. G-11 giai đoạn C2 — đối chiếu SHA-256 payload của hai ZIP, chỉ đọc (2026-10-15)
+
+**Khoảng trống ở giai đoạn C:** `crane_backup_shape_compare.py` so hình dạng Info/Metadata và phương thức nén, nhưng *không* so byte nội dung file ứng dụng. Hai ZIP có cùng tên file, cùng kích thước và cùng các khóa plist vẫn có thể chứa dữ liệu khác nhau. Đã bổ sung `reconstruction/tools/crane_backup_payload_parity.py` để thực hiện so sánh sâu có giới hạn.
+
+**Kiểm tra:** trước tiên độc lập kiểm tra cả reference và candidate bằng `crane_backup_inspector.inspect_archive(..., verify_payload=True)` để kiểm CRC *ngoài Keychain*, mỗi ZIP giới hạn 256 MiB uncompressed; chặn ZIP mã hóa và đường dẫn không hợp lệ. Cả hai phải cùng loại single/multi và có **tập cặp `applicationIdentifier` + `containerIdentifier` giống nhau** (chỉ dùng trong RAM, không in ra ngoài); thiếu khớp là `container_identity_or_kind_mismatch_uncompared`. Multi chuẩn hóa prefix `<app>/<container>/` để không phụ thuộc thứ tự container trong index. Sau đó đối chiếu chính xác tập file/thư mục theo relative path, kích thước từng file, SHA-256 từng file cùng tên/kích thước và **serialized bytes** `Info.plist`/`Metadata.plist` (kể cả root multi `Info.plist`). Không đọc nội dung `Keychain.plist` dù file có ở cả hai phía. Bộ so sánh hình dạng C vẫn được gọi để đếm sai biệt keys/ZIP compression methods.
+
+```sh
+python3 reconstruction/tools/crane_backup_payload_parity.py \
+  --reference /path/to/disposable-crane-original.cranect \
+  --candidate /path/to/synthetic-writer-candidate.cranect
+
+# Tương tự cho .cranebk khi app+container IDs đã được căn đúng
+```
+
+**Báo cáo bảo vệ riêng tư:** chỉ in số file thiếu/thừa, thư mục thiếu/thừa, file khác kích thước, file cùng kích thước nhưng hash khác, số plist khác byte và `shape_difference_count`, số Keychain bị bỏ qua. Không in identifier, tên file, metadata values, originalPaths, hash digest hoặc lỗi thô. Không tạo/xóa/đổi tên/giải nén file, cấm so cùng inode hoặc input symlink và so dev/inode/size/mtime/ctime ở đầu/cuối để phát hiện một số thay đổi trong lúc đọc.
+
+**Exit code:** 0 `payload_and_metadata_bytes_match_not_proven` khi file/metadata/shape trùng (chỉ có nghĩa là hai archive được cung cấp trùng theo tiêu chí vừa kiểm tra), 1 `payload_or_metadata_differences` hoặc `container_identity_or_kind_mismatch_uncompared`, 2 `parity_unavailable_or_unsupported`. Mọi báo cáo luôn `original_compatibility_proven:false`, `restore_safe:false`, `files_extracted:false`, `filesystem_writes:false`, `keychain_contents_read:false`. Kết quả này **không xác thực provenance**: hai ZIP synthetic giống nhau vẫn *không* chứng minh Crane original tương thích. Serialized metadata timestamp hoặc UID khác nhau có thể khiến `different_plist_bytes > 0` dù file payload giống nhau; đó là dữ liệu chẩn đoán, chưa nên tự normalize hoặc bỏ qua.
+
+**Kiểm thử/CI:** `test_crane_backup_payload_parity.py` tạo cặp ZIP synthetic; thử same-size tamper mà shape vẫn bằng nhau, size/dir/file mismatch, thay đổi `containerName` không đổi keys, đổi compression method, multi, identity mismatch, Keychain khác byte nhưng chưa bao giờ mở, bad ZIP, budget chặn, thay đổi source giữa lượt scan, CLI privacy/exit codes. `check_backup_payload_parity_contract.py` ràng buộc read-only, Keychain skip và giữ nguyên Root Settings fail-closed. Hai bước CI được nối ngay sau Stage C.
+
+**Chưa hoàn tất bước thực địa:** workspace chưa chứa file `.cranect`/`.cranebk` xuất từ Crane gốc trên ứng dụng thử nghiệm. Chưa thể đánh dấu G-11 định dạng gốc verified hoặc bật Backup/Restore iPhone. Cần một reference *thật* được chủ động tạo từ disposable app và candidate offline với cùng IDs/dữ liệu, rồi dùng công cụ này để xác định chênh lệch cụ thể mà không đăng dữ liệu nhạy cảm lên log.
+
+## 19. G-11 C3 — archive Crane gốc đầu tiên, xác minh trực tiếp (2026-10-15)
+
+**Mẫu gốc do người dùng cung cấp (không commit vào Git):** `backup/test_Chrome_bg_10.15.2026_09-25-24.cranect`. Chỉ kiểm tại workspace; không giải nén hoặc sao chép nội dung Chrome vào fixture, không mở Keychain và không in/sao lưu app/container IDs, `originalPaths`, file names, UID/GID, tên account hay giá trị metadata. Giữ file nguyên vẹn, **không đóng gói vào CI/artifact**.
+
+**Kết quả chạy thật:** `crane_original_archive_audit.py --archive backup/test_Chrome_bg_10.15.2026_09-25-24.cranect --verify-payload` trả `original_structure_accepted_not_parity_proof`, CRC dữ liệu ngoài Keychain **PASS**. File ZIP có **22.628.701 byte**; **704 entries** (501 file bao gồm `Info.plist`/`Metadata.plist`, 203 thư mục), **53 file rỗng**, **42.958.372 byte uncompressed**. **Không có ZIP encryption và không có Keychain.plist**. ZIP store (method 0) cho 203 thư mục và deflate (method 8) cho 501 file. Inspector xác nhận `single`, 1 container, `Info.plist` và `Metadata.plist` đều **binary**, Info chứa 5 trường gốc `applicationIdentifier`, `containerIdentifier`, `containerName`, `deviceIdentifierForVendor`, `originalPaths`; `originalPaths` có **10 associated IDs**.
+
+**Bằng chứng quan trọng từ Metadata.plist:** **702 record**, mỗi record ứng với đúng một entry dữ liệu ZIP (499 file payload + 203 directories), không có metadata orphan và không có entry dữ liệu bị thiếu metadata. Cả 702 record có đúng **8 khóa sau**, không có khóa lạ và chỉ **một tổ hợp khóa**: `NSFileCreationDate` (datetime), `NSFileModificationDate` (datetime), `NSFileExtensionHidden` (boolean), `NSFileOwnerAccountID` (integer), `NSFileGroupOwnerAccountID` (integer), `NSFileOwnerAccountName` (string), `NSFileGroupOwnerAccountName` (string), `NSFilePosixPermissions` (integer). Các giá trị cụ thể được giữ kín.
+
+**Sai khác đã xác định với fixture writer Windows:** `crane_backup_metadata.attributes_available_from_stat` hiện chủ động chỉ ghi các thuộc tính lấy được từ OS: POSIX mode, modification time, birthtime nếu cung cấp, numeric UID/GID khi có. Trên Windows có thể thiếu birthtime hoặc names; writer **chưa tạo `NSFileExtensionHidden`, account owner/group names** và không được tự suy diễn giá trị iOS từ host. Bổ sung 8 keys một cách giả định để được 'match' là sai; cần phát triển provider native NSFileManager iOS trên dữ liệu test hoặc metadata manifest có chủ đích trong fixture mới đủ cơ sở. Do archive original có cả dữ liệu riêng tư, **không dùng nó như source tree cho fixture writer**, chưa có cặp candidate chứa chính xác dữ liệu giống archive để kiểm C2 payload parity.
+
+**Thêm công cụ/audit có chế độ read-only:** `reconstruction/tools/crane_original_archive_audit.py` thu thập số liệu nén/ZIP/encryption/metadata coverage/kiểu giá trị trên allowlist, không in path hoặc values; opt-in `--verify-payload` gọi inspector để kiểm CRC trong giới hạn 256 MiB ngoại trừ Keychain. `test_crane_original_archive_audit.py` dùng các ZIP synthetic cho CI; ca regression cho đúng mẫu Chrome chạy **chỉ khi file tồn tại ở workspace**, trên CI sẽ được SKIP và không có backup riêng tư. `check_original_archive_audit_contract.py` kiểm tra không có mutators, Keychain không bị đọc, UI vẫn fail closed. Hai bước CI thêm contract + test.
+
+**Giới hạn kết luận:** đã có **bằng chứng cấu trúc thật** đối với **một** `.cranect` đơn không mật khẩu/Keychain và CRC dữ liệu ngoài Keychain. **Chưa chứng minh writer tương thích bit-for-bit hoặc restore được**, chưa có cặp candidate thật với cùng app/container IDs/payload, chưa chứng minh multi `.cranebk`, mã hóa/password/Keychain. Không bật Root Backup/Restore và không sửa daemon/injection/CraneManager/helper. Cần thêm archive disposable app không chứa dữ liệu riêng tư với cặp candidate thích hợp, rồi chạy `crane_backup_payload_parity.py` để xác nhận chi tiết.
+
+## 20. G-11 C4 — metadata schema 8 trường original bằng **giá trị giả** trong fixture writer (2026-10-15)
+
+Đã đối chiếu ZIP gốc `backup/test_Chrome_bg_10.15.2026_09-25-24.cranect` ở mục 19: tất cả 702 `Metadata.plist` entries có cùng **8 khóa và kiểu**: `NSFileCreationDate`/`NSFileModificationDate` (datetime), `NSFileExtensionHidden` (bool), `NSFileOwnerAccountID`/`NSFileGroupOwnerAccountID` (integer), `NSFileOwnerAccountName`/`NSFileGroupOwnerAccountName` (string), `NSFilePosixPermissions` (integer). Đây là quan sát về **schema**, không có quyền tái tạo UID/GID/account/hidden/time thực của người dùng.
+
+**Đã triển khai (chỉ offline disposable fixture):** `crane_backup_metadata.original_sample_shape_synthetic_attributes` sinh đúng 8 khóa bằng các giá trị test công khai/cố định: 2 timestamp `2001-01-01T00:00:00` (naive UTC tương thích binary plist), `NSFileExtensionHidden=False`, owner/group IDs giả `900001/900002`, tên `crane-fixture-owner-NOT-IOS` và `crane-fixture-group-NOT-IOS`, permissions lấy từ `stat.S_IMODE` của **file fixture**. Các giá trị giả **KHÔNG đúng theo iOS và TUYỆT ĐỐI không dùng để restore lên thiết bị**. Không đọc/sao chép bất kỳ metadata, Chrome payload, account names hoặc đường dẫn thực trong archive gốc để tạo candidate.
+
+Writer hiện có tùy chọn tường minh `--metadata-profile synthetic-original-eight-field`; **mặc định `host-stat` không đổi**. Vẫn đòi root có marker `.crane-disposable-fixture`, manifest chỉ đường dẫn nguồn nằm trong fixture, ghi ZIP tạo mới không overwrite và inspector CRC output. Với cả single/multi và mỗi thư mục/file, `Metadata.plist` dạng binary chứa đúng 8 khóa có type của bản gốc. `Info.plist` giữ schema writer gốc (không được thêm marker lạ chỉ nhằm thông qua test). JSON output công bố `metadata_profile` và `original_compatibility_proven:false`.
+
+```sh
+python3 reconstruction/tools/crane_backup_fixture_writer.py \
+  --fixture-root /path/to/disposable-fixture \
+  --manifest manifest.json --output synthetic-eight.cranect \
+  --metadata-profile synthetic-original-eight-field
+```
+
+**Kiểm thử:** `test_crane_original_metadata_shape.py` gồm 11 unit tests: binary plist 8-key/type cho mọi file/thư mục, UID/GID không lấy từ host, timestamp test cố định, output deterministic, multi-container, default host-stat không bị ảnh hưởng, profile tùy ý bị từ chối, thiếu marker bị chặn, không overwrite, CLI opt-in không lộ tên chủ sở hữu; ca **local** đối chiếu đúng 8 tên/kiểu với mẫu Chrome gốc chỉ chạy nếu file riêng tư hiện diện, **CI không chứa archive sẽ SKIP**. Source contract `check_original_metadata_shape_contract.py` và 2 CI steps kiểm tra đúng giới hạn.
+
+**Điều chưa được chứng minh:** đây chỉ là **metadata shape parity**. Không hề chứng minh ZIP file/data payload/parity với backup gốc (writer chưa có candidate cùng IDs/payload), không chứng minh việc nhận/trả đúng owner/permissions/timestamp trên iOS, không giải quyết `deviceIdentifierForVendor`/Keychain/password/multi-original hay restore transaction. Mọi Root Backup/Restore vẫn fail-closed; daemon/injection/CraneManager/helper không đổi.
+
 **Nguồn kiểm toán tại workspace:** `analysis/objc_classes.json`, bản decompile `0x20E64`, `0x211A8`, `0x2614C`, `0x2619C`, `0x25A8C`, `0x24CF8`, `0x257AC`, `0x29504`, `0x2B9B0`, `0x2ADA0`, `0x2B31C`, và các helpers/blocks chỉ rõ trong mục 2-3; đối chiếu với `sources/prefs/CRPreferences.m`, `sources/libcrane/CRManager.m`, `sources/cranehelperd/CRHelperd.m`.

@@ -21,7 +21,8 @@ from crane_backup_inspector import (
     InvalidArchive, UnsupportedArchive, _safe_id, _safe_member_name,
     _safe_original_path, inspect_archive,
 )
-from crane_backup_metadata import attributes_available_from_stat
+from crane_backup_metadata import (attributes_available_from_stat,
+                                   original_sample_shape_synthetic_attributes)
 
 MARKER = ".crane-disposable-fixture"
 MARKER_CONTENT = b"CRANE_DISPOSABLE_FIXTURE_V1\n"
@@ -141,8 +142,14 @@ def _load_manifest(root: Path, name: str) -> list[dict]:
     return output
 
 
-def _scan_sources(root: Path, containers: list[dict], multi: bool):
+def _scan_sources(root: Path, containers: list[dict], multi: bool,
+                  metadata_profile: str = "host-stat"):
     """List only fixture entries, fail before writing when unsafe."""
+    _ensure(metadata_profile in ("host-stat", "synthetic-original-eight-field"),
+            "unsupported test-only metadata profile")
+    attribute_provider = (original_sample_shape_synthetic_attributes
+                          if metadata_profile == "synthetic-original-eight-field"
+                          else attributes_available_from_stat)
     items: list[tuple[str, Path | None, int]] = []
     metadata_by_container: list[dict] = []
     folded_names: set[str] = set()
@@ -175,8 +182,7 @@ def _scan_sources(root: Path, containers: list[dict], multi: bool):
                 source = _verify_regular(root, source.relative_to(root), True)
                 # Original 0x24948 applies CRPBackupContainer's twelve-key
                 # writable filter to NSFileManager attributes for each item.
-                attributes[relative] = attributes_available_from_stat(
-                    source.lstat())
+                attributes[relative] = attribute_provider(source.lstat())
                 add(prefix + relative + "/", None, 0)
                 children = sorted(os.scandir(source), key=lambda e: e.name,
                                   reverse=True)
@@ -194,7 +200,7 @@ def _scan_sources(root: Path, containers: list[dict], multi: bool):
                                 "hardlink is not accepted in fixture data")
                         size = child.stat(follow_symlinks=False).st_size
                         _ensure(size <= MAX_FILE_SIZE, "fixture file too large")
-                        attributes[child_relative] = attributes_available_from_stat(
+                        attributes[child_relative] = attribute_provider(
                             child_path.lstat())
                         add(prefix + child_relative, child_path, size)
                     else:
@@ -245,7 +251,8 @@ def _write_file(zf: zipfile.ZipFile, name: str, source: Path,
 
 
 def write_fixture(root_path: str | os.PathLike[str], *,
-                  manifest_name: str, output_name: str) -> dict:
+                  manifest_name: str, output_name: str,
+                  metadata_profile: str = "host-stat") -> dict:
     root = _fixture_root(root_path)
     _ensure(isinstance(output_name, str) and
             0 < len(output_name) <= 255 and
@@ -264,7 +271,8 @@ def write_fixture(root_path: str | os.PathLike[str], *,
     target = output_dir / output_name
     _ensure(not target.exists() and not target.is_symlink(),
             "refusing to overwrite an existing output")
-    entries, metas = _scan_sources(root, containers, multi)
+    entries, metas = _scan_sources(root, containers, multi,
+                                   metadata_profile=metadata_profile)
     staging = output_dir / ("." + uuid.uuid4().hex + "." + output_name)
     result = None
     try:
@@ -309,6 +317,8 @@ def write_fixture(root_path: str | os.PathLike[str], *,
                   "kind": "multi" if multi else "single",
                   "containers": len(containers), "members": checked["member_count"],
                   "verified_bytes": checked["crc_checked_bytes"],
+                  "metadata_profile": metadata_profile,
+                  "original_compatibility_proven": False,
                   "output": str(target)}
         return result
     except (InvalidArchive, UnsupportedArchive) as exc:
@@ -329,11 +339,16 @@ def main(argv: list[str] | None = None) -> int:
                         help="fixture-relative JSON manifest")
     parser.add_argument("--output", required=True,
                         help="basename inside pre-existing fixture/output/ directory")
+    parser.add_argument("--metadata-profile", default="host-stat",
+                        choices=("host-stat", "synthetic-original-eight-field"),
+                        help="EXPLICIT fake 8-key schema for disposable fixture only; "
+                             "not real iOS UID/GID/dates or original compatibility")
     args = parser.parse_args(argv)
     try:
         result = write_fixture(args.fixture_root,
                                manifest_name=args.manifest,
-                               output_name=args.output)
+                               output_name=args.output,
+                               metadata_profile=args.metadata_profile)
     except (FixtureError, OSError, ValueError, RuntimeError, zipfile.BadZipFile) as exc:
         print(json.dumps({"status": "fixture_failed", "reason": str(exc)}))
         return 1

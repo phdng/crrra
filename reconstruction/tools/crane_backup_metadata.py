@@ -31,6 +31,43 @@ WRITABLE_FILE_ATTRIBUTES = frozenset({
 })
 
 
+
+# Controlled test vectors for the EIGHT FIELD signature observed in the
+# user-provided original Chrome .cranect. These values are deliberately
+# fictional and MUST NEVER be applied to an actual filesystem.
+ORIGINAL_SAMPLE_EIGHT_FIELDS = frozenset({
+    "NSFileCreationDate", "NSFileExtensionHidden",
+    "NSFileGroupOwnerAccountID", "NSFileGroupOwnerAccountName",
+    "NSFileModificationDate", "NSFileOwnerAccountID",
+    "NSFileOwnerAccountName", "NSFilePosixPermissions",
+})
+_SYNTHETIC_DATE = datetime(2001, 1, 1, 0, 0, 0)
+_SYNTHETIC_OWNER = "crane-fixture-owner-NOT-IOS"
+_SYNTHETIC_GROUP = "crane-fixture-group-NOT-IOS"
+
+
+def original_sample_shape_synthetic_attributes(info: Any) -> dict[str, Any]:
+    """Eight-field *shape* from original sample, with fictitious test values.
+
+    Intentionally independent from source UID/GID, OS account names and
+    original archive data. The non-sensitive permission mode is derived from
+    the supplied disposable stat input. Timestamps, ownership and hidden
+    state are intentionally invented test VECTORS, not evidence of accuracy.
+    This API is permitted ONLY for explicit, marked, disposable fixtures.
+    """
+    attributes = {
+        "NSFileCreationDate": _SYNTHETIC_DATE,
+        "NSFileModificationDate": _SYNTHETIC_DATE,
+        "NSFileExtensionHidden": False,
+        "NSFileOwnerAccountID": 900001,
+        "NSFileGroupOwnerAccountID": 900002,
+        "NSFileOwnerAccountName": _SYNTHETIC_OWNER,
+        "NSFileGroupOwnerAccountName": _SYNTHETIC_GROUP,
+        "NSFilePosixPermissions": stat_module.S_IMODE(info.st_mode),
+    }
+    assert frozenset(attributes) == ORIGINAL_SAMPLE_EIGHT_FIELDS
+    return filter_writable_file_attributes(attributes)
+
 def filter_writable_file_attributes(
     attributes: Mapping[str, Any],
 ) -> dict[str, Any]:

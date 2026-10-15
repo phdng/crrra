@@ -178,6 +178,24 @@ jobs:
       - name: Test offline original-vs-candidate ZIP shape reporting
         run: python3 -m unittest discover -s reconstruction/tools -p test_crane_backup_shape_compare.py -v
 
+      - name: Verify bounded non-Keychain ZIP payload SHA-256 parity contract
+        run: python3 reconstruction/tools/check_backup_payload_parity_contract.py
+
+      - name: Test offline source-vs-candidate ZIP byte and metadata parity
+        run: python3 -m unittest discover -s reconstruction/tools -p test_crane_backup_payload_parity.py -v
+
+      - name: Verify original Crane ZIP read-only audit privacy contract
+        run: python3 reconstruction/tools/check_original_archive_audit_contract.py
+
+      - name: Test original Crane ZIP audit (private local reference optional)
+        run: python3 -m unittest discover -s reconstruction/tools -p test_crane_original_archive_audit.py -v
+
+      - name: Verify synthetic eight-field metadata source and safety contract
+        run: python3 reconstruction/tools/check_original_metadata_shape_contract.py
+
+      - name: Test original-observed 8-field schema with entirely fictitious fixture values
+        run: python3 -m unittest discover -s reconstruction/tools -p test_crane_original_metadata_shape.py -v
+
       - name: Verify read-only Crane restore mapping preflight safety
         run: python3 reconstruction/tools/check_restore_preflight_contract.py
 

@@ -70,8 +70,11 @@ assert "st_birthtime" in module
 assert "st_ctime" not in module.split("def attributes_available_from_stat")[1].split(
     "return filter_writable_file_attributes")[0].replace("never ctime", "")
 assert "tzinfo=None" in module
-assert "from crane_backup_metadata import attributes_available_from_stat" in writer
-assert writer.count("attributes_available_from_stat(") == 2
+assert "from crane_backup_metadata import (attributes_available_from_stat," in writer
+assert "original_sample_shape_synthetic_attributes" in writer
+assert "attribute_provider(source.lstat())" in writer
+assert "attribute_provider(" in writer
+assert "metadata_profile: str = \"host-stat\"" in writer
 assert "from crane_backup_metadata import WRITABLE_FILE_ATTRIBUTES" in comparison
 assert "KNOWN_METADATA_KEYS = WRITABLE_FILE_ATTRIBUTES" in comparison
 
