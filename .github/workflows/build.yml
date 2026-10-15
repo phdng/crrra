@@ -184,6 +184,12 @@ jobs:
       - name: Test Crane restore preflight on synthetic archive inventories
         run: python3 -m unittest discover -s reconstruction/tools -p test_crane_restore_preflight.py -v
 
+      - name: Verify virtual-only Crane restore transaction model contract
+        run: python3 reconstruction/tools/check_restore_transaction_model_contract.py
+
+      - name: Fault-inject synthetic single/multi restore transactions
+        run: python3 -m unittest discover -s reconstruction/tools -p test_crane_restore_transaction_model.py -v
+
       - name: Verify optional Choicy integration (tracked native evidence)
         run: CRANE_CHOICY_SKIP_NATIVE_EXPORT=1 python3 reconstruction/tools/check_choicy_integration_contract.py
 

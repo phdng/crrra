@@ -295,4 +295,27 @@ python3 reconstruction/tools/crane_restore_preflight.py \
 
 **Vẫn chưa giải quyết:** không có archive gốc thực tế trên disposable app, chưa có backend Keychain, không có snapshot/staging transaction/rollback, chưa xác minh live inventory hoặc tiền kiểm target filesystem, chưa có runtime prefs/controller. **Không được nối planner này vào `CRManager wipe`** hay mở tính năng Restore trước khi các điều kiện đó hoàn thành.
 
+## 13. G-11 giai đoạn D1 — mô hình transaction/rollback ảo và fault injection (2026-10-15)
+
+**Đã thêm** `reconstruction/tools/crane_restore_transaction_model.py`: công cụ chạy offline nối đầu ra **D0 read-only preflight** tới mô hình trạng thái transaction **trong bộ nhớ**, không có backend restore, không giải nén ZIP, không ghi file thật, không gọi `CraneManager` hoặc helper/Keychain. Đây là **mô phỏng logic bất biến**, không phải snapshot hay rollback filesystem đang sử dụng được trên iPhone.
+
+**Bằng chứng từ Crane gốc:** `CRPRestoreOperation main` tại `0x2B9B0` làm lần lượt free-space, password, load Info, xác định mapping, kiểm tra appID, extract, kiểm tra group rồi chạy suboperation restore. `restoreBackupContainer:intoContainer:` tại `0x2ADA0` **wipe dữ liệu target trước move**; block `0x2B228` chuyển các associated paths sang target, sau đó có thao tác Keychain và device ID. Đây là lý do reconstruction **không được nối selector UI vào wipe** trước khi có atomic recovery thật và error propagation.
+
+**Mô hình D1:** `snapshot(old virtual states)` → `stage(new virtual states)` → `promote target 1..N` → `verify` → `commit` hoặc `rollback toàn bộ trạng thái ảo`. Các phép gán chỉ sử dụng tuple `('old', index)`/`('new', index)` trong dictionary Python, **không dùng tên hoặc nội dung file**. Có thể chèn lỗi tại `after_snapshot`, `after_staging`, `after_first_promotion`, `after_all_promotions`, `after_verification`, `before_commit`; kiểm tra sau lỗi rằng mọi target ảo khớp snapshot trước đó.
+
+```sh
+python3 reconstruction/tools/crane_restore_transaction_model.py \
+  --archive /path/to/disposable.cranebk \
+  --inventory /path/to/test-inventory.json \
+  --inject-failure after_first_promotion
+```
+
+**Fail-closed:** D0 báo blocked thì không bắt đầu mô phỏng; báo advisory mới mô phỏng. Công cụ chỉ nhận output D0 có toàn bộ cờ không thực thi (`restore_executable:false`, `rollback_implemented:false`, `inventory_verified_against_device:false`, v.v.). JSON không chứa app/container ID hay private path. Bản thân kết quả successful **vẫn không được dùng để bật Restore**.
+
+**Các trạng thái:** `simulation_committed_virtual_only` nếu hoàn tất mô phỏng trong RAM, `simulation_rolled_back_virtual_only` nếu lỗi đã được rollback ảo, `simulation_not_run_blocked` nếu D0 từ chối, `simulation_unavailable_or_invalid` nếu input/contract sai. `real_rollback_implemented:false`, `device_data_touched:false`, `filesystem_writes:false`, `zip_extracted:false`, `keychain_contents_read:false`, `restore_executable:false` ở **mọi kết quả hợp lệ**. Các trạng thái mô phỏng không đảm bảo ứng dụng không mất dữ liệu thật khi restore thực.
+
+**Kiểm thử/CI:** 11 unit tests trong `test_crane_restore_transaction_model.py` cho single/multi commit ảo, fault injection ở tất cả 6 bước, lỗi giữa multi-target, preflight blocked, giả mạo flags, CLI không tiết lộ danh tính, archive/inventory giữ nguyên. `check_restore_transaction_model_contract.py` giới hạn AST imports/calls ở read-only và đối chiếu decompile khi có file gốc. Hai CI steps đã thêm.
+
+**Để biến thành restore thực:** cần xác thực archive gốc disposable app, kiểm CRC/extract an toàn, chụp snapshot dữ liệu thực cho tất cả app/group containers, transaction journal bền vững qua process crash, atomic move với error propagation, restore permissions/Preferences path/Keychain với undo rõ ràng, lifecycle handling và device-based inventory. Những hạng mục đó **chưa được triển khai**.
+
 **Nguồn kiểm toán tại workspace:** `analysis/objc_classes.json`, bản decompile `0x20E64`, `0x211A8`, `0x2614C`, `0x2619C`, `0x25A8C`, `0x24CF8`, `0x257AC`, `0x29504`, `0x2B9B0`, `0x2ADA0`, `0x2B31C`, và các helpers/blocks chỉ rõ trong mục 2-3; đối chiếu với `sources/prefs/CRPreferences.m`, `sources/libcrane/CRManager.m`, `sources/cranehelperd/CRHelperd.m`.
