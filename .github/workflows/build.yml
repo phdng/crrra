@@ -305,7 +305,9 @@ jobs:
           "$RUNNER_TEMP/native_backup_core_smoke" \
             "$RUNNER_TEMP/crane-native-valid.cranect" \
             "$RUNNER_TEMP/crane-native-bad-crc.cranect" \
-            "$RUNNER_TEMP/crane-native-invalid-info.cranect"
+            "$RUNNER_TEMP/crane-native-invalid-info.cranect" \
+            "$RUNNER_TEMP/crane-native-bad-central-size.cranect" \
+            "$RUNNER_TEMP/crane-native-bad-central-crc.cranect"
 
       - name: Smoke-test Clang XPC protocol metadata with Foundation
         working-directory: reconstruction

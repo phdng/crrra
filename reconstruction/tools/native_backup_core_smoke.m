@@ -15,10 +15,12 @@ static void Check(BOOL yes, NSString *message)
 int main(int argc, const char **argv)
 {
     @autoreleasepool {
-        Check(argc == 4, @"requires synthetic good / bad-CRC / invalid-info ZIP");
+        Check(argc == 6, @"requires synthetic good / bad-CRC / invalid-info / bad-central-size / bad-central-CRC ZIP");
         NSString *path = [NSString stringWithUTF8String:argv[1]];
         NSString *badCRC = [NSString stringWithUTF8String:argv[2]];
         NSString *badPlist = [NSString stringWithUTF8String:argv[3]];
+        NSString *badCentralSize = [NSString stringWithUTF8String:argv[4]];
+        NSString *badCentralCRC = [NSString stringWithUTF8String:argv[5]];
         NSError *error = nil;
         NSDictionary *info = [CRBackupNativeCore
             readSingleBackupInfoAtPath:path error:&error];
@@ -45,6 +47,12 @@ int main(int argc, const char **argv)
         error = nil;
         Check(![CRBackupNativeCore readSingleBackupInfoAtPath:badPlist error:&error]
               && error != nil, @"invalid Info binary plist accepted");
+        error = nil;
+        Check(![CRBackupNativeCore readSingleBackupInfoAtPath:badCentralSize error:&error]
+              && error != nil, @"contradictory central-directory compressed size accepted");
+        error = nil;
+        Check(![CRBackupNativeCore readSingleBackupInfoAtPath:badCentralCRC error:&error]
+              && error != nil, @"contradictory central-directory CRC accepted");
         error = nil;
         Check(![CRBackupNativeCore readSingleBackupInfoAtPath:
                    @"/nonexistent-crane-test.cranect" error:&error]

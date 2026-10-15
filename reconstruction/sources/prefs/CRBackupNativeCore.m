@@ -150,6 +150,123 @@ static NSData *CRInflate(const uint8_t *source, size_t length,
     return buffer;
 }
 
+/*
+ * Read ONLY the first central-directory entry. ZIP writers using bit 3
+ * (data descriptor) may leave both LOCAL ZIP64 size fields at zero.
+ * The CENTRAL ZIP64 extra contains the actual sizes even in that case.
+ *
+ * This is intentionally not a whole-archive validator and can never
+ * authorize extraction or a Restore operation.
+ */
+typedef struct {
+    uint64_t compressed;
+    uint64_t uncompressed;
+    uint32_t crc;
+    uint16_t flags;
+    uint16_t method;
+} CRCentralInfo;
+
+static BOOL CRReadFirstCentralInfo(int fd, uint64_t fileSize,
+                                   CRCentralInfo *found)
+{
+    if (fileSize < 22)
+        return NO;
+    const uint64_t tailSize = MIN(fileSize, (uint64_t)(65535 + 22));
+    const uint64_t tailOffset = fileSize - tailSize;
+    NSMutableData *tail = [NSMutableData dataWithLength:(NSUInteger)tailSize];
+    if (!CRRead(fd, tailOffset, tail.mutableBytes, tail.length, fileSize))
+        return NO;
+
+    const uint8_t *bytes = tail.bytes;
+    uint64_t directoryStart = 0;
+    uint64_t directorySize = 0;
+    BOOL sawEnd = NO;
+    for (NSInteger position = (NSInteger)tailSize - 22; position >= 0; --position) {
+        const uint8_t *eocd = bytes + position;
+        if (CR32(eocd) != 0x06054b50 ||
+            CR16(eocd + 20) != tailSize - (uint64_t)position - 22)
+            continue;
+        if (CR16(eocd + 4) != 0 || CR16(eocd + 6) != 0 ||
+            CR16(eocd + 8) == 0 || CR16(eocd + 8) != CR16(eocd + 10))
+            return NO; /* no split archives or ZIP64 EOCD yet */
+
+        directorySize = CR32(eocd + 12);
+        directoryStart = CR32(eocd + 16);
+        const uint64_t endOffset = tailOffset + (uint64_t)position;
+        if (directorySize == UINT32_MAX || directoryStart == UINT32_MAX ||
+            directoryStart > endOffset ||
+            directorySize != endOffset - directoryStart ||
+            directorySize < 46)
+            return NO;
+        sawEnd = YES;
+        break;
+    }
+    if (!sawEnd)
+        return NO;
+
+    uint8_t central[46];
+    if (!CRRead(fd, directoryStart, central, sizeof(central), fileSize) ||
+        CR32(central) != 0x02014b50)
+        return NO;
+    const uint16_t nameSize = CR16(central + 28);
+    const uint16_t extraSize = CR16(central + 30);
+    const uint16_t commentSize = CR16(central + 32);
+    if (nameSize != 10 || extraSize > 1024 ||
+        CR16(central + 34) != 0 || /* disk start */
+        CR32(central + 42) != 0 || /* first LOCAL offset */
+        (uint64_t)46 + nameSize + extraSize + commentSize > directorySize)
+        return NO;
+    uint8_t name[10];
+    if (!CRRead(fd, directoryStart + 46, name, sizeof(name), fileSize) ||
+        memcmp(name, "Info.plist", sizeof(name)) != 0)
+        return NO;
+
+    uint64_t compressed = CR32(central + 20);
+    uint64_t uncompressed = CR32(central + 24);
+    if (compressed == UINT32_MAX || uncompressed == UINT32_MAX) {
+        uint8_t extra[1024];
+        if (extraSize < 4 ||
+            !CRRead(fd, directoryStart + 46 + nameSize, extra,
+                    extraSize, fileSize))
+            return NO;
+        BOOL sizesFound = NO;
+        for (NSUInteger at = 0; at + 4 <= extraSize;) {
+            uint16_t tag = CR16(extra + at);
+            uint16_t count = CR16(extra + at + 2);
+            at += 4;
+            if (count > extraSize - at)
+                return NO;
+            if (tag == 1) {
+                NSUInteger required = (uncompressed == UINT32_MAX ? 8 : 0) +
+                                      (compressed == UINT32_MAX ? 8 : 0);
+                if (count < required)
+                    return NO;
+                NSUInteger cursor = at;
+                if (uncompressed == UINT32_MAX) {
+                    uncompressed = CR64(extra + cursor);
+                    cursor += 8;
+                }
+                if (compressed == UINT32_MAX)
+                    compressed = CR64(extra + cursor);
+                sizesFound = YES;
+                break;
+            }
+            at += count;
+        }
+        if (!sizesFound)
+            return NO;
+    }
+    if (compressed > CRCompressedInfoLimit ||
+        uncompressed > CRInfoLimit)
+        return NO;
+    found->compressed = compressed;
+    found->uncompressed = uncompressed;
+    found->crc = CR32(central + 16);
+    found->flags = CR16(central + 8);
+    found->method = CR16(central + 10);
+    return YES;
+}
+
 static NSDictionary<NSString *, id> *CRReadInfoFromFD(int fd,
                                                  NSInteger *failureStage)
 {
@@ -183,6 +300,18 @@ static NSDictionary<NSString *, id> *CRReadInfoFromFD(int fd,
         memcmp(name, "Info.plist", sizeof(name)) != 0)
         return nil;
 
+    /*
+     * In both original Crane and Python's non-seek fixture, bit 3 is set
+     * and the local ZIP64 extra stores (0, 0). Locate the first CENTRAL
+     * record for authoritative sizes; never attempt raw Deflate with the
+     * empty local placeholders.
+     */
+    if (failureStage) *failureStage = 35;
+    CRCentralInfo central = {0};
+    if (!CRReadFirstCentralInfo(fd, size, &central) ||
+        central.flags != generalFlags || central.method != method)
+        return nil;
+
     uint64_t compressed = CR32(header + 18);
     uint64_t uncompressed = CR32(header + 22);
     BOOL zip64 = compressed == UINT32_MAX || uncompressed == UINT32_MAX;
@@ -211,6 +340,19 @@ static NSDictionary<NSString *, id> *CRReadInfoFromFD(int fd,
         if (!found)
             return nil;
     }
+    /* Local size 0 is legal only for a descriptor-based entry, provided
+     * the central directory supplies bounded, nonzero actual sizes. */
+    if (generalFlags & 0x0008) {
+        if ((compressed != 0 && compressed != central.compressed) ||
+            (uncompressed != 0 && uncompressed != central.uncompressed))
+            return nil;
+    } else if (compressed != central.compressed ||
+               uncompressed != central.uncompressed ||
+               CR32(header + 14) != central.crc) {
+        return nil;
+    }
+    compressed = central.compressed;
+    uncompressed = central.uncompressed;
     if (compressed > CRCompressedInfoLimit ||
         uncompressed > CRInfoLimit ||
         compressed > size - headerBytes)
@@ -242,7 +384,8 @@ static NSDictionary<NSString *, id> *CRReadInfoFromFD(int fd,
         uint64_t descriptorUncompressed = zip64 ? CR64(descriptor + 16)
                                                 : CR32(descriptor + 12);
         if (descriptorCompressed != compressed ||
-            descriptorUncompressed != uncompressed)
+            descriptorUncompressed != uncompressed ||
+            wantedCRC != central.crc)
             return nil;
     }
     if (failureStage) *failureStage = 70;

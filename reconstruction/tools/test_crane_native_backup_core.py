@@ -70,7 +70,7 @@ class NativeCoreFixtureTests(unittest.TestCase):
                                  descriptor_offset + 28], b"PK\x03\x04")
 
     def test_bad_crc_descriptor_rejected_by_native_test_vector(self):
-        good, bad, _ = self.paths
+        good, bad = self.paths[:2]
         self.assertEqual(good.stat().st_size, bad.stat().st_size)
         with zipfile.ZipFile(bad) as zf:
             # The ZIP central directory remains valid, but the local
@@ -82,6 +82,37 @@ class NativeCoreFixtureTests(unittest.TestCase):
             self.assertNotEqual(
                 struct.unpack_from("<I", raw, local_end + 4)[0],
                 first.CRC)
+
+    def test_local_zip64_zero_sizes_resolve_to_central_actual_sizes(self):
+        raw = self.paths[0].read_bytes()
+        with zipfile.ZipFile(self.paths[0]) as zf:
+            member = zf.infolist()[0]
+            self.assertNotEqual(member.compress_size, 0)
+            self.assertNotEqual(member.file_size, 0)
+        name_size, extra_size = struct.unpack_from("<HH", raw, 26)
+        extra = raw[30 + name_size:30 + name_size + extra_size]
+        self.assertEqual(extra[:4], b"\x01\x00\x10\x00")
+        self.assertEqual(struct.unpack_from("<QQ", extra, 4), (0, 0))
+        eocd = raw.rfind(b"PK\x05\x06")
+        self.assertGreater(eocd, 0)
+        central_offset = struct.unpack_from("<I", raw, eocd + 16)[0]
+        self.assertEqual(raw[central_offset:central_offset + 4],
+                         b"PK\x01\x02")
+        central_compressed, central_uncompressed = struct.unpack_from(
+            "<II", raw, central_offset + 20)
+        self.assertEqual((central_compressed, central_uncompressed),
+                         (member.compress_size, member.file_size))
+
+    def test_tampered_central_size_and_crc_are_distinct_invalid_vectors(self):
+        good, _, _, altered_size, altered_crc = self.paths
+        baseline = good.read_bytes()
+        size_raw, crc_raw = altered_size.read_bytes(), altered_crc.read_bytes()
+        eocd = baseline.rfind(b"PK\x05\x06")
+        offset = struct.unpack_from("<I", baseline, eocd + 16)[0]
+        self.assertEqual(size_raw[offset + 20] ^ baseline[offset + 20], 1)
+        self.assertEqual(crc_raw[offset + 16] ^ baseline[offset + 16], 1)
+        self.assertEqual(len(baseline), len(size_raw))
+        self.assertEqual(len(baseline), len(crc_raw))
 
     def test_nonbinary_plist_is_readable_zip_but_invalid_info(self):
         with zipfile.ZipFile(self.paths[2]) as zf:
@@ -116,10 +147,12 @@ class NativeCoreFixtureTests(unittest.TestCase):
                 self.assertEqual(struct.unpack_from("<Q", descriptor, 16)[0],
                                  first.file_size)
 
-    def test_three_disposable_vectors_only(self):
+    def test_five_disposable_vectors_only(self):
         self.assertEqual({p.name for p in self.paths}, {
             "crane-native-valid.cranect", "crane-native-bad-crc.cranect",
             "crane-native-invalid-info.cranect",
+            "crane-native-bad-central-size.cranect",
+            "crane-native-bad-central-crc.cranect",
         })
         for path in self.paths:
             self.assertLess(path.stat().st_size, 1024 * 1024)

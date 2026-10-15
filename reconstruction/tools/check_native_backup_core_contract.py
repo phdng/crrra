@@ -38,6 +38,12 @@ for marker in (
     "pread(fd, out, remaining, (off_t)offset)",
     "memcmp(name, \"Info.plist\"", "0x04034b50",
     "CR64(extra + cursor)", "UINT32_MAX",
+    "CRReadFirstCentralInfo(fd, size, &central)",
+    "CR32(eocd) != 0x06054b50", "CR32(central) != 0x02014b50",
+    "central.flags != generalFlags", "central.method != method",
+    "compressed = central.compressed;",
+    "uncompressed = central.uncompressed;",
+    "wantedCRC != central.crc",
     "(generalFlags & ~(uint16_t)0x0808)",
     "inflateInit2(&strm, -MAX_WBITS)",
     "dataWithLength:targetSize + 1",
@@ -75,6 +81,14 @@ assert "force_zip64=True" in fixtures and "PK\\x07\\x08" in fixtures
 assert "test_zip64_local_first_info_binary_plist" in tests
 assert "test_bad_crc_descriptor_rejected_by_native_test_vector" in tests
 assert "test_valid_zip64_descriptor_and_raw_deflate_stream_complete" in tests
+assert "test_local_zip64_zero_sizes_resolve_to_central_actual_sizes" in tests
+assert "test_tampered_central_size_and_crc_are_distinct_invalid_vectors" in tests
+assert "crane-native-bad-central-size.cranect" in fixtures
+assert "crane-native-bad-central-crc.cranect" in fixtures
+assert "readSingleBackupInfoAtPath:badCentralSize" in smoke
+assert "readSingleBackupInfoAtPath:badCentralCRC" in smoke
+assert "crane-native-bad-central-size.cranect" in workflow
+assert "crane-native-bad-central-crc.cranect" in workflow
 assert "reader rejected synthetic ZIP at stage %ld" in smoke
 assert "test_original_single_local_zip64_descriptor_matches_native_contract" in tests
 assert "@unittest.skipUnless(ORIGINAL_FIXTURE.is_file()" in tests

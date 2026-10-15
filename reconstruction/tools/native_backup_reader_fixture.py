@@ -11,6 +11,7 @@ import argparse
 import io
 from pathlib import Path
 import plistlib
+import struct
 import zipfile
 
 
@@ -65,10 +66,25 @@ def create(output: Path) -> list[Path]:
         raise ValueError("ZIP data descriptor not generated")
     corrupt = bytearray(valid)
     corrupt[descriptor + 4] ^= 0x01
+    # First central Info record: sizes/CRC are genuine here, while the
+    # local ZIP64 extra carries zeroes because bit 3 is set. Test that the
+    # native reader validates the CENTRAL fields, not just the descriptor.
+    central = valid.rfind(b"PK\x05\x06")
+    if central < 0:
+        raise ValueError("missing end of central directory")
+    first_central = struct.unpack_from("<I", valid, central + 16)[0]
+    if valid[first_central:first_central + 4] != b"PK\x01\x02":
+        raise ValueError("missing first central record")
+    wrong_size = bytearray(valid)
+    wrong_size[first_central + 20] ^= 1
+    wrong_crc = bytearray(valid)
+    wrong_crc[first_central + 16] ^= 1
     variants = {
         "crane-native-valid.cranect": valid,
         "crane-native-bad-crc.cranect": bytes(corrupt),
         "crane-native-invalid-info.cranect": fixture(b"not-a-binary-property-list"),
+        "crane-native-bad-central-size.cranect": bytes(wrong_size),
+        "crane-native-bad-central-crc.cranect": bytes(wrong_crc),
     }
     written = []
     for name, data in variants.items():
