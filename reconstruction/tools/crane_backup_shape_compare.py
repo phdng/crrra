@@ -24,19 +24,14 @@ import zipfile
 from crane_backup_inspector import (
     InvalidArchive, UnsupportedArchive, MAX_PLIST_BYTES, inspect_archive,
 )
+from crane_backup_metadata import WRITABLE_FILE_ATTRIBUTES
 
 KNOWN_INFO_KEYS = frozenset({
     "applicationIdentifier", "containerIdentifier", "containerName",
     "deviceIdentifierForVendor", "originalPaths", "originalPath",
     "applicationGroups",
 })
-KNOWN_METADATA_KEYS = frozenset({
-    "NSFileBusy", "NSFileCreationDate", "NSFileExtensionHidden",
-    "NSFileGroupOwnerAccountID", "NSFileGroupOwnerAccountName",
-    "NSFileHFSCreatorCode", "NSFileHFSTypeCode", "NSFileImmutable",
-    "NSFileModificationDate", "NSFileOwnerAccountID",
-    "NSFileOwnerAccountName", "NSFilePosixPermissions",
-})
+KNOWN_METADATA_KEYS = WRITABLE_FILE_ATTRIBUTES
 MAX_CONTAINERS = 50
 
 

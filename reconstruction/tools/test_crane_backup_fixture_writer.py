@@ -96,8 +96,15 @@ class WriterTest(unittest.TestCase):
             self.assertIn(f"{GROUP}/Nested/member.bin", zf.namelist())
             attrs = plistlib.loads(zf.read("Metadata.plist"))
             self.assertIn(f"{APP}/Library/Preferences/settings.plist", attrs)
-            self.assertIn("NSFilePosixPermissions",
-                          attrs[f"{APP}/Library/Preferences/settings.plist"])
+            target_attributes = attrs[f"{APP}/Library/Preferences/settings.plist"]
+            self.assertIn("NSFilePosixPermissions", target_attributes)
+            self.assertIn("NSFileModificationDate", target_attributes)
+            self.assertIsNone(target_attributes["NSFileModificationDate"].tzinfo)
+            self.assertNotIn("NSFileSize", target_attributes)
+            self.assertNotIn("NSFileReferenceCount", target_attributes)
+            self.assertEqual(target_attributes["NSFilePosixPermissions"],
+                             stat.S_IMODE((self.root / "one" / "app" / "Library" /
+                                  "Preferences" / "settings.plist").stat().st_mode))
 
     def test_multi_root_index_and_roundtrip(self):
         second = container(OTHER_APP, CID2, "two")

@@ -136,8 +136,7 @@ class ComparatorTest(unittest.TestCase):
         target = self.root / "output/candidate.cranect"
         with zipfile.ZipFile(target) as zf:
             original = plistlib.loads(zf.read("Metadata.plist"))
-        original[next(iter(original))]["NSFileModificationDate"] = (
-            "2026-10-15")
+        original[next(iter(original))]["NSFileImmutable"] = True
         replace_members(target, {"Metadata.plist": plistlib.dumps(
             original, fmt=plistlib.FMT_BINARY)})
         result = compare_archives(self.root / "output/reference.cranect", target)

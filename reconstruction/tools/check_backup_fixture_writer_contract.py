@@ -36,7 +36,12 @@ assert "containerIdentifier" in text and "applicationIdentifier" in text
 assert 'f"{container[\'applicationIdentifier\']}/"' in text
 assert 'f"{container[\'containerIdentifier\']}/"' in text
 assert "FMT_BINARY" in text and "containedContainers" in text
-assert "NSFilePosixPermissions" in text
+assert "from crane_backup_metadata import attributes_available_from_stat" in text
+assert "attributes_available_from_stat(" in text
+metadata_source = (tools / "crane_backup_metadata.py").read_text(encoding="utf-8")
+assert '"NSFilePosixPermissions"' in metadata_source
+assert '"NSFileModificationDate"' in metadata_source
+assert "filter_writable_file_attributes" in metadata_source
 assert "os.link(staging, target)" in text
 assert "staging.unlink()" in text
 assert "inspect_archive(staging, verify_payload=True)" in text

@@ -21,6 +21,7 @@ from crane_backup_inspector import (
     InvalidArchive, UnsupportedArchive, _safe_id, _safe_member_name,
     _safe_original_path, inspect_archive,
 )
+from crane_backup_metadata import attributes_available_from_stat
 
 MARKER = ".crane-disposable-fixture"
 MARKER_CONTENT = b"CRANE_DISPOSABLE_FIXTURE_V1\n"
@@ -172,9 +173,10 @@ def _scan_sources(root: Path, containers: list[dict], multi: bool):
             while pending:
                 source, relative = pending.pop()
                 source = _verify_regular(root, source.relative_to(root), True)
-                mode = source.lstat().st_mode
-                attributes[relative] = {"NSFilePosixPermissions":
-                                        stat.S_IMODE(mode)}
+                # Original 0x24948 applies CRPBackupContainer's twelve-key
+                # writable filter to NSFileManager attributes for each item.
+                attributes[relative] = attributes_available_from_stat(
+                    source.lstat())
                 add(prefix + relative + "/", None, 0)
                 children = sorted(os.scandir(source), key=lambda e: e.name,
                                   reverse=True)
@@ -192,8 +194,8 @@ def _scan_sources(root: Path, containers: list[dict], multi: bool):
                                 "hardlink is not accepted in fixture data")
                         size = child.stat(follow_symlinks=False).st_size
                         _ensure(size <= MAX_FILE_SIZE, "fixture file too large")
-                        attributes[child_relative] = {
-                            "NSFilePosixPermissions": stat.S_IMODE(mode)}
+                        attributes[child_relative] = attributes_available_from_stat(
+                            child_path.lstat())
                         add(prefix + child_relative, child_path, size)
                     else:
                         raise FixtureError("nonregular fixture object")

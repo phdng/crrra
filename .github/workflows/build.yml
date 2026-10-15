@@ -166,6 +166,12 @@ jobs:
       - name: Smoke-test synthetic Crane backup writer and inspector roundtrip
         run: python3 -m unittest discover -s reconstruction/tools -p test_crane_backup_fixture_writer.py -v
 
+      - name: Verify original Crane writable filesystem metadata allowlist
+        run: python3 reconstruction/tools/check_backup_metadata_contract.py
+
+      - name: Test offline backup metadata projection and plist dates
+        run: python3 -m unittest discover -s reconstruction/tools -p test_crane_backup_metadata.py -v
+
       - name: Verify redacted Crane backup shape comparison contract
         run: python3 reconstruction/tools/check_backup_shape_compare_contract.py
 

@@ -231,4 +231,24 @@ python3 reconstruction/tools/crane_backup_shape_compare.py \
 - **Kiểm thử:** 11 ca tổng hợp trong `test_crane_backup_shape_compare.py` (single/multi, XML/binary, metadata, compression, Keychain presence, trường hợp path nhạy cảm, invalid archive, giữ nguyên file nguồn). Contract `check_backup_shape_compare_contract.py` và hai CI steps mới khóa công cụ ở chế độ chỉ đọc.
 - **Tồn đọng:** workspace chưa có ZIP gốc từ Crane trên disposable app, nên hiện chỉ thử nghiệm bằng fixture tổng hợp. Cần cặp archive thật và synthetic cùng điều kiện đầu vào trước khi so kết quả và xác định chi tiết cần sửa ở writer.
 
+## 11. G-11 giai đoạn B2 — metadata theo 12 thuộc tính gốc (2026-10-15)
+
+Đã đối chiếu trực tiếp bản decompile:
+
+- `+[CRPBackupContainer allWritableFileAttributes]` **0x2301C** liệt kê 12 khóa: `NSFileBusy`, `NSFileCreationDate`, `NSFileExtensionHidden`, `NSFileGroupOwnerAccountID`, `NSFileGroupOwnerAccountName`, `NSFileHFSCreatorCode`, `NSFileHFSTypeCode`, `NSFileImmutable`, `NSFileModificationDate`, `NSFileOwnerAccountID`, `NSFileOwnerAccountName`, `NSFilePosixPermissions`.
+- `+[CRPBackupContainer attributeDictionaryWithNonWritableAttributesFilteredOut:]` **0x23124** và block **0x23238** chỉ giữ những khóa nằm trong tập hợp trên. `-[CRPRestoreOperation restoreMetadataOfContainer:]` **0x2A848** dùng lại allowlist khi apply metadata. Không phải mọi archive sẽ có đầy đủ 12 khóa.
+
+**Đã triển khai (offline, chỉ fixture):** module `tools/crane_backup_metadata.py` chứa danh sách 12 khóa có thứ tự bất kỳ dưới dạng `frozenset` và hàm `filter_writable_file_attributes`. Module này cung cấp `attributes_available_from_stat` cho writer **chỉ nhận thuộc tính có chứng cứ từ filesystem thử nghiệm**:
+
+- `NSFilePosixPermissions` từ `st_mode`, `NSFileModificationDate` từ `st_mtime` dưới dạng `NSDate` trong binary plist (UTC, độ phân giải giây).
+- `NSFileCreationDate` **chỉ nếu hệ điều hành có `st_birthtime`**. Không tự diễn giải POSIX `st_ctime` thành ngày tạo vì trên Linux đây là ngày inode thay đổi.
+- `NSFileOwnerAccountID`/`NSFileGroupOwnerAccountID` chỉ lấy nếu OS cung cấp UID/GID số nguyên hợp lệ. Đây là identity **của máy tạo fixture**, **không phải UID/GID phù hợp để khôi phục trên iOS**.
+- Các flag HFS, owner/group account name, busy, hidden, immutable không thể suy ra tin cậy từ thông tin portable `stat` nên không giả lập. Hàm filter giữ đúng 12 thuộc tính gốc nếu đã có giá trị hợp lệ từ nguồn ngoài (cần kiểm tra plist serialization riêng).
+
+**Điểm kỹ thuật đã kiểm chứng:** Python `plistlib` mặc định yêu cầu datetime UTC **naive** cho binary plist; lưu timezone-aware datetime khiến `TypeError`. Hàm `_date_if_representable` chuyển về UTC rồi loại `tzinfo` và microseconds trước khi ghi; bộ fixture test xác minh round-trip binary plist.
+
+**Test/CI:** `test_crane_backup_metadata.py` có 8 test (exact allowlist, filter chống khóa không được phép, UTC/creation vs ctime, UID/GID, plist, invalid date), thêm kiểm tra integration writer và cập nhật bài test comparator do `NSFileModificationDate` nay có sẵn; `check_backup_metadata_contract.py` đối chiếu hàm gốc khi có IDA export và giữ UI fail-closed. Hai CI steps kiểm tra metadata và smoke test.
+
+**Giới hạn:** điều này không chứng minh file ZIP tạo từ fixture tương thích thực tế với Crane gốc. Chưa có `.cranect/.cranebk` xuất từ app thử nghiệm Crane gốc; không can thiệp Keychain, không khôi phục metadata vào filesystem, không nối Backup/Restore trên iPhone.
+
 **Nguồn kiểm toán tại workspace:** `analysis/objc_classes.json`, bản decompile `0x20E64`, `0x211A8`, `0x2614C`, `0x2619C`, `0x25A8C`, `0x24CF8`, `0x257AC`, `0x29504`, `0x2B9B0`, `0x2ADA0`, `0x2B31C`, và các helpers/blocks chỉ rõ trong mục 2-3; đối chiếu với `sources/prefs/CRPreferences.m`, `sources/libcrane/CRManager.m`, `sources/cranehelperd/CRHelperd.m`.
