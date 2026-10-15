@@ -28,6 +28,7 @@
 #import "CRPaths.h"
 #import "CRPreferences.h"
 #import "CRGameCenterAccounts.h"
+#import "CRRootSettingsProjection.h"
 #import "CRCommon.h"
 #import "CRChoicyEditor.h"
 
@@ -87,6 +88,9 @@
 
 @interface CRPRootListController : PSListController
 @property (nonatomic, strong) NSArray *craneRootSpecifiers;
+@property (nonatomic, strong) NSArray *craneAllRootSpecifiers;
+@property (nonatomic, assign) BOOL craneRootReloadScheduled;
+- (void)scheduleRootSettingsReload;
 @end
 
 @implementation CRPRootListController
@@ -108,7 +112,7 @@
 {
     /* Explicit loading is required: NSPrincipalClass alone does not load
      * Root.plist and Settings otherwise displays an empty pane. */
-    if (!self.craneRootSpecifiers) {
+    if (!self.craneAllRootSpecifiers) {
         NSBundle *bundle = [NSBundle bundleForClass:[self class]];
         NSLog(@"CranePrefs: root controller loaded; bundle=%@; Root.plist=%@",
               bundle.bundlePath, [bundle pathForResource:@"Root" ofType:@"plist"]);
@@ -159,21 +163,88 @@
             [rootRows replaceObjectsInRange:NSMakeRange(markerIndex, 1)
                        withObjectsFromArray:suggestions];
         }
-        self.craneRootSpecifiers = rootRows;
-        /* Avoid a direct _specifiers ivar reference: the private framework's
-         * ivar-offset symbol is not exported by the SDK linker stub. KVC
-         * resolves the ivar in the installed Preferences.framework at runtime. */
-        @try {
-            [self setValue:self.craneRootSpecifiers forKey:@"_specifiers"];
-        } @catch (NSException *exception) {
-            NSLog(@"CranePrefs: unable to install table specifiers: %@", exception);
-        }
-        NSLog(@"CranePrefs: root specifier count=%lu",
-              (unsigned long)self.craneRootSpecifiers.count);
+        /* Retain full source order so toggling a parent can restore hidden children. */
+        self.craneAllRootSpecifiers = [rootRows copy];
+    }
+    if (!self.craneRootSpecifiers) {
+        /* 0x20828: project persisted switches to their nested rows. */
+        self.craneRootSpecifiers = CRRootVisibleNestedItems(
+            self.craneAllRootSpecifiers,
+            ^id(id item) { return [item propertyForKey:@"nestedEntryCount"]; },
+            ^BOOL(id item) { return [[self readPreferenceValue:item] boolValue]; });
+        NSLog(@"CranePrefs: visible Root specifiers=%lu of %lu",
+              (unsigned long)self.craneRootSpecifiers.count,
+              (unsigned long)self.craneAllRootSpecifiers.count);
     }
     @try { [self setValue:self.craneRootSpecifiers forKey:@"_specifiers"]; }
-    @catch (NSException *exception) { NSLog(@"CranePrefs: root backing refresh failed: %@", exception); }
+    @catch (NSException *exception) {
+        NSLog(@"CranePrefs: root backing refresh failed: %@", exception);
+    }
     return self.craneRootSpecifiers;
+}
+
+/* Original 0x2074C reads CraneManager's global preference, falling
+ * back to the Root.plist default only when the value is absent. */
+- (id)readPreferenceValue:(id)specifier
+{
+    NSString *key = [specifier propertyForKey:@"key"];
+    if (![key isKindOfClass:NSString.class] || !key.length)
+        return [specifier propertyForKey:@"default"];
+    id stored = [CraneManager.sharedManager preferenceValueForKey:key];
+    return stored ?: [specifier propertyForKey:@"default"];
+}
+
+/* Native 0x20BCC saves through the global manager. Source keys are restricted
+ * to the eight known Root.plist switches, never an arbitrary PSSpecifier key. */
+- (void)setPreferenceValue:(id)value specifier:(id)specifier
+{
+    NSString *key = [specifier propertyForKey:@"key"];
+    if (![key isKindOfClass:NSString.class] ||
+        ![value respondsToSelector:@selector(boolValue)] ||
+        ![@[CRPref_AppShortcutEnabled, CRPref_LaunchAppOnContainerSelection,
+             CRPref_ExpandContainersShortcut, CRPref_NewContainerShortcut,
+             CRPref_OnlyShowIfContainersExist, CRPref_ShowContainerNotificationBadges,
+             CRPref_NotificationsSupportEnabled, CRPref_ShowContainerInTitle]
+          containsObject:key])
+        return;
+    BOOL enabled = [value boolValue];
+    BOOL oldEnabled = [[self readPreferenceValue:specifier] boolValue];
+    if (enabled == oldEnabled)
+        return;
+
+    [CraneManager.sharedManager setPreferenceValue:@(enabled) forKey:key];
+    if ([specifier propertyForKey:@"nestedEntryCount"])
+        [self scheduleRootSettingsReload];
+}
+
+/* Updating a Settings table during a switch callback can invalidate private
+ * Preferences.framework row indexes. Reproject after that callback returns. */
+- (void)scheduleRootSettingsReload
+{
+    if (!NSThread.isMainThread) {
+        dispatch_async(dispatch_get_main_queue(), ^{
+            [self scheduleRootSettingsReload];
+        });
+        return;
+    }
+    if (self.craneRootReloadScheduled)
+        return;
+    self.craneRootReloadScheduled = YES;
+    dispatch_async(dispatch_get_main_queue(), ^{
+        self.craneRootReloadScheduled = NO;
+        self.craneRootSpecifiers = nil;
+        @try { [self setValue:nil forKey:@"_specifiers"]; }
+        @catch (__unused NSException *exception) {}
+        [self reloadSpecifiers];
+    });
+}
+
+/* The original 0x20DE8 additionally asks registered apps to refresh
+ * notification state, recovered as 0x2220C. Keep filesystem/daemon effects
+ * separate until the app-side notification hook is verified on-device. */
+- (void)setNotificationsSupportEnabled:(id)value specifier:(id)specifier
+{
+    [self setPreferenceValue:value specifier:specifier];
 }
 
 /* Native 0x1FE80: tap the info accessory for the matching alert. */

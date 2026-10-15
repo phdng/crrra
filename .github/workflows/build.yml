@@ -148,6 +148,9 @@ jobs:
       - name: Verify original Root Suggestions provider and info cells
         run: python3 reconstruction/tools/check_root_suggestions_contract.py
 
+      - name: Verify Root Settings nested preferences
+        run: python3 reconstruction/tools/check_root_settings_contract.py
+
       - name: Verify optional Choicy integration (tracked native evidence)
         run: CRANE_CHOICY_SKIP_NATIVE_EXPORT=1 python3 reconstruction/tools/check_choicy_integration_contract.py
 
@@ -206,6 +209,15 @@ jobs:
             -framework Foundation \
             -o xpc_protocol_metadata_smoke
           ./xpc_protocol_metadata_smoke 2>&1 | tee xpc_protocol_metadata_smoke.log
+
+      - name: Smoke-test Root Settings nested visibility
+        working-directory: reconstruction
+        run: |
+          set -euo pipefail
+          clang -fobjc-arc -fblocks -Wall -Wextra -Werror \
+            -I sources/common tools/root_settings_projection_smoke.m \
+            -framework Foundation -o root_settings_projection_smoke
+          ./root_settings_projection_smoke 2>&1 | tee root_settings_projection_smoke.log
 
       - name: Smoke-test container scaffold and shortcut defaults
         working-directory: reconstruction
