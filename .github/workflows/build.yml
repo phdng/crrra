@@ -178,6 +178,12 @@ jobs:
       - name: Test offline original-vs-candidate ZIP shape reporting
         run: python3 -m unittest discover -s reconstruction/tools -p test_crane_backup_shape_compare.py -v
 
+      - name: Verify read-only Crane restore mapping preflight safety
+        run: python3 reconstruction/tools/check_restore_preflight_contract.py
+
+      - name: Test Crane restore preflight on synthetic archive inventories
+        run: python3 -m unittest discover -s reconstruction/tools -p test_crane_restore_preflight.py -v
+
       - name: Verify optional Choicy integration (tracked native evidence)
         run: CRANE_CHOICY_SKIP_NATIVE_EXPORT=1 python3 reconstruction/tools/check_choicy_integration_contract.py
 

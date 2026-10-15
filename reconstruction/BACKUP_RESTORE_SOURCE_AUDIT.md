@@ -251,4 +251,48 @@ python3 reconstruction/tools/crane_backup_shape_compare.py \
 
 **Giới hạn:** điều này không chứng minh file ZIP tạo từ fixture tương thích thực tế với Crane gốc. Chưa có `.cranect/.cranebk` xuất từ app thử nghiệm Crane gốc; không can thiệp Keychain, không khôi phục metadata vào filesystem, không nối Backup/Restore trên iPhone.
 
+## 12. G-11 — Restore preflight mapping (offline, no restore, 2026-10-15)
+
+**Mã gốc đã xác minh:** `CRPRestoreOperation determineBackupsToRestore` 0x29A84 (multi người dùng chọn mapping qua event 2; single target tường minh), `handleAppIdentifierCheck` 0x29CAC (single backup appID phải trùng target), `handleGroupIdentifierCheck` 0x2A298 + block 0x2A7CC (mỗi associated ID gốc phải có trong tập DEFAULT, nếu không yêu cầu người dùng xác nhận event 3), `updatePathsOfContainer` 0x2B31C (thay các phần đường dẫn), `restoreBackupContainer` 0x2ADA0 (wipe trước move — NGUY HIỂM khi chưa có rollback).
+
+**Đã triển khai `reconstruction/tools/crane_restore_preflight.py`:** kiểm tra đầu vào ZIP bằng read-only `inspect_archive`, đọc có giới hạn đúng `Info.plist` từng container, nhận JSON inventory **do người chạy tự tạo**, không tra cứu thiết bị, không nhập đường dẫn đích, không giải nén/copy/xóa/chmod/chown/move bất cứ thứ gì. Có thể chọn subset nguồn trong multi nhưng mỗi source và mỗi target chỉ dùng một lần. Single buộc một ánh xạ. Cả multi cũng chặn appID mismatch để chặt hơn nhánh single của mã gốc.
+
+**Mẫu inventory chỉ chứa danh sách định danh (không có path):**
+
+```json
+{
+  "freeBytes": 1000000000,
+  "targets": [{
+    "applicationIdentifier": "com.example.fixture",
+    "containerIdentifier": "TARGET-1",
+    "defaultAssociatedIdentifiers": ["com.example.fixture", "group.com.example.fixture"],
+    "targetAssociatedIdentifiers": ["com.example.fixture", "group.com.example.fixture"],
+    "active": false,
+    "existingData": false
+  }],
+  "mappings": [{
+    "sourceApplicationIdentifier": "com.example.fixture",
+    "sourceContainerIdentifier": "SOURCE-1",
+    "targetApplicationIdentifier": "com.example.fixture",
+    "targetContainerIdentifier": "TARGET-1"
+  }]
+}
+```
+
+Trong thực tế `sourceContainerIdentifier` phải khớp archive; `defaultAssociatedIdentifiers` là ảnh chụp TEST inventory của ứng dụng DEFAULT và **không được tự suy từ danh sách backup**. JSON này không xác thực ứng dụng/đường dẫn trên iPhone. `freeBytes` chỉ là số khai báo giả định, **không phải kiểm tra dung lượng thật**; công cụ so sơ bộ với `ceil(1.2 * archive_size)` từ luồng gốc 0x28FE0.
+
+```sh
+python3 reconstruction/tools/crane_restore_preflight.py \
+  --archive /path/to/disposable.cranect \
+  --inventory /path/to/test-inventory.json
+```
+
+**Phân loại lý do an toàn:** `application_identifier_mismatch`, `associated_identifier_confirmation_required`, `target_associated_identifier_unavailable`, `target_active_reload_unverified`, `overwrite_requires_snapshot_and_rollback`, `keychain_restore_backend_unavailable`, `free_space_unknown`, `insufficient_estimated_free_space`. Không xuất bundle ID, container ID, group ID hay đường dẫn trong báo cáo JSON. Input hỏng được trả mã lỗi chung tránh lộ tên file/giá trị.
+
+**Kết quả:** exit 0 `preflight_advisory_only` khi không có cảnh báo từ dữ liệu TEST; exit 1 `preflight_blocked` khi có lý do chặn; exit 2 `preflight_unavailable_or_invalid` khi inventory/backup sai. **Ở MỌI KẾT QUẢ `restore_executable:false`, `original_compatibility_proven:false`, `inventory_verified_against_device:false`, `free_space_verified_on_device:false`, `rollback_implemented:false`, `wrote_files:false`, `extracted:false`, `keychain_contents_read:false`.** Nhánh preflight thành công không cấp quyền thực thi restore.
+
+**Fixture/CI:** `test_crane_restore_preflight.py` tạo ZIP giả lập bằng writer fixture, có các tình huống single/multi, chỉ chọn một phần multi, app/group mismatch, target active/existing data, thiếu dung lượng, trùng mapping, Keychain presence, inventory hỏng và che thông tin. `check_restore_preflight_contract.py` khóa nguồn ở chế độ đọc, đối chiếu original selectors/block khi có decompile và giữ Root Settings hành vi fail-closed; hai bước đã thêm trong `.github/workflows/build.yml`.
+
+**Vẫn chưa giải quyết:** không có archive gốc thực tế trên disposable app, chưa có backend Keychain, không có snapshot/staging transaction/rollback, chưa xác minh live inventory hoặc tiền kiểm target filesystem, chưa có runtime prefs/controller. **Không được nối planner này vào `CRManager wipe`** hay mở tính năng Restore trước khi các điều kiện đó hoàn thành.
+
 **Nguồn kiểm toán tại workspace:** `analysis/objc_classes.json`, bản decompile `0x20E64`, `0x211A8`, `0x2614C`, `0x2619C`, `0x25A8C`, `0x24CF8`, `0x257AC`, `0x29504`, `0x2B9B0`, `0x2ADA0`, `0x2B31C`, và các helpers/blocks chỉ rõ trong mục 2-3; đối chiếu với `sources/prefs/CRPreferences.m`, `sources/libcrane/CRManager.m`, `sources/cranehelperd/CRHelperd.m`.
