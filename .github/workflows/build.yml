@@ -208,6 +208,12 @@ jobs:
       - name: Test synthetic ZIP64 local-Info native reader inputs
         run: python3 -m unittest discover -s reconstruction/tools -p test_crane_native_backup_core.py -v
 
+      - name: Verify native read-only full ZIP structural survey safety contract
+        run: python3 reconstruction/tools/check_native_backup_survey_contract.py
+
+      - name: Test synthetic malformed archive headers for native ZIP survey
+        run: python3 -m unittest discover -s reconstruction/tools -p test_crane_native_backup_survey.py -v
+
       - name: Verify read-only Crane restore mapping preflight safety
         run: python3 reconstruction/tools/check_restore_preflight_contract.py
 
@@ -308,6 +314,27 @@ jobs:
             "$RUNNER_TEMP/crane-native-invalid-info.cranect" \
             "$RUNNER_TEMP/crane-native-bad-central-size.cranect" \
             "$RUNNER_TEMP/crane-native-bad-central-crc.cranect"
+
+      - name: Smoke-test native Crane read-only ZIP central/local survey
+        working-directory: reconstruction
+        run: |
+          set -euo pipefail
+          python3 tools/native_backup_survey_fixture.py --output-dir "$RUNNER_TEMP"
+          clang -fobjc-arc -fblocks -Wall -Wextra -Werror \
+            -I sources/prefs \
+            sources/prefs/CRBackupArchiveSurvey.m tools/native_backup_survey_smoke.m \
+            -framework Foundation \
+            -o "$RUNNER_TEMP/native_backup_survey_smoke"
+          "$RUNNER_TEMP/native_backup_survey_smoke" \
+            "$RUNNER_TEMP/crane-survey-valid.cranect" \
+            "$RUNNER_TEMP/crane-survey-traversal.cranect" \
+            "$RUNNER_TEMP/crane-survey-duplicate.cranect" \
+            "$RUNNER_TEMP/crane-survey-symlink.cranect" \
+            "$RUNNER_TEMP/crane-survey-missing-meta.cranect" \
+            "$RUNNER_TEMP/crane-survey-local-mismatch.cranect" \
+            "$RUNNER_TEMP/crane-survey-central-mismatch.cranect" \
+            "$RUNNER_TEMP/crane-survey-descriptor-mismatch.cranect" \
+            "$RUNNER_TEMP/crane-survey-keychain-shape.cranect"
 
       - name: Smoke-test Clang XPC protocol metadata with Foundation
         working-directory: reconstruction
