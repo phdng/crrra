@@ -232,6 +232,12 @@ jobs:
       - name: Test N5 read-only source-map preflight regression
         run: python3 -m unittest discover -s reconstruction/tools -p test_crane_native_source_preflight.py -v
 
+      - name: Verify N6 read-only CraneManager bridge contract
+        run: python3 reconstruction/tools/check_native_manager_bridge_contract.py
+
+      - name: Test N6 native CraneManager bridge safety regression
+        run: python3 -m unittest discover -s reconstruction/tools -p test_crane_native_manager_bridge.py -v
+
       - name: Verify native disposable ZIP writer contract
         run: python3 reconstruction/tools/check_native_backup_writer_contract.py
 
@@ -424,6 +430,19 @@ jobs:
             -framework Foundation \
             -o "$RUNNER_TEMP/native_backup_source_preflight_smoke"
           "$RUNNER_TEMP/native_backup_source_preflight_smoke"
+
+      - name: Smoke-test real CraneManager adapter with disposable mock registry
+        working-directory: reconstruction
+        run: |
+          set -euo pipefail
+          clang -fobjc-arc -fblocks -Wall -Wextra -Werror \
+            -I sources/prefs -I sources/common \
+            sources/prefs/CRBackupNativeSourcePreflight.m \
+            sources/prefs/CRBackupNativeManagerPreflight.m \
+            tools/native_backup_manager_bridge_smoke.m \
+            -framework Foundation \
+            -o "$RUNNER_TEMP/native_backup_manager_bridge_smoke"
+          "$RUNNER_TEMP/native_backup_manager_bridge_smoke"
 
       - name: Smoke-test Clang XPC protocol metadata with Foundation
         working-directory: reconstruction
