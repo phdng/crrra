@@ -214,6 +214,12 @@ jobs:
       - name: Test synthetic malformed archive headers for native ZIP survey
         run: python3 -m unittest discover -s reconstruction/tools -p test_crane_native_backup_survey.py -v
 
+      - name: Verify non-Keychain native ZIP CRC safety contract
+        run: python3 reconstruction/tools/check_native_backup_crc_contract.py
+
+      - name: Test native CRC fixture data and tamper cases
+        run: python3 -m unittest discover -s reconstruction/tools -p test_crane_native_crc_verification.py -v
+
       - name: Verify native disposable ZIP writer contract
         run: python3 reconstruction/tools/check_native_backup_writer_contract.py
 
@@ -329,7 +335,7 @@ jobs:
           clang -fobjc-arc -fblocks -Wall -Wextra -Werror \
             -I sources/prefs \
             sources/prefs/CRBackupArchiveSurvey.m tools/native_backup_survey_smoke.m \
-            -framework Foundation \
+            -framework Foundation -lz \
             -o "$RUNNER_TEMP/native_backup_survey_smoke"
           "$RUNNER_TEMP/native_backup_survey_smoke" \
             "$RUNNER_TEMP/crane-survey-valid.cranect" \
@@ -341,6 +347,26 @@ jobs:
             "$RUNNER_TEMP/crane-survey-central-mismatch.cranect" \
             "$RUNNER_TEMP/crane-survey-descriptor-mismatch.cranect" \
             "$RUNNER_TEMP/crane-survey-keychain-shape.cranect"
+
+      - name: Smoke-test bounded non-Keychain native CRC with tampered payloads
+        working-directory: reconstruction
+        run: |
+          set -euo pipefail
+          N3_FIXTURES="$RUNNER_TEMP/crane-n3-fixtures"
+          mkdir -p "$N3_FIXTURES"
+          python3 tools/native_backup_survey_fixture.py --output-dir "$N3_FIXTURES"
+          clang -fobjc-arc -fblocks -Wall -Wextra -Werror \
+            -I sources/prefs \
+            sources/prefs/CRBackupArchiveSurvey.m tools/native_backup_crc_smoke.m \
+            -framework Foundation -lz \
+            -o "$RUNNER_TEMP/native_backup_crc_smoke"
+          "$RUNNER_TEMP/native_backup_crc_smoke" \
+            "$N3_FIXTURES/crane-survey-valid.cranect" \
+            "$N3_FIXTURES/crane-survey-payload-corrupt.cranect" \
+            "$N3_FIXTURES/crane-survey-keychain-shape.cranect" \
+            "$N3_FIXTURES/crane-survey-keychain-corrupt.cranect" \
+            "$N3_FIXTURES/crane-survey-large-payload.cranect" \
+            "$N3_FIXTURES/crane-survey-stored-payload.cranect"
 
       - name: Smoke-test native disposable single ZIP64 writer with N0 N1 and full dummy CRC
         working-directory: reconstruction

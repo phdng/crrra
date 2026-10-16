@@ -42,10 +42,12 @@ for blocked in (
     "writeToFile:", "writestr", "extractall", "ZipArchive", "SecItemCopyMatching",
     "SecItemAdd", "SecItemDelete", "CraneManager", "opainject",
     "removeItemAtPath", "moveItemAtPath", "createFileAtPath",
-    "inflate(", "crc32(", "NSLog(",
+    "NSLog(",
 ):
     assert blocked not in source, blocked
 assert "report.count == 10" in smoke
+assert "SSurvey(fd, NO)" in source  # N1 remains header-only
+assert "SSurvey(fd, YES)" in source  # N3 separate explicit CRC API
 assert "crane-survey-keychain-shape.cranect" in fixture
 assert "crane-survey-descriptor-mismatch.cranect" in fixture
 assert "test_keychain_only_presence_not_contents" in tests

@@ -93,6 +93,15 @@ int main(void)
               ![survey[@"restoreExecutable"] boolValue],
               @"N1 must report structure only");
 
+        NSDictionary *nonKeychainCRC = [CRBackupArchiveSurvey
+            verifyNonKeychainPayloadAtPath:archive error:&error];
+        Check(nonKeychainCRC && !error &&
+              [nonKeychainCRC[@"nonKeychainPayloadCRCVerified"] boolValue] &&
+              [nonKeychainCRC[@"payloadCRCVerified"] boolValue] &&
+              [nonKeychainCRC[@"verifiedNonKeychainMembers"] integerValue] == 5 &&
+              ![nonKeychainCRC[@"restoreExecutable"] boolValue],
+              @"N3 must stream and CRC-check every dummy entry");
+
         NSData *before = [NSData dataWithContentsOfFile:archive];
         error = nil;
         Check(![CRBackupNativeFixtureWriter writeDisposableSingleAtRoot:root

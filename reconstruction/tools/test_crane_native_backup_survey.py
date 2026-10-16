@@ -29,8 +29,8 @@ class NativeSurveyFixtureTest(unittest.TestCase):
             self.assertEqual(sum(x.filename == "Keychain.plist"
                                  for x in zf.infolist()), 0)
 
-    def test_all_nine_named_vectors_are_temporary(self):
-        self.assertEqual(len(self.paths), 9)
+    def test_all_thirteen_named_vectors_are_temporary(self):
+        self.assertEqual(len(self.paths), 13)
         self.assertEqual({p.name for p in self.paths}, {
             "crane-survey-valid.cranect", "crane-survey-traversal.cranect",
             "crane-survey-duplicate.cranect", "crane-survey-symlink.cranect",
@@ -39,6 +39,10 @@ class NativeSurveyFixtureTest(unittest.TestCase):
             "crane-survey-central-mismatch.cranect",
             "crane-survey-descriptor-mismatch.cranect",
             "crane-survey-keychain-shape.cranect",
+            "crane-survey-payload-corrupt.cranect",
+            "crane-survey-keychain-corrupt.cranect",
+            "crane-survey-large-payload.cranect",
+            "crane-survey-stored-payload.cranect",
         })
         self.assertTrue(all(p.stat().st_size < 16384 for p in self.paths))
 

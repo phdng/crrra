@@ -1,8 +1,9 @@
 /*
  * G-11 N1: original single .cranect ZIP structural survey, read-only.
  * Verifies central/local headers, bounded member names, ZIP64 sizes,
- * descriptor CRC/size agreement and safe path topology WITHOUT OPENING
- * any app payload or Keychain contents. Not a full CRC or Restore check.
+ * descriptor CRC/size agreement and safe path topology. N1 reads headers
+ * only; N3 streams ordinary payload bytes to verify actual CRC32 but NEVER
+ * reads Keychain contents. Neither API authorizes Restore.
  */
 #import "CRBackupArchiveSurvey.h"
 #import <errno.h>
@@ -11,6 +12,7 @@
 #import <string.h>
 #import <sys/stat.h>
 #import <unistd.h>
+#import <zlib.h>
 
 static NSString * const CRSurveyErrorDomain = @"com.crane.backup.archive.survey";
 static const uint64_t CRSurveyArchiveLimit = 512ULL * 1024 * 1024;
@@ -88,7 +90,82 @@ static BOOL SZIP64(const uint8_t *extra, NSUInteger length,
     return NO;
 }
 
-static NSDictionary<NSString *, id> *SSurvey(int fd)
+/*
+ * N3 streaming CRC32 for ONE already-bounded, structurally checked ZIP
+ * entry. Fixed 32KiB input/output buffers, no extracted paths or writes.
+ * Enforces central-directory claimed uncompressed byte count EXACTLY and
+ * rejects trailing compressed bytes or a prematurely ended Deflate stream.
+ */
+static BOOL SVerifyEntryCRC(int fd, uint64_t body, uint64_t compressed,
+                            uint64_t uncompressed, uint16_t method,
+                            uint32_t expectedCRC, uint64_t archiveSize)
+{
+    uint8_t input[32768], output[32768];
+    uint64_t consumed = 0, produced = 0;
+    uLong crc = crc32(0L, Z_NULL, 0);
+    if (method == 0) {
+        if (compressed != uncompressed)
+            return NO;
+        while (consumed < compressed) {
+            size_t count = (size_t)MIN((uint64_t)sizeof(input), compressed-consumed);
+            if (!SRead(fd, body+consumed, input, count, archiveSize))
+                return NO;
+            crc = crc32(crc, input, (uInt)count);
+            consumed += count;
+        }
+        return (uint32_t)crc == expectedCRC;
+    }
+    if (method != 8)
+        return NO;
+
+    z_stream stream = {0};
+    if (inflateInit2(&stream, -MAX_WBITS) != Z_OK)
+        return NO;
+    BOOL ok = YES, ended = NO;
+    while (consumed < compressed && !ended) {
+        size_t count = (size_t)MIN((uint64_t)sizeof(input), compressed-consumed);
+        if (!SRead(fd, body+consumed, input, count, archiveSize)) {
+            ok = NO;
+            break;
+        }
+        consumed += count;
+        stream.next_in = input;
+        stream.avail_in = (uInt)count;
+        do {
+            uInt oldInput = stream.avail_in;
+            stream.next_out = output;
+            stream.avail_out = (uInt)sizeof(output);
+            int status = inflate(&stream, Z_NO_FLUSH);
+            size_t got = sizeof(output) - stream.avail_out;
+            if (got > uncompressed-produced) {
+                ok = NO; /* archive expands beyond its declared size */
+                break;
+            }
+            if (got) {
+                crc = crc32(crc, output, (uInt)got);
+                produced += got;
+            }
+            if (status == Z_STREAM_END) {
+                ended = YES;
+                if (stream.avail_in != 0 || consumed != compressed)
+                    ok = NO; /* trailing stream or extra bytes */
+                break;
+            }
+            if (status != Z_OK || (!got && oldInput == stream.avail_in)) {
+                ok = NO; /* truncated, invalid or stalled Deflate */
+                break;
+            }
+        } while (stream.avail_in != 0 || stream.avail_out == 0);
+        if (!ok)
+            break;
+    }
+    if (!ended || produced != uncompressed || (uint32_t)crc != expectedCRC)
+        ok = NO;
+    inflateEnd(&stream);
+    return ok;
+}
+
+static NSDictionary<NSString *, id> *SSurvey(int fd, BOOL verifyCRC)
 {
     struct stat before;
     if (fstat(fd, &before) != 0 || !S_ISREG(before.st_mode) ||
@@ -126,6 +203,8 @@ static NSDictionary<NSString *, id> *SSurvey(int fd)
     NSMutableSet<NSString *> *actualFiles = [NSMutableSet setWithCapacity:entries];
     uint64_t cursor = cdOffset, previousEnd = 0, totalUncompressed = 0;
     NSUInteger directories = 0, files = 0, keychain = 0;
+    uint64_t verifiedBytes = 0;
+    NSUInteger verifiedMembers = 0;
     BOOL hasMetadata = NO;
 
     for (uint32_t i = 0; i < entries; ++i) {
@@ -161,7 +240,11 @@ static NSDictionary<NSString *, id> *SSurvey(int fd)
             if (i != entries-1 || hasMetadata) return nil;
             hasMetadata = YES;
         }
-        if ([name isEqualToString:@"Keychain.plist"]) keychain++;
+        /* Also skip case variants and nested Keychain names; never stream
+         * a potential credential payload in N3, even on malformed archives. */
+        BOOL isKeychain = [[[name lastPathComponent] lowercaseString]
+                           isEqualToString:@"keychain.plist"];
+        if (isKeychain) keychain++;
         if (isDirectory) {
             directories++;
         } else {
@@ -246,6 +329,14 @@ static NSDictionary<NSString *, id> *SSurvey(int fd)
             dataEnd += descriptorLen;
         }
         if (dataEnd > cdOffset) return nil;
+        /* Never call the content reader on Keychain member bytes. */
+        if (verifyCRC && !isKeychain) {
+            if (!SVerifyEntryCRC(fd, body, comp, uncomp, method,
+                                 S32(c+16), fileSize))
+                return nil;
+            verifiedBytes += uncomp;
+            verifiedMembers++;
+        }
         previousEnd = dataEnd;
         cursor += recordLength;
     }
@@ -270,7 +361,7 @@ static NSDictionary<NSString *, id> *SSurvey(int fd)
         before.st_mtime != after.st_mtime)
         return nil;
 
-    return @{
+    NSMutableDictionary<NSString *, id> *report = [@{
         @"status": @"single_archive_structure_inspected_not_restorable",
         @"entryCount": @(entries), @"fileCount": @(files),
         @"directoryCount": @(directories),
@@ -280,7 +371,16 @@ static NSDictionary<NSString *, id> *SSurvey(int fd)
         @"payloadCRCVerified": @NO,
         @"keychainContentsRead": @NO,
         @"restoreExecutable": @NO,
-    };
+    } mutableCopy];
+    if (verifyCRC) {
+        report[@"status"] = @"non_keychain_crc_verified_not_restorable";
+        report[@"nonKeychainPayloadCRCVerified"] = @YES;
+        report[@"payloadCRCVerified"] = @(keychain == 0);
+        report[@"keychainEntriesSkipped"] = @(keychain);
+        report[@"verifiedNonKeychainMembers"] = @(verifiedMembers);
+        report[@"verifiedNonKeychainBytes"] = @(verifiedBytes);
+    }
+    return report;
 }
 
 @implementation CRBackupArchiveSurvey
@@ -304,11 +404,39 @@ static NSDictionary<NSString *, id> *SSurvey(int fd)
         return nil;
     }
     NSDictionary *result = nil;
-    @try { result = SSurvey(fd); }
+    @try { result = SSurvey(fd, NO); }
     @finally { close(fd); }
     if (!result && error)
         *error = [NSError errorWithDomain:CRSurveyErrorDomain code:2
             userInfo:@{NSLocalizedDescriptionKey: @"ZIP structure rejected"}];
+    return result;
+}
+
++ (NSDictionary<NSString *, id> *)verifyNonKeychainPayloadAtPath:(NSString *)path
+                                                           error:(NSError **)error
+{
+    int fd = -1;
+    if ([path isKindOfClass:NSString.class] && path.length) {
+        int flags = O_RDONLY;
+#ifdef O_NOFOLLOW
+        flags |= O_NOFOLLOW;
+#endif
+#ifdef O_CLOEXEC
+        flags |= O_CLOEXEC;
+#endif
+        fd = open(path.fileSystemRepresentation, flags);
+    }
+    if (fd < 0) {
+        if (error) *error = [NSError errorWithDomain:CRSurveyErrorDomain code:3
+            userInfo:@{NSLocalizedDescriptionKey: @"Read-only CRC scan unavailable"}];
+        return nil;
+    }
+    NSDictionary *result = nil;
+    @try { result = SSurvey(fd, YES); }
+    @finally { close(fd); }
+    if (!result && error)
+        *error = [NSError errorWithDomain:CRSurveyErrorDomain code:4
+            userInfo:@{NSLocalizedDescriptionKey: @"Non-Keychain CRC validation rejected"}];
     return result;
 }
 @end

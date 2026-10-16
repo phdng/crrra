@@ -25,7 +25,8 @@ def _member(name, data, *, is_symlink=False):
 
 
 def build(*, wrong_path=False, duplicate=False, symlink=False,
-          omit_metadata=False, with_keychain=False) -> bytes:
+          omit_metadata=False, with_keychain=False, stored_payload=False,
+          large_payload=False) -> bytes:
     output = NoSeek()
     with warnings.catch_warnings():
         warnings.simplefilter("ignore", UserWarning)
@@ -37,8 +38,11 @@ def build(*, wrong_path=False, duplicate=False, symlink=False,
                 stream.write(plistlib.dumps(INFO, fmt=plistlib.FMT_BINARY))
             records = [
                 _member("com.example.crane.native/", b""),
-                _member("com.example.crane.native/one.txt", b"FAKE_NOT_PRIVATE"),
+                _member("com.example.crane.native/one.txt",
+                        bytes(range(256)) * 420 if large_payload else b"FAKE_NOT_PRIVATE"),
             ]
+            if stored_payload:
+                records[1][0].compress_type = zipfile.ZIP_STORED
             if wrong_path:
                 records.append(_member("com.example.crane.native/../escape.txt", b"bad"))
             if duplicate:
@@ -90,6 +94,21 @@ def corrupted_descriptor(content: bytes) -> bytes:
     return bytes(result)
 
 
+def corrupted_member_bytes(content: bytes, member_name: str) -> bytes:
+    """Tamper only a member's compressed payload; leave ZIP headers intact."""
+    with zipfile.ZipFile(io.BytesIO(content), "r") as archive:
+        member = archive.getinfo(member_name)
+    result = bytearray(content)
+    local = member.header_offset
+    assert result[local:local+4] == b"PK\x03\x04"
+    filename_len, extra_len = struct.unpack_from("<HH", result, local+26)
+    start = local + 30 + filename_len + extra_len
+    if member.compress_size < 3:
+        raise ValueError("synthetic payload unexpectedly too small")
+    result[start + member.compress_size // 2] ^= 0x40
+    return bytes(result)
+
+
 def create(folder: Path) -> list[Path]:
     if not folder.is_dir():
         raise ValueError("output directory must already exist")
@@ -104,6 +123,12 @@ def create(folder: Path) -> list[Path]:
         "crane-survey-central-mismatch.cranect": corrupted_central_method(valid),
         "crane-survey-descriptor-mismatch.cranect": corrupted_descriptor(valid),
         "crane-survey-keychain-shape.cranect": build(with_keychain=True),
+        "crane-survey-payload-corrupt.cranect": corrupted_member_bytes(
+            valid, "com.example.crane.native/one.txt"),
+        "crane-survey-keychain-corrupt.cranect": corrupted_member_bytes(
+            build(with_keychain=True), "Keychain.plist"),
+        "crane-survey-large-payload.cranect": build(large_payload=True),
+        "crane-survey-stored-payload.cranect": build(stored_payload=True),
     }
     result = []
     for name, data in variants.items():
