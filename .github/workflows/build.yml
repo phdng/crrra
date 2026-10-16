@@ -226,6 +226,12 @@ jobs:
       - name: Test fail-closed N4 native fixture verifier and source guard
         run: python3 -m unittest discover -s reconstruction/tools -p test_crane_native_fixture_collector.py -v
 
+      - name: Verify native N5 CraneManager source resolver preflight contract
+        run: python3 reconstruction/tools/check_native_source_preflight_contract.py
+
+      - name: Test N5 read-only source-map preflight regression
+        run: python3 -m unittest discover -s reconstruction/tools -p test_crane_native_source_preflight.py -v
+
       - name: Verify native disposable ZIP writer contract
         run: python3 reconstruction/tools/check_native_backup_writer_contract.py
 
@@ -406,6 +412,18 @@ jobs:
           ROOT="$("$RUNNER_TEMP/native_backup_fixture_collector_smoke" | sed -n 's/^CRANE_N4_FIXTURE=//p')"
           test -n "$ROOT"
           python3 tools/crane_native_collector_verify.py --fixture-root "$ROOT"
+
+      - name: Smoke-test native registered source-root preflight without reading files
+        working-directory: reconstruction
+        run: |
+          set -euo pipefail
+          clang -fobjc-arc -fblocks -Wall -Wextra -Werror \
+            -I sources/prefs \
+            sources/prefs/CRBackupNativeSourcePreflight.m \
+            tools/native_backup_source_preflight_smoke.m \
+            -framework Foundation \
+            -o "$RUNNER_TEMP/native_backup_source_preflight_smoke"
+          "$RUNNER_TEMP/native_backup_source_preflight_smoke"
 
       - name: Smoke-test Clang XPC protocol metadata with Foundation
         working-directory: reconstruction
