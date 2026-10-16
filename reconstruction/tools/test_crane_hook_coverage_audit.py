@@ -90,6 +90,133 @@ class HookCoverageAuditTests(unittest.TestCase):
             ("MSHookMessageEx", "setEnabled:"),
         ])
 
+    def test_concatenated_objc_literal_apsd_selectors_are_recovered(self):
+        expected = {
+            "sendTokenGenerateMessageWithTopicHash:baseToken:appId:expirationTTL:vapidPublicKeyHash:type:onInterface:",
+            "_handleMessageMessage:onProtocolConnection:withGeneration:isWakingMessage:fromAgent:",
+            "_handleMessageMessage:onInterface:withGeneration:isWakingMessage:fromAgent:",
+        }
+        actual = {
+            row["original"]["target_selector"] for row in self.report["rows"]
+            if row["original"]["target_selector"] in expected
+            and row["source_match_status"] == "textual_installer_candidate"
+            and any(match["file"] == "reconstruction/sources/support/CRApsd.m"
+                    for match in row["source_candidates"])
+        }
+        self.assertEqual(expected, actual)
+
+    def test_scanner_handles_concatenated_literals_and_rejects_computed_names(self):
+        source = (
+            'SEL joined = NSSelectorFromString(@"doThing:" "forApp:");\n'
+            'MSHookMessageEx(cls, joined, (IMP)Combined, &orig);\n'
+            'MSHookMessageEx(cls, NSSelectorFromString(@"inline:" "extra:"),'
+            ' (IMP)Inline, &orig2);\n'
+            'MSHookMessageEx(cls, NSSelectorFromString([NSString'
+            ' stringWithFormat:@"%@", @"guess"]), (IMP)Guess, &orig3);\n'
+            'MSHookMessageEx(cls, NSSelectorFromString(@"bad\\\\escape:"),'
+            ' (IMP)Bad, &orig4);\n'
+        )
+        with tempfile.TemporaryDirectory() as tmp:
+            (Path(tmp) / "mock.m").write_text(source, encoding="utf-8")
+            with patch.object(audit, "REPO", Path(tmp)):
+                found = audit._registrations("mock.m")
+        self.assertEqual([x["selector"] for x in found],
+                         ["doThing:forApp:", "inline:extra:"])
+
+    def test_12_unmatched_sources_are_reviewed_without_parity_assumption(self):
+        unknown = [r for r in self.report["rows"]
+                   if r["source_match_status"] == "no_installer_candidate"]
+        self.assertEqual(len(unknown), 12)
+        self.assertEqual(self.report["unmatched_reviewed_alternative_count"], 12)
+        self.assertTrue(all(r["reviewed_alternative_not_parity"] is not None
+                            for r in unknown))
+        for row in unknown:
+            evidence = row["reviewed_alternative_not_parity"]
+            if evidence:
+                self.assertFalse(evidence["equivalence_verified"])
+                self.assertGreater(evidence["anchor_occurrences"], 0)
+                content = (REPO / evidence["file"]).read_text(encoding="utf-8")
+                self.assertIn(evidence["anchor"], content)
+                self.assertGreater(evidence["line"], 0)
+
+    def test_local_at_selector_definition_is_not_a_missing_hook(self):
+        hook = [row for row in self.report["rows"]
+                if row["original"]["binary"] == "CraneSB.dylib"
+                and row["original"]["registering_function"] == "sub_14D18"
+                and row["original"]["target_selector"] == "init"]
+        self.assertEqual(len(hook), 1)
+        row = hook[0]
+        self.assertEqual(row["source_match_status"], "textual_installer_candidate")
+        self.assertEqual(row["source_candidate_count"], 1)
+        candidate = row["source_candidates"][0]
+        self.assertEqual(candidate["file"],
+                         "reconstruction/sources/cranesb/CRMenuHooks.m")
+        self.assertEqual(candidate["target_expression"], "controllerClass")
+        self.assertEqual(candidate["impl_expression"],
+                         "(IMP)CRLegacyForceTouchControllerInit")
+        self.assertFalse(row["runtime_verified"])
+        self.assertFalse(row["behavior_verified"])
+
+    def test_init_original_and_reconstruction_have_the_same_legacy_intent(self):
+        original = (REPO / "Library/MobileSubstrate/DynamicLibraries/"
+                    "CraneSB.dylib_export_for_ai/decompile/14D18.c").read_text(
+                        encoding="utf-8")
+        implementation = (REPO / "Library/MobileSubstrate/DynamicLibraries/"
+                          "CraneSB.dylib_export_for_ai/decompile/15204.c").read_text(
+                              encoding="utf-8")
+        current = (REPO / "reconstruction/sources/cranesb/CRMenuHooks.m").read_text(
+            encoding="utf-8")
+        for marker in ('objc_getClass("SBUIAppIconForceTouchController")',
+                       'MSHookMessageEx(v3, "init", sub_15204, &off_2D410)'):
+            self.assertIn(marker, original)
+        for marker in ('off_2D410()', '"setCrane_provideContainerOptions:", 0'):
+            self.assertIn(marker, implementation)
+        for marker in ('Class controllerClass =',
+                       'NSClassFromString(@"SBUIAppIconForceTouchController")',
+                       'SEL initSelector = @selector(init);',
+                       'MSHookMessageEx(controllerClass,',
+                       '(IMP)CRLegacyForceTouchControllerInit,',
+                       'id result = original ? original(self, _cmd) : self;',
+                       'CRDynamicBoolSetter(result,',
+                       'NO);'):
+            self.assertIn(marker, current)
+
+    def test_legacy_init_installation_keeps_original_cf_version_gate(self):
+        original = (REPO / "Library/MobileSubstrate/DynamicLibraries/"
+                    "CraneSB.dylib_export_for_ai/decompile/14D18.c").read_text(
+                        encoding="utf-8")
+        current = (REPO / "reconstruction/sources/cranesb/CRMenuHooks.m").read_text(
+            encoding="utf-8")
+        self.assertIn("if ( kCFCoreFoundationVersionNumber >= 1665.15 )", original)
+        self.assertIn('void CRInitApplicationShortcutHooks(void)', current)
+        modern_gate = current[current.index("void CRInitApplicationShortcutHooks(void)"):]
+        self.assertIn("if (kCFCoreFoundationVersionNumber < 1665.15) {", modern_gate)
+        self.assertIn("CRInitLegacyApplicationShortcutHooks();", modern_gate)
+        legacy = current[current.index("static void CRInitLegacyApplicationShortcutHooks(void)"):
+                         current.index("void CRInitApplicationShortcutLateHooks(void)")]
+        self.assertIn('NSClassFromString(@"SBUIAppIconForceTouchController")', legacy)
+        self.assertEqual(legacy.count("(IMP)CRLegacyForceTouchControllerInit,"), 1)
+        self.assertIn("instancesRespondToSelector:initSelector", legacy)
+
+    def test_local_selector_parser_ignores_comments_and_nearby_fake_names(self):
+        source = (
+            '// SEL fake = @selector(faked:);\\n'
+            'SEL initialized = @selector(init);\\n'
+            'MSHookMessageEx(legacy, initialized, (IMP)HookInit, &original);\\n'
+            'SEL delayed = @selector(update:);\\n'
+            'MSHookMessageEx(legacy, missing, (IMP)Unknown, &unused);\\n'
+            'SEL modern = @selector(realSelector:);\\n'
+            'class_addMethod(legacy, modern, (IMP)AddMethod, "v@:@");\\n'
+        ).replace('\\n', '\n')
+        with tempfile.TemporaryDirectory() as tmp:
+            (Path(tmp) / "mock.m").write_text(source, encoding="utf-8")
+            with patch.object(audit, "REPO", Path(tmp)):
+                found = audit._registrations("mock.m")
+        self.assertEqual([(item["api"], item["selector"]) for item in found], [
+            ("MSHookMessageEx", "init"),
+            ("class_addMethod", "realSelector:"),
+        ])
+
     def test_test_references_are_text_only_not_runtime_evidence(self):
         for row in self.report["rows"]:
             selector = row["original"]["target_selector"]

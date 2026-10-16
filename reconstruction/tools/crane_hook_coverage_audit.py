@@ -44,13 +44,112 @@ SOURCE_FILES = {
     ],
 }
 REGISTER_RE = re.compile(r"\b(MSHookMessageEx|class_addMethod)\s*\(")
+# Clang concatenates adjacent NSString/ordinary string literals:
+# NSSelectorFromString(@"part1:" "part2:"). Restrict the parser to literal
+# segments only; computed expressions and format strings remain unresolved.
+_STRING = r'"(?:\\.|[^"\\])*"'
+_SELECTOR_PARTS = rf'@{_STRING}(?:\s*{_STRING})*'
 SELECTOR_DEF = re.compile(
-    r'\bSEL\s+(\w+)\s*=\s*NSSelectorFromString\s*\(\s*@"([^"]+)"\s*\)',
+    rf'\bSEL\s+(\w+)\s*=\s*NSSelectorFromString\s*\(\s*({_SELECTOR_PARTS})\s*\)',
     re.MULTILINE,
 )
-DIRECT_SELECTOR = re.compile(
-    r'^(?:NSSelectorFromString\s*\(\s*@"([^"]+)"\s*\)|@selector\s*\(\s*([^)]*)\s*\))$'
+# A local SEL may also be initialized with the compile-time @selector(...)
+# construct, e.g. SEL initSelector = @selector(init). This was the sole
+# false missing registration in legacy CraneSB's force-touch init hook.
+SELECTOR_AT_DEF = re.compile(
+    r'\bSEL\s+(\w+)\s*=\s*@selector\s*\(\s*([A-Za-z_][A-Za-z_0-9:]*)\s*\)'
 )
+DIRECT_SELECTOR = re.compile(
+    rf'^(?:NSSelectorFromString\s*\(\s*({_SELECTOR_PARTS})\s*\)|@selector\s*\(\s*([^)]*)\s*\))$'
+)
+_LITERAL_SEGMENT = re.compile(_STRING)
+
+
+def _joined_literal(parts: str) -> str | None:
+    pieces = [literal[1:-1] for literal in _LITERAL_SEGMENT.findall(parts)]
+    # Selectors recovered here use literal ASCII punctuation only. Reject
+    # escapes instead of guessing how the Objective-C compiler interprets
+    # them (a false positive would corrupt the audit).
+    if not pieces or any("\\" in piece for piece in pieces):
+        return None
+    return "".join(pieces)
+# G-09 human-reviewed provenance hints for rows with no identical installer
+# selector/API. These are ONLY pointers to current alternative code paths;
+# they are NOT claims of hook/class/behavior parity. Keep every key explicit
+# so unrelated identical selectors never inherit an adaptation label.
+ALTERNATE_EVIDENCE = {
+    ("CraneSB.dylib", "valueForUndefinedKey:"): (
+        "alternative_class_method", "reconstruction/sources/cranesb/CRMenuHooks.m",
+        "class_addMethod(created, undefinedSEL,",
+    ),
+    ("CraneSB.dylib", "updateConstraints"): (
+        "visual_adapter_only", "reconstruction/sources/cranesb/CRMenuHooks.m",
+        "static void CRMenuReserveBadgeSpacing(",
+    ),
+    ("CraneSB.dylib", "layoutSubviews"): (
+        "visual_adapter_only", "reconstruction/sources/cranesb/CRMenuHooks.m",
+        "static void CRMenuRestoreBadgeSpacing(",
+    ),
+    ("CraneSB.dylib", "badgeView"): (
+        "visual_adapter_only", "reconstruction/sources/cranesb/CRMenuHooks.m",
+        "static UIView *CRMenuCreateNativeBadgeView(",
+    ),
+    ("CraneSB.dylib", "setBadgeView:"): (
+        "visual_adapter_only", "reconstruction/sources/cranesb/CRMenuHooks.m",
+        "static void CRApplyBadgeToActionView(",
+    ),
+    ("CraneSB.dylib", "associatedApplicationID"): (
+        "visual_adapter_only", "reconstruction/sources/cranesb/CRMenuHooks.m",
+        "static id CRMenuFakeIconApplicationBundleID(",
+    ),
+    ("CraneSB.dylib", "setAssociatedApplicationID:"): (
+        "visual_adapter_only", "reconstruction/sources/cranesb/CRMenuHooks.m",
+        "static id CRMenuFakeIconApplicationBundleID(",
+    ),
+    ("CraneSB.dylib", "containsObject:"): (
+        "alternative_class_method", "reconstruction/sources/cranesb/CRBadgeStore.m",
+        "class_addMethod(subclass, containsSEL,",
+    ),
+    ("CraneSupport.dylib", "_xpc_connection_set_event_handler"): (
+        "function_hook_alternative", "reconstruction/sources/support/CRMCM.m",
+        "MSHookFunction((void *)&xpc_connection_set_event_handler,",
+    ),
+    ("CraneSupport.dylib", "handleSourceMessage:replyHandler:"): (
+        "hook_wrapper_alternative", "reconstruction/sources/support/CRCfprefs.m",
+        "CRPrefsHookMessage(daemonClass,",
+    ),
+    ("CraneSupport.dylib", "gHandleSourceMessageSym"): (
+        "function_hook_alternative", "reconstruction/sources/support/CRCfprefs.m",
+        "(void *)CRPrefsHandleSourceMessageV2,",
+    ),
+    ("CraneSupport.dylib", "gWithSourceForDomainHookSym"): (
+        "function_hook_alternative", "reconstruction/sources/support/CRCfprefs.m",
+        "(void *)CRPrefsWithSourceV3,",
+    ),
+}
+
+
+def _reviewed_alternate(binary: str, selector: str) -> dict | None:
+    hint = ALTERNATE_EVIDENCE.get((binary, selector))
+    if hint is None:
+        return None
+    label, path, anchor = hint
+    content = (REPO / path).read_text(encoding="utf-8")
+    # Fail closed if a human-reviewed alternative disappears. Do not silently
+    # keep a stale label merely because the original selector is still in CSV.
+    occurrences = content.count(anchor)
+    if occurrences == 0:
+        raise ValueError(f"Alternative evidence changed: {path} / {anchor}")
+    return {
+        "kind": label,
+        "file": path,
+        "line": content[:content.index(anchor)].count("\n") + 1,
+        "anchor": anchor,
+        "anchor_occurrences": occurrences,
+        "equivalence_verified": False,
+    }
+
+
 # 0xCBEC CSV class field aliases source classes and is NOT authoritative.
 ALIAS_COLLAPSED_GROUPS = {("CraneSB.dylib", "_initNotificationSupport")}
 
@@ -148,7 +247,10 @@ def _arguments(source: str, start: int) -> list[str] | None:
 
 def _registrations(path: str) -> list[dict[str, str | int]]:
     code = _mask_comments((REPO / path).read_text(encoding="utf-8"))
-    definitions = [(m.start(), m.group(1), m.group(2)) for m in SELECTOR_DEF.finditer(code)]
+    definitions = [(m.start(), m.group(1), _joined_literal(m.group(2)))
+                   for m in SELECTOR_DEF.finditer(code)]
+    definitions.extend((m.start(), m.group(1), m.group(2))
+                       for m in SELECTOR_AT_DEF.finditer(code))
     found: list[dict[str, str | int]] = []
     for match in REGISTER_RE.finditer(code):
         args = _arguments(code, code.index("(", match.start(), match.end()))
@@ -156,13 +258,15 @@ def _registrations(path: str) -> list[dict[str, str | int]]:
             continue
         selector_expr = args[1].strip()
         direct = DIRECT_SELECTOR.fullmatch(selector_expr)
-        selector = direct.group(1) or direct.group(2) if direct else None
+        selector = (_joined_literal(direct.group(1)) if direct.group(1)
+                    else direct.group(2).strip()) if direct else None
         if selector is None:
             # Only accept a nearest earlier selector definition if it is
             # local to the registration (bounded by 6 KiB), NOT an unscoped
             # mention anywhere in the file.
             possible = [(pos, val) for pos, key, val in definitions
-                        if key == selector_expr and 0 < match.start() - pos < 6144]
+                        if key == selector_expr and val and
+                        0 < match.start() - pos < 6144]
             if possible:
                 selector = max(possible)[1]
         if not selector:
@@ -220,8 +324,11 @@ def build() -> dict:
             state = "multiple_installer_candidates"
         else:
             state = "textual_installer_candidate"
+        alternate = (_reviewed_alternate(orig["binary"], orig["target_selector"])
+                     if state == "no_installer_candidate" else None)
         rows.append({
             "ordinal": ordinal,
+            "reviewed_alternative_not_parity": alternate,
             "original": {
                 "binary": orig["binary"],
                 "registering_function": orig["registration_fn"],
@@ -254,6 +361,9 @@ def build() -> dict:
         "original_registrations": len(rows),
         "by_binary": dict(sorted(Counter(r["original"]["binary"] for r in rows).items())),
         "source_match_counts": dict(sorted(Counter(r["source_match_status"] for r in rows).items())),
+        "unmatched_reviewed_alternative_count": sum(
+            r["reviewed_alternative_not_parity"] is not None for r in rows
+        ),
         "rows": rows,
     }
 

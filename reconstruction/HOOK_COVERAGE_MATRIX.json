@@ -22,6 +22,7 @@
       },
       "original_class_attribution": "indexed_not_runtime_verified",
       "original_same_selector_api_count": 1,
+      "reviewed_alternative_not_parity": null,
       "runtime_verified": false,
       "source_candidate_count": 1,
       "source_candidates": [
@@ -51,6 +52,7 @@
       },
       "original_class_attribution": "indexed_not_runtime_verified",
       "original_same_selector_api_count": 1,
+      "reviewed_alternative_not_parity": null,
       "runtime_verified": false,
       "source_candidate_count": 1,
       "source_candidates": [
@@ -80,6 +82,7 @@
       },
       "original_class_attribution": "indexed_not_runtime_verified",
       "original_same_selector_api_count": 2,
+      "reviewed_alternative_not_parity": null,
       "runtime_verified": false,
       "source_candidate_count": 2,
       "source_candidates": [
@@ -117,6 +120,7 @@
       },
       "original_class_attribution": "indexed_not_runtime_verified",
       "original_same_selector_api_count": 1,
+      "reviewed_alternative_not_parity": null,
       "runtime_verified": false,
       "source_candidate_count": 1,
       "source_candidates": [
@@ -146,6 +150,7 @@
       },
       "original_class_attribution": "indexed_not_runtime_verified",
       "original_same_selector_api_count": 1,
+      "reviewed_alternative_not_parity": null,
       "runtime_verified": false,
       "source_candidate_count": 1,
       "source_candidates": [
@@ -175,6 +180,7 @@
       },
       "original_class_attribution": "indexed_not_runtime_verified",
       "original_same_selector_api_count": 1,
+      "reviewed_alternative_not_parity": null,
       "runtime_verified": false,
       "source_candidate_count": 1,
       "source_candidates": [
@@ -204,6 +210,7 @@
       },
       "original_class_attribution": "indexed_not_runtime_verified",
       "original_same_selector_api_count": 1,
+      "reviewed_alternative_not_parity": null,
       "runtime_verified": false,
       "source_candidate_count": 1,
       "source_candidates": [
@@ -233,6 +240,7 @@
       },
       "original_class_attribution": "indexed_not_runtime_verified",
       "original_same_selector_api_count": 1,
+      "reviewed_alternative_not_parity": null,
       "runtime_verified": false,
       "source_candidate_count": 1,
       "source_candidates": [
@@ -262,6 +270,7 @@
       },
       "original_class_attribution": "indexed_not_runtime_verified",
       "original_same_selector_api_count": 1,
+      "reviewed_alternative_not_parity": null,
       "runtime_verified": false,
       "source_candidate_count": 1,
       "source_candidates": [
@@ -291,6 +300,7 @@
       },
       "original_class_attribution": "indexed_not_runtime_verified",
       "original_same_selector_api_count": 1,
+      "reviewed_alternative_not_parity": null,
       "runtime_verified": false,
       "source_candidate_count": 1,
       "source_candidates": [
@@ -320,6 +330,7 @@
       },
       "original_class_attribution": "indexed_not_runtime_verified",
       "original_same_selector_api_count": 1,
+      "reviewed_alternative_not_parity": null,
       "runtime_verified": false,
       "source_candidate_count": 1,
       "source_candidates": [
@@ -349,10 +360,20 @@
       },
       "original_class_attribution": "indexed_not_runtime_verified",
       "original_same_selector_api_count": 1,
+      "reviewed_alternative_not_parity": null,
       "runtime_verified": false,
-      "source_candidate_count": 0,
-      "source_candidates": [],
-      "source_match_status": "no_installer_candidate",
+      "source_candidate_count": 1,
+      "source_candidates": [
+        {
+          "api": "MSHookMessageEx",
+          "file": "reconstruction/sources/cranesb/CRMenuHooks.m",
+          "impl_expression": "(IMP)CRLegacyForceTouchControllerInit",
+          "line": 1153,
+          "selector": "init",
+          "target_expression": "controllerClass"
+        }
+      ],
+      "source_match_status": "textual_installer_candidate",
       "test_source_selector_mentions_only": [
         "reconstruction/tools/check_accountsd_isolation_contract.py",
         "reconstruction/tools/check_app_runtime_probe_contract.py",
@@ -394,6 +415,7 @@
       },
       "original_class_attribution": "indexed_not_runtime_verified",
       "original_same_selector_api_count": 1,
+      "reviewed_alternative_not_parity": null,
       "runtime_verified": false,
       "source_candidate_count": 1,
       "source_candidates": [
@@ -423,6 +445,7 @@
       },
       "original_class_attribution": "indexed_not_runtime_verified",
       "original_same_selector_api_count": 1,
+      "reviewed_alternative_not_parity": null,
       "runtime_verified": false,
       "source_candidate_count": 1,
       "source_candidates": [
@@ -452,6 +475,7 @@
       },
       "original_class_attribution": "indexed_not_runtime_verified",
       "original_same_selector_api_count": 1,
+      "reviewed_alternative_not_parity": null,
       "runtime_verified": false,
       "source_candidate_count": 1,
       "source_candidates": [
@@ -481,6 +505,7 @@
       },
       "original_class_attribution": "indexed_not_runtime_verified",
       "original_same_selector_api_count": 1,
+      "reviewed_alternative_not_parity": null,
       "runtime_verified": false,
       "source_candidate_count": 1,
       "source_candidates": [
@@ -510,6 +535,7 @@
       },
       "original_class_attribution": "indexed_not_runtime_verified",
       "original_same_selector_api_count": 1,
+      "reviewed_alternative_not_parity": null,
       "runtime_verified": false,
       "source_candidate_count": 1,
       "source_candidates": [
@@ -539,6 +565,7 @@
       },
       "original_class_attribution": "indexed_not_runtime_verified",
       "original_same_selector_api_count": 1,
+      "reviewed_alternative_not_parity": null,
       "runtime_verified": false,
       "source_candidate_count": 1,
       "source_candidates": [
@@ -568,6 +595,7 @@
       },
       "original_class_attribution": "indexed_not_runtime_verified",
       "original_same_selector_api_count": 1,
+      "reviewed_alternative_not_parity": null,
       "runtime_verified": false,
       "source_candidate_count": 1,
       "source_candidates": [
@@ -597,6 +625,7 @@
       },
       "original_class_attribution": "indexed_not_runtime_verified",
       "original_same_selector_api_count": 1,
+      "reviewed_alternative_not_parity": null,
       "runtime_verified": false,
       "source_candidate_count": 1,
       "source_candidates": [
@@ -628,6 +657,7 @@
       },
       "original_class_attribution": "indexed_not_runtime_verified",
       "original_same_selector_api_count": 2,
+      "reviewed_alternative_not_parity": null,
       "runtime_verified": false,
       "source_candidate_count": 2,
       "source_candidates": [
@@ -665,6 +695,7 @@
       },
       "original_class_attribution": "indexed_not_runtime_verified",
       "original_same_selector_api_count": 1,
+      "reviewed_alternative_not_parity": null,
       "runtime_verified": false,
       "source_candidate_count": 1,
       "source_candidates": [
@@ -694,6 +725,7 @@
       },
       "original_class_attribution": "indexed_not_runtime_verified",
       "original_same_selector_api_count": 1,
+      "reviewed_alternative_not_parity": null,
       "runtime_verified": false,
       "source_candidate_count": 1,
       "source_candidates": [
@@ -723,6 +755,7 @@
       },
       "original_class_attribution": "indexed_not_runtime_verified",
       "original_same_selector_api_count": 1,
+      "reviewed_alternative_not_parity": null,
       "runtime_verified": false,
       "source_candidate_count": 1,
       "source_candidates": [
@@ -752,6 +785,7 @@
       },
       "original_class_attribution": "indexed_not_runtime_verified",
       "original_same_selector_api_count": 1,
+      "reviewed_alternative_not_parity": null,
       "runtime_verified": false,
       "source_candidate_count": 1,
       "source_candidates": [
@@ -781,6 +815,7 @@
       },
       "original_class_attribution": "indexed_not_runtime_verified",
       "original_same_selector_api_count": 1,
+      "reviewed_alternative_not_parity": null,
       "runtime_verified": false,
       "source_candidate_count": 1,
       "source_candidates": [
@@ -810,6 +845,7 @@
       },
       "original_class_attribution": "indexed_not_runtime_verified",
       "original_same_selector_api_count": 1,
+      "reviewed_alternative_not_parity": null,
       "runtime_verified": false,
       "source_candidate_count": 1,
       "source_candidates": [
@@ -839,6 +875,7 @@
       },
       "original_class_attribution": "indexed_not_runtime_verified",
       "original_same_selector_api_count": 1,
+      "reviewed_alternative_not_parity": null,
       "runtime_verified": false,
       "source_candidate_count": 1,
       "source_candidates": [
@@ -868,6 +905,7 @@
       },
       "original_class_attribution": "indexed_not_runtime_verified",
       "original_same_selector_api_count": 1,
+      "reviewed_alternative_not_parity": null,
       "runtime_verified": false,
       "source_candidate_count": 1,
       "source_candidates": [
@@ -897,6 +935,7 @@
       },
       "original_class_attribution": "indexed_not_runtime_verified",
       "original_same_selector_api_count": 1,
+      "reviewed_alternative_not_parity": null,
       "runtime_verified": false,
       "source_candidate_count": 1,
       "source_candidates": [
@@ -926,6 +965,7 @@
       },
       "original_class_attribution": "indexed_not_runtime_verified",
       "original_same_selector_api_count": 1,
+      "reviewed_alternative_not_parity": null,
       "runtime_verified": false,
       "source_candidate_count": 1,
       "source_candidates": [
@@ -955,6 +995,7 @@
       },
       "original_class_attribution": "indexed_not_runtime_verified",
       "original_same_selector_api_count": 1,
+      "reviewed_alternative_not_parity": null,
       "runtime_verified": false,
       "source_candidate_count": 1,
       "source_candidates": [
@@ -986,6 +1027,7 @@
       },
       "original_class_attribution": "indexed_not_runtime_verified",
       "original_same_selector_api_count": 1,
+      "reviewed_alternative_not_parity": null,
       "runtime_verified": false,
       "source_candidate_count": 1,
       "source_candidates": [
@@ -1017,6 +1059,7 @@
       },
       "original_class_attribution": "indexed_not_runtime_verified",
       "original_same_selector_api_count": 1,
+      "reviewed_alternative_not_parity": null,
       "runtime_verified": false,
       "source_candidate_count": 1,
       "source_candidates": [
@@ -1048,6 +1091,7 @@
       },
       "original_class_attribution": "indexed_not_runtime_verified",
       "original_same_selector_api_count": 1,
+      "reviewed_alternative_not_parity": null,
       "runtime_verified": false,
       "source_candidate_count": 1,
       "source_candidates": [
@@ -1077,6 +1121,7 @@
       },
       "original_class_attribution": "indexed_not_runtime_verified",
       "original_same_selector_api_count": 1,
+      "reviewed_alternative_not_parity": null,
       "runtime_verified": false,
       "source_candidate_count": 1,
       "source_candidates": [
@@ -1106,6 +1151,7 @@
       },
       "original_class_attribution": "indexed_not_runtime_verified",
       "original_same_selector_api_count": 1,
+      "reviewed_alternative_not_parity": null,
       "runtime_verified": false,
       "source_candidate_count": 1,
       "source_candidates": [
@@ -1135,6 +1181,7 @@
       },
       "original_class_attribution": "indexed_not_runtime_verified",
       "original_same_selector_api_count": 1,
+      "reviewed_alternative_not_parity": null,
       "runtime_verified": false,
       "source_candidate_count": 1,
       "source_candidates": [
@@ -1167,6 +1214,7 @@
       },
       "original_class_attribution": "indexed_not_runtime_verified",
       "original_same_selector_api_count": 1,
+      "reviewed_alternative_not_parity": null,
       "runtime_verified": false,
       "source_candidate_count": 1,
       "source_candidates": [
@@ -1199,6 +1247,14 @@
       },
       "original_class_attribution": "indexed_not_runtime_verified",
       "original_same_selector_api_count": 1,
+      "reviewed_alternative_not_parity": {
+        "anchor": "class_addMethod(created, undefinedSEL,",
+        "anchor_occurrences": 1,
+        "equivalence_verified": false,
+        "file": "reconstruction/sources/cranesb/CRMenuHooks.m",
+        "kind": "alternative_class_method",
+        "line": 1558
+      },
       "runtime_verified": false,
       "source_candidate_count": 0,
       "source_candidates": [],
@@ -1221,6 +1277,14 @@
       },
       "original_class_attribution": "indexed_not_runtime_verified",
       "original_same_selector_api_count": 1,
+      "reviewed_alternative_not_parity": {
+        "anchor": "static void CRMenuReserveBadgeSpacing(",
+        "anchor_occurrences": 1,
+        "equivalence_verified": false,
+        "file": "reconstruction/sources/cranesb/CRMenuHooks.m",
+        "kind": "visual_adapter_only",
+        "line": 1450
+      },
       "runtime_verified": false,
       "source_candidate_count": 0,
       "source_candidates": [],
@@ -1241,6 +1305,14 @@
       },
       "original_class_attribution": "indexed_not_runtime_verified",
       "original_same_selector_api_count": 1,
+      "reviewed_alternative_not_parity": {
+        "anchor": "static void CRMenuRestoreBadgeSpacing(",
+        "anchor_occurrences": 1,
+        "equivalence_verified": false,
+        "file": "reconstruction/sources/cranesb/CRMenuHooks.m",
+        "kind": "visual_adapter_only",
+        "line": 1436
+      },
       "runtime_verified": false,
       "source_candidate_count": 0,
       "source_candidates": [],
@@ -1261,6 +1333,7 @@
       },
       "original_class_attribution": "indexed_not_runtime_verified",
       "original_same_selector_api_count": 1,
+      "reviewed_alternative_not_parity": null,
       "runtime_verified": false,
       "source_candidate_count": 1,
       "source_candidates": [
@@ -1378,6 +1451,7 @@
       },
       "original_class_attribution": "indexed_not_runtime_verified",
       "original_same_selector_api_count": 1,
+      "reviewed_alternative_not_parity": null,
       "runtime_verified": false,
       "source_candidate_count": 1,
       "source_candidates": [
@@ -1409,6 +1483,14 @@
       },
       "original_class_attribution": "indexed_not_runtime_verified",
       "original_same_selector_api_count": 1,
+      "reviewed_alternative_not_parity": {
+        "anchor": "static UIView *CRMenuCreateNativeBadgeView(",
+        "anchor_occurrences": 1,
+        "equivalence_verified": false,
+        "file": "reconstruction/sources/cranesb/CRMenuHooks.m",
+        "kind": "visual_adapter_only",
+        "line": 1567
+      },
       "runtime_verified": false,
       "source_candidate_count": 0,
       "source_candidates": [],
@@ -1429,6 +1511,14 @@
       },
       "original_class_attribution": "indexed_not_runtime_verified",
       "original_same_selector_api_count": 1,
+      "reviewed_alternative_not_parity": {
+        "anchor": "static void CRApplyBadgeToActionView(",
+        "anchor_occurrences": 1,
+        "equivalence_verified": false,
+        "file": "reconstruction/sources/cranesb/CRMenuHooks.m",
+        "kind": "visual_adapter_only",
+        "line": 1604
+      },
       "runtime_verified": false,
       "source_candidate_count": 0,
       "source_candidates": [],
@@ -1449,6 +1539,14 @@
       },
       "original_class_attribution": "indexed_not_runtime_verified",
       "original_same_selector_api_count": 1,
+      "reviewed_alternative_not_parity": {
+        "anchor": "static id CRMenuFakeIconApplicationBundleID(",
+        "anchor_occurrences": 1,
+        "equivalence_verified": false,
+        "file": "reconstruction/sources/cranesb/CRMenuHooks.m",
+        "kind": "visual_adapter_only",
+        "line": 1512
+      },
       "runtime_verified": false,
       "source_candidate_count": 0,
       "source_candidates": [],
@@ -1469,6 +1567,14 @@
       },
       "original_class_attribution": "indexed_not_runtime_verified",
       "original_same_selector_api_count": 1,
+      "reviewed_alternative_not_parity": {
+        "anchor": "static id CRMenuFakeIconApplicationBundleID(",
+        "anchor_occurrences": 1,
+        "equivalence_verified": false,
+        "file": "reconstruction/sources/cranesb/CRMenuHooks.m",
+        "kind": "visual_adapter_only",
+        "line": 1512
+      },
       "runtime_verified": false,
       "source_candidate_count": 0,
       "source_candidates": [],
@@ -1489,6 +1595,7 @@
       },
       "original_class_attribution": "indexed_not_runtime_verified",
       "original_same_selector_api_count": 2,
+      "reviewed_alternative_not_parity": null,
       "runtime_verified": false,
       "source_candidate_count": 2,
       "source_candidates": [
@@ -1526,6 +1633,7 @@
       },
       "original_class_attribution": "indexed_not_runtime_verified",
       "original_same_selector_api_count": 1,
+      "reviewed_alternative_not_parity": null,
       "runtime_verified": false,
       "source_candidate_count": 1,
       "source_candidates": [
@@ -1555,6 +1663,7 @@
       },
       "original_class_attribution": "indexed_not_runtime_verified",
       "original_same_selector_api_count": 1,
+      "reviewed_alternative_not_parity": null,
       "runtime_verified": false,
       "source_candidate_count": 1,
       "source_candidates": [
@@ -1584,6 +1693,7 @@
       },
       "original_class_attribution": "indexed_not_runtime_verified",
       "original_same_selector_api_count": 1,
+      "reviewed_alternative_not_parity": null,
       "runtime_verified": false,
       "source_candidate_count": 1,
       "source_candidates": [
@@ -1613,6 +1723,7 @@
       },
       "original_class_attribution": "indexed_not_runtime_verified",
       "original_same_selector_api_count": 1,
+      "reviewed_alternative_not_parity": null,
       "runtime_verified": false,
       "source_candidate_count": 1,
       "source_candidates": [
@@ -1642,6 +1753,7 @@
       },
       "original_class_attribution": "indexed_not_runtime_verified",
       "original_same_selector_api_count": 1,
+      "reviewed_alternative_not_parity": null,
       "runtime_verified": false,
       "source_candidate_count": 1,
       "source_candidates": [
@@ -1671,6 +1783,7 @@
       },
       "original_class_attribution": "indexed_not_runtime_verified",
       "original_same_selector_api_count": 1,
+      "reviewed_alternative_not_parity": null,
       "runtime_verified": false,
       "source_candidate_count": 1,
       "source_candidates": [
@@ -1710,6 +1823,7 @@
       },
       "original_class_attribution": "indexed_not_runtime_verified",
       "original_same_selector_api_count": 1,
+      "reviewed_alternative_not_parity": null,
       "runtime_verified": false,
       "source_candidate_count": 1,
       "source_candidates": [
@@ -1739,6 +1853,7 @@
       },
       "original_class_attribution": "indexed_not_runtime_verified",
       "original_same_selector_api_count": 1,
+      "reviewed_alternative_not_parity": null,
       "runtime_verified": false,
       "source_candidate_count": 1,
       "source_candidates": [
@@ -1768,6 +1883,7 @@
       },
       "original_class_attribution": "indexed_not_runtime_verified",
       "original_same_selector_api_count": 1,
+      "reviewed_alternative_not_parity": null,
       "runtime_verified": false,
       "source_candidate_count": 1,
       "source_candidates": [
@@ -1797,6 +1913,7 @@
       },
       "original_class_attribution": "indexed_not_runtime_verified",
       "original_same_selector_api_count": 2,
+      "reviewed_alternative_not_parity": null,
       "runtime_verified": false,
       "source_candidate_count": 2,
       "source_candidates": [
@@ -1834,6 +1951,7 @@
       },
       "original_class_attribution": "indexed_not_runtime_verified",
       "original_same_selector_api_count": 1,
+      "reviewed_alternative_not_parity": null,
       "runtime_verified": false,
       "source_candidate_count": 1,
       "source_candidates": [
@@ -1871,6 +1989,7 @@
       },
       "original_class_attribution": "indexed_not_runtime_verified",
       "original_same_selector_api_count": 1,
+      "reviewed_alternative_not_parity": null,
       "runtime_verified": false,
       "source_candidate_count": 1,
       "source_candidates": [
@@ -1902,6 +2021,7 @@
       },
       "original_class_attribution": "alias_collapsed_unverified",
       "original_same_selector_api_count": 1,
+      "reviewed_alternative_not_parity": null,
       "runtime_verified": false,
       "source_candidate_count": 1,
       "source_candidates": [
@@ -1933,6 +2053,7 @@
       },
       "original_class_attribution": "alias_collapsed_unverified",
       "original_same_selector_api_count": 2,
+      "reviewed_alternative_not_parity": null,
       "runtime_verified": false,
       "source_candidate_count": 1,
       "source_candidates": [
@@ -1962,6 +2083,7 @@
       },
       "original_class_attribution": "alias_collapsed_unverified",
       "original_same_selector_api_count": 2,
+      "reviewed_alternative_not_parity": null,
       "runtime_verified": false,
       "source_candidate_count": 1,
       "source_candidates": [
@@ -1993,6 +2115,7 @@
       },
       "original_class_attribution": "alias_collapsed_unverified",
       "original_same_selector_api_count": 1,
+      "reviewed_alternative_not_parity": null,
       "runtime_verified": false,
       "source_candidate_count": 1,
       "source_candidates": [
@@ -2022,6 +2145,7 @@
       },
       "original_class_attribution": "alias_collapsed_unverified",
       "original_same_selector_api_count": 2,
+      "reviewed_alternative_not_parity": null,
       "runtime_verified": false,
       "source_candidate_count": 1,
       "source_candidates": [
@@ -2051,6 +2175,7 @@
       },
       "original_class_attribution": "alias_collapsed_unverified",
       "original_same_selector_api_count": 2,
+      "reviewed_alternative_not_parity": null,
       "runtime_verified": false,
       "source_candidate_count": 1,
       "source_candidates": [
@@ -2082,6 +2207,7 @@
       },
       "original_class_attribution": "alias_collapsed_unverified",
       "original_same_selector_api_count": 1,
+      "reviewed_alternative_not_parity": null,
       "runtime_verified": false,
       "source_candidate_count": 1,
       "source_candidates": [
@@ -2111,6 +2237,7 @@
       },
       "original_class_attribution": "alias_collapsed_unverified",
       "original_same_selector_api_count": 1,
+      "reviewed_alternative_not_parity": null,
       "runtime_verified": false,
       "source_candidate_count": 1,
       "source_candidates": [
@@ -2140,6 +2267,7 @@
       },
       "original_class_attribution": "alias_collapsed_unverified",
       "original_same_selector_api_count": 1,
+      "reviewed_alternative_not_parity": null,
       "runtime_verified": false,
       "source_candidate_count": 1,
       "source_candidates": [
@@ -2169,6 +2297,7 @@
       },
       "original_class_attribution": "alias_collapsed_unverified",
       "original_same_selector_api_count": 1,
+      "reviewed_alternative_not_parity": null,
       "runtime_verified": false,
       "source_candidate_count": 1,
       "source_candidates": [
@@ -2198,6 +2327,7 @@
       },
       "original_class_attribution": "alias_collapsed_unverified",
       "original_same_selector_api_count": 1,
+      "reviewed_alternative_not_parity": null,
       "runtime_verified": false,
       "source_candidate_count": 1,
       "source_candidates": [
@@ -2227,6 +2357,7 @@
       },
       "original_class_attribution": "alias_collapsed_unverified",
       "original_same_selector_api_count": 1,
+      "reviewed_alternative_not_parity": null,
       "runtime_verified": false,
       "source_candidate_count": 1,
       "source_candidates": [
@@ -2265,6 +2396,14 @@
       },
       "original_class_attribution": "alias_collapsed_unverified",
       "original_same_selector_api_count": 1,
+      "reviewed_alternative_not_parity": {
+        "anchor": "class_addMethod(subclass, containsSEL,",
+        "anchor_occurrences": 1,
+        "equivalence_verified": false,
+        "file": "reconstruction/sources/cranesb/CRBadgeStore.m",
+        "kind": "alternative_class_method",
+        "line": 1376
+      },
       "runtime_verified": false,
       "source_candidate_count": 0,
       "source_candidates": [],
@@ -2300,6 +2439,7 @@
       },
       "original_class_attribution": "alias_collapsed_unverified",
       "original_same_selector_api_count": 1,
+      "reviewed_alternative_not_parity": null,
       "runtime_verified": false,
       "source_candidate_count": 1,
       "source_candidates": [
@@ -2331,6 +2471,7 @@
       },
       "original_class_attribution": "alias_collapsed_unverified",
       "original_same_selector_api_count": 1,
+      "reviewed_alternative_not_parity": null,
       "runtime_verified": false,
       "source_candidate_count": 1,
       "source_candidates": [
@@ -2360,6 +2501,7 @@
       },
       "original_class_attribution": "alias_collapsed_unverified",
       "original_same_selector_api_count": 1,
+      "reviewed_alternative_not_parity": null,
       "runtime_verified": false,
       "source_candidate_count": 1,
       "source_candidates": [
@@ -2389,6 +2531,7 @@
       },
       "original_class_attribution": "alias_collapsed_unverified",
       "original_same_selector_api_count": 1,
+      "reviewed_alternative_not_parity": null,
       "runtime_verified": false,
       "source_candidate_count": 1,
       "source_candidates": [
@@ -2418,6 +2561,7 @@
       },
       "original_class_attribution": "alias_collapsed_unverified",
       "original_same_selector_api_count": 1,
+      "reviewed_alternative_not_parity": null,
       "runtime_verified": false,
       "source_candidate_count": 1,
       "source_candidates": [
@@ -2447,6 +2591,7 @@
       },
       "original_class_attribution": "alias_collapsed_unverified",
       "original_same_selector_api_count": 1,
+      "reviewed_alternative_not_parity": null,
       "runtime_verified": false,
       "source_candidate_count": 1,
       "source_candidates": [
@@ -2478,6 +2623,7 @@
       },
       "original_class_attribution": "alias_collapsed_unverified",
       "original_same_selector_api_count": 1,
+      "reviewed_alternative_not_parity": null,
       "runtime_verified": false,
       "source_candidate_count": 1,
       "source_candidates": [
@@ -2509,6 +2655,7 @@
       },
       "original_class_attribution": "alias_collapsed_unverified",
       "original_same_selector_api_count": 1,
+      "reviewed_alternative_not_parity": null,
       "runtime_verified": false,
       "source_candidate_count": 1,
       "source_candidates": [
@@ -2538,6 +2685,7 @@
       },
       "original_class_attribution": "alias_collapsed_unverified",
       "original_same_selector_api_count": 1,
+      "reviewed_alternative_not_parity": null,
       "runtime_verified": false,
       "source_candidate_count": 1,
       "source_candidates": [
@@ -2569,6 +2717,7 @@
       },
       "original_class_attribution": "alias_collapsed_unverified",
       "original_same_selector_api_count": 1,
+      "reviewed_alternative_not_parity": null,
       "runtime_verified": false,
       "source_candidate_count": 1,
       "source_candidates": [
@@ -2600,6 +2749,7 @@
       },
       "original_class_attribution": "alias_collapsed_unverified",
       "original_same_selector_api_count": 1,
+      "reviewed_alternative_not_parity": null,
       "runtime_verified": false,
       "source_candidate_count": 1,
       "source_candidates": [
@@ -2631,6 +2781,7 @@
       },
       "original_class_attribution": "alias_collapsed_unverified",
       "original_same_selector_api_count": 1,
+      "reviewed_alternative_not_parity": null,
       "runtime_verified": false,
       "source_candidate_count": 1,
       "source_candidates": [
@@ -2662,6 +2813,7 @@
       },
       "original_class_attribution": "alias_collapsed_unverified",
       "original_same_selector_api_count": 1,
+      "reviewed_alternative_not_parity": null,
       "runtime_verified": false,
       "source_candidate_count": 1,
       "source_candidates": [
@@ -2693,6 +2845,7 @@
       },
       "original_class_attribution": "alias_collapsed_unverified",
       "original_same_selector_api_count": 1,
+      "reviewed_alternative_not_parity": null,
       "runtime_verified": false,
       "source_candidate_count": 1,
       "source_candidates": [
@@ -2722,6 +2875,7 @@
       },
       "original_class_attribution": "alias_collapsed_unverified",
       "original_same_selector_api_count": 1,
+      "reviewed_alternative_not_parity": null,
       "runtime_verified": false,
       "source_candidate_count": 1,
       "source_candidates": [
@@ -2751,6 +2905,7 @@
       },
       "original_class_attribution": "alias_collapsed_unverified",
       "original_same_selector_api_count": 1,
+      "reviewed_alternative_not_parity": null,
       "runtime_verified": false,
       "source_candidate_count": 1,
       "source_candidates": [
@@ -2780,6 +2935,7 @@
       },
       "original_class_attribution": "alias_collapsed_unverified",
       "original_same_selector_api_count": 1,
+      "reviewed_alternative_not_parity": null,
       "runtime_verified": false,
       "source_candidate_count": 1,
       "source_candidates": [
@@ -2809,6 +2965,7 @@
       },
       "original_class_attribution": "alias_collapsed_unverified",
       "original_same_selector_api_count": 1,
+      "reviewed_alternative_not_parity": null,
       "runtime_verified": false,
       "source_candidate_count": 1,
       "source_candidates": [
@@ -2838,6 +2995,7 @@
       },
       "original_class_attribution": "alias_collapsed_unverified",
       "original_same_selector_api_count": 1,
+      "reviewed_alternative_not_parity": null,
       "runtime_verified": false,
       "source_candidate_count": 1,
       "source_candidates": [
@@ -2867,6 +3025,7 @@
       },
       "original_class_attribution": "alias_collapsed_unverified",
       "original_same_selector_api_count": 1,
+      "reviewed_alternative_not_parity": null,
       "runtime_verified": false,
       "source_candidate_count": 1,
       "source_candidates": [
@@ -2898,6 +3057,7 @@
       },
       "original_class_attribution": "alias_collapsed_unverified",
       "original_same_selector_api_count": 1,
+      "reviewed_alternative_not_parity": null,
       "runtime_verified": false,
       "source_candidate_count": 1,
       "source_candidates": [
@@ -2927,6 +3087,7 @@
       },
       "original_class_attribution": "alias_collapsed_unverified",
       "original_same_selector_api_count": 1,
+      "reviewed_alternative_not_parity": null,
       "runtime_verified": false,
       "source_candidate_count": 1,
       "source_candidates": [
@@ -2956,6 +3117,7 @@
       },
       "original_class_attribution": "alias_collapsed_unverified",
       "original_same_selector_api_count": 1,
+      "reviewed_alternative_not_parity": null,
       "runtime_verified": false,
       "source_candidate_count": 1,
       "source_candidates": [
@@ -2985,6 +3147,7 @@
       },
       "original_class_attribution": "alias_collapsed_unverified",
       "original_same_selector_api_count": 1,
+      "reviewed_alternative_not_parity": null,
       "runtime_verified": false,
       "source_candidate_count": 1,
       "source_candidates": [
@@ -3016,6 +3179,7 @@
       },
       "original_class_attribution": "alias_collapsed_unverified",
       "original_same_selector_api_count": 1,
+      "reviewed_alternative_not_parity": null,
       "runtime_verified": false,
       "source_candidate_count": 1,
       "source_candidates": [
@@ -3047,6 +3211,7 @@
       },
       "original_class_attribution": "alias_collapsed_unverified",
       "original_same_selector_api_count": 1,
+      "reviewed_alternative_not_parity": null,
       "runtime_verified": false,
       "source_candidate_count": 1,
       "source_candidates": [
@@ -3078,6 +3243,7 @@
       },
       "original_class_attribution": "alias_collapsed_unverified",
       "original_same_selector_api_count": 1,
+      "reviewed_alternative_not_parity": null,
       "runtime_verified": false,
       "source_candidate_count": 1,
       "source_candidates": [
@@ -3109,6 +3275,7 @@
       },
       "original_class_attribution": "alias_collapsed_unverified",
       "original_same_selector_api_count": 1,
+      "reviewed_alternative_not_parity": null,
       "runtime_verified": false,
       "source_candidate_count": 1,
       "source_candidates": [
@@ -3140,6 +3307,7 @@
       },
       "original_class_attribution": "alias_collapsed_unverified",
       "original_same_selector_api_count": 1,
+      "reviewed_alternative_not_parity": null,
       "runtime_verified": false,
       "source_candidate_count": 1,
       "source_candidates": [
@@ -3171,6 +3339,7 @@
       },
       "original_class_attribution": "alias_collapsed_unverified",
       "original_same_selector_api_count": 1,
+      "reviewed_alternative_not_parity": null,
       "runtime_verified": false,
       "source_candidate_count": 1,
       "source_candidates": [
@@ -3202,6 +3371,7 @@
       },
       "original_class_attribution": "alias_collapsed_unverified",
       "original_same_selector_api_count": 1,
+      "reviewed_alternative_not_parity": null,
       "runtime_verified": false,
       "source_candidate_count": 1,
       "source_candidates": [
@@ -3233,6 +3403,7 @@
       },
       "original_class_attribution": "alias_collapsed_unverified",
       "original_same_selector_api_count": 1,
+      "reviewed_alternative_not_parity": null,
       "runtime_verified": false,
       "source_candidate_count": 1,
       "source_candidates": [
@@ -3264,6 +3435,7 @@
       },
       "original_class_attribution": "alias_collapsed_unverified",
       "original_same_selector_api_count": 1,
+      "reviewed_alternative_not_parity": null,
       "runtime_verified": false,
       "source_candidate_count": 1,
       "source_candidates": [
@@ -3295,6 +3467,7 @@
       },
       "original_class_attribution": "alias_collapsed_unverified",
       "original_same_selector_api_count": 1,
+      "reviewed_alternative_not_parity": null,
       "runtime_verified": false,
       "source_candidate_count": 1,
       "source_candidates": [
@@ -3326,6 +3499,7 @@
       },
       "original_class_attribution": "alias_collapsed_unverified",
       "original_same_selector_api_count": 1,
+      "reviewed_alternative_not_parity": null,
       "runtime_verified": false,
       "source_candidate_count": 1,
       "source_candidates": [
@@ -3355,6 +3529,7 @@
       },
       "original_class_attribution": "alias_collapsed_unverified",
       "original_same_selector_api_count": 1,
+      "reviewed_alternative_not_parity": null,
       "runtime_verified": false,
       "source_candidate_count": 1,
       "source_candidates": [
@@ -3384,6 +3559,7 @@
       },
       "original_class_attribution": "alias_collapsed_unverified",
       "original_same_selector_api_count": 1,
+      "reviewed_alternative_not_parity": null,
       "runtime_verified": false,
       "source_candidate_count": 1,
       "source_candidates": [
@@ -3413,6 +3589,7 @@
       },
       "original_class_attribution": "alias_collapsed_unverified",
       "original_same_selector_api_count": 2,
+      "reviewed_alternative_not_parity": null,
       "runtime_verified": false,
       "source_candidate_count": 2,
       "source_candidates": [
@@ -3452,6 +3629,7 @@
       },
       "original_class_attribution": "alias_collapsed_unverified",
       "original_same_selector_api_count": 2,
+      "reviewed_alternative_not_parity": null,
       "runtime_verified": false,
       "source_candidate_count": 2,
       "source_candidates": [
@@ -3491,6 +3669,14 @@
       },
       "original_class_attribution": "indexed_not_runtime_verified",
       "original_same_selector_api_count": 1,
+      "reviewed_alternative_not_parity": {
+        "anchor": "MSHookFunction((void *)&xpc_connection_set_event_handler,",
+        "anchor_occurrences": 2,
+        "equivalence_verified": false,
+        "file": "reconstruction/sources/support/CRMCM.m",
+        "kind": "function_hook_alternative",
+        "line": 777
+      },
       "runtime_verified": false,
       "source_candidate_count": 0,
       "source_candidates": [],
@@ -3511,6 +3697,7 @@
       },
       "original_class_attribution": "indexed_not_runtime_verified",
       "original_same_selector_api_count": 1,
+      "reviewed_alternative_not_parity": null,
       "runtime_verified": false,
       "source_candidate_count": 1,
       "source_candidates": [
@@ -3540,6 +3727,7 @@
       },
       "original_class_attribution": "indexed_not_runtime_verified",
       "original_same_selector_api_count": 1,
+      "reviewed_alternative_not_parity": null,
       "runtime_verified": false,
       "source_candidate_count": 1,
       "source_candidates": [
@@ -3569,6 +3757,7 @@
       },
       "original_class_attribution": "indexed_not_runtime_verified",
       "original_same_selector_api_count": 1,
+      "reviewed_alternative_not_parity": null,
       "runtime_verified": false,
       "source_candidate_count": 1,
       "source_candidates": [
@@ -3598,6 +3787,7 @@
       },
       "original_class_attribution": "indexed_not_runtime_verified",
       "original_same_selector_api_count": 1,
+      "reviewed_alternative_not_parity": null,
       "runtime_verified": false,
       "source_candidate_count": 1,
       "source_candidates": [
@@ -3630,6 +3820,7 @@
       },
       "original_class_attribution": "indexed_not_runtime_verified",
       "original_same_selector_api_count": 1,
+      "reviewed_alternative_not_parity": null,
       "runtime_verified": false,
       "source_candidate_count": 1,
       "source_candidates": [
@@ -3661,6 +3852,7 @@
       },
       "original_class_attribution": "indexed_not_runtime_verified",
       "original_same_selector_api_count": 1,
+      "reviewed_alternative_not_parity": null,
       "runtime_verified": false,
       "source_candidate_count": 1,
       "source_candidates": [
@@ -3690,6 +3882,7 @@
       },
       "original_class_attribution": "indexed_not_runtime_verified",
       "original_same_selector_api_count": 1,
+      "reviewed_alternative_not_parity": null,
       "runtime_verified": false,
       "source_candidate_count": 1,
       "source_candidates": [
@@ -3719,6 +3912,7 @@
       },
       "original_class_attribution": "indexed_not_runtime_verified",
       "original_same_selector_api_count": 1,
+      "reviewed_alternative_not_parity": null,
       "runtime_verified": false,
       "source_candidate_count": 1,
       "source_candidates": [
@@ -3748,6 +3942,7 @@
       },
       "original_class_attribution": "indexed_not_runtime_verified",
       "original_same_selector_api_count": 1,
+      "reviewed_alternative_not_parity": null,
       "runtime_verified": false,
       "source_candidate_count": 1,
       "source_candidates": [
@@ -3777,6 +3972,7 @@
       },
       "original_class_attribution": "indexed_not_runtime_verified",
       "original_same_selector_api_count": 1,
+      "reviewed_alternative_not_parity": null,
       "runtime_verified": false,
       "source_candidate_count": 1,
       "source_candidates": [
@@ -3806,10 +4002,20 @@
       },
       "original_class_attribution": "indexed_not_runtime_verified",
       "original_same_selector_api_count": 1,
+      "reviewed_alternative_not_parity": null,
       "runtime_verified": false,
-      "source_candidate_count": 0,
-      "source_candidates": [],
-      "source_match_status": "no_installer_candidate",
+      "source_candidate_count": 1,
+      "source_candidates": [
+        {
+          "api": "MSHookMessageEx",
+          "file": "reconstruction/sources/support/CRApsd.m",
+          "impl_expression": "(IMP)CraneApsdSendTokenGenerate",
+          "line": 861,
+          "selector": "sendTokenGenerateMessageWithTopicHash:baseToken:appId:expirationTTL:vapidPublicKeyHash:type:onInterface:",
+          "target_expression": "connectionClass"
+        }
+      ],
+      "source_match_status": "textual_installer_candidate",
       "test_source_selector_mentions_only": []
     },
     {
@@ -3826,6 +4032,7 @@
       },
       "original_class_attribution": "indexed_not_runtime_verified",
       "original_same_selector_api_count": 1,
+      "reviewed_alternative_not_parity": null,
       "runtime_verified": false,
       "source_candidate_count": 1,
       "source_candidates": [
@@ -3855,6 +4062,7 @@
       },
       "original_class_attribution": "indexed_not_runtime_verified",
       "original_same_selector_api_count": 1,
+      "reviewed_alternative_not_parity": null,
       "runtime_verified": false,
       "source_candidate_count": 1,
       "source_candidates": [
@@ -3884,6 +4092,7 @@
       },
       "original_class_attribution": "indexed_not_runtime_verified",
       "original_same_selector_api_count": 1,
+      "reviewed_alternative_not_parity": null,
       "runtime_verified": false,
       "source_candidate_count": 1,
       "source_candidates": [
@@ -3913,6 +4122,7 @@
       },
       "original_class_attribution": "indexed_not_runtime_verified",
       "original_same_selector_api_count": 1,
+      "reviewed_alternative_not_parity": null,
       "runtime_verified": false,
       "source_candidate_count": 1,
       "source_candidates": [
@@ -3942,10 +4152,20 @@
       },
       "original_class_attribution": "indexed_not_runtime_verified",
       "original_same_selector_api_count": 1,
+      "reviewed_alternative_not_parity": null,
       "runtime_verified": false,
-      "source_candidate_count": 0,
-      "source_candidates": [],
-      "source_match_status": "no_installer_candidate",
+      "source_candidate_count": 1,
+      "source_candidates": [
+        {
+          "api": "MSHookMessageEx",
+          "file": "reconstruction/sources/support/CRApsd.m",
+          "impl_expression": "(IMP)CraneApsdMessageProtocolConnection",
+          "line": 917,
+          "selector": "_handleMessageMessage:onProtocolConnection:withGeneration:isWakingMessage:fromAgent:",
+          "target_expression": "courierClass"
+        }
+      ],
+      "source_match_status": "textual_installer_candidate",
       "test_source_selector_mentions_only": []
     },
     {
@@ -3962,10 +4182,20 @@
       },
       "original_class_attribution": "indexed_not_runtime_verified",
       "original_same_selector_api_count": 1,
+      "reviewed_alternative_not_parity": null,
       "runtime_verified": false,
-      "source_candidate_count": 0,
-      "source_candidates": [],
-      "source_match_status": "no_installer_candidate",
+      "source_candidate_count": 1,
+      "source_candidates": [
+        {
+          "api": "MSHookMessageEx",
+          "file": "reconstruction/sources/support/CRApsd.m",
+          "impl_expression": "(IMP)CraneApsdMessageInterfaceWaking",
+          "line": 924,
+          "selector": "_handleMessageMessage:onInterface:withGeneration:isWakingMessage:fromAgent:",
+          "target_expression": "courierClass"
+        }
+      ],
+      "source_match_status": "textual_installer_candidate",
       "test_source_selector_mentions_only": []
     },
     {
@@ -3982,6 +4212,7 @@
       },
       "original_class_attribution": "indexed_not_runtime_verified",
       "original_same_selector_api_count": 1,
+      "reviewed_alternative_not_parity": null,
       "runtime_verified": false,
       "source_candidate_count": 1,
       "source_candidates": [
@@ -4011,6 +4242,7 @@
       },
       "original_class_attribution": "indexed_not_runtime_verified",
       "original_same_selector_api_count": 1,
+      "reviewed_alternative_not_parity": null,
       "runtime_verified": false,
       "source_candidate_count": 1,
       "source_candidates": [
@@ -4040,6 +4272,7 @@
       },
       "original_class_attribution": "indexed_not_runtime_verified",
       "original_same_selector_api_count": 1,
+      "reviewed_alternative_not_parity": null,
       "runtime_verified": false,
       "source_candidate_count": 1,
       "source_candidates": [
@@ -4069,6 +4302,7 @@
       },
       "original_class_attribution": "indexed_not_runtime_verified",
       "original_same_selector_api_count": 1,
+      "reviewed_alternative_not_parity": null,
       "runtime_verified": false,
       "source_candidate_count": 1,
       "source_candidates": [
@@ -4098,6 +4332,14 @@
       },
       "original_class_attribution": "indexed_not_runtime_verified",
       "original_same_selector_api_count": 1,
+      "reviewed_alternative_not_parity": {
+        "anchor": "CRPrefsHookMessage(daemonClass,",
+        "anchor_occurrences": 3,
+        "equivalence_verified": false,
+        "file": "reconstruction/sources/support/CRCfprefs.m",
+        "kind": "hook_wrapper_alternative",
+        "line": 471
+      },
       "runtime_verified": false,
       "source_candidate_count": 0,
       "source_candidates": [],
@@ -4118,6 +4360,14 @@
       },
       "original_class_attribution": "indexed_not_runtime_verified",
       "original_same_selector_api_count": 1,
+      "reviewed_alternative_not_parity": {
+        "anchor": "(void *)CRPrefsHandleSourceMessageV2,",
+        "anchor_occurrences": 1,
+        "equivalence_verified": false,
+        "file": "reconstruction/sources/support/CRCfprefs.m",
+        "kind": "function_hook_alternative",
+        "line": 462
+      },
       "runtime_verified": false,
       "source_candidate_count": 0,
       "source_candidates": [],
@@ -4138,6 +4388,14 @@
       },
       "original_class_attribution": "indexed_not_runtime_verified",
       "original_same_selector_api_count": 1,
+      "reviewed_alternative_not_parity": {
+        "anchor": "(void *)CRPrefsWithSourceV3,",
+        "anchor_occurrences": 1,
+        "equivalence_verified": false,
+        "file": "reconstruction/sources/support/CRCfprefs.m",
+        "kind": "function_hook_alternative",
+        "line": 499
+      },
       "runtime_verified": false,
       "source_candidate_count": 0,
       "source_candidates": [],
@@ -4158,6 +4416,7 @@
       },
       "original_class_attribution": "indexed_not_runtime_verified",
       "original_same_selector_api_count": 1,
+      "reviewed_alternative_not_parity": null,
       "runtime_verified": false,
       "source_candidate_count": 1,
       "source_candidates": [
@@ -4187,6 +4446,7 @@
       },
       "original_class_attribution": "indexed_not_runtime_verified",
       "original_same_selector_api_count": 1,
+      "reviewed_alternative_not_parity": null,
       "runtime_verified": false,
       "source_candidate_count": 1,
       "source_candidates": [
@@ -4216,6 +4476,7 @@
       },
       "original_class_attribution": "indexed_not_runtime_verified",
       "original_same_selector_api_count": 1,
+      "reviewed_alternative_not_parity": null,
       "runtime_verified": false,
       "source_candidate_count": 1,
       "source_candidates": [
@@ -4245,6 +4506,7 @@
       },
       "original_class_attribution": "indexed_not_runtime_verified",
       "original_same_selector_api_count": 1,
+      "reviewed_alternative_not_parity": null,
       "runtime_verified": false,
       "source_candidate_count": 1,
       "source_candidates": [
@@ -4276,6 +4538,7 @@
       },
       "original_class_attribution": "indexed_not_runtime_verified",
       "original_same_selector_api_count": 1,
+      "reviewed_alternative_not_parity": null,
       "runtime_verified": false,
       "source_candidate_count": 1,
       "source_candidates": [
@@ -4305,6 +4568,7 @@
       },
       "original_class_attribution": "indexed_not_runtime_verified",
       "original_same_selector_api_count": 1,
+      "reviewed_alternative_not_parity": null,
       "runtime_verified": false,
       "source_candidate_count": 1,
       "source_candidates": [
@@ -4337,6 +4601,7 @@
       },
       "original_class_attribution": "indexed_not_runtime_verified",
       "original_same_selector_api_count": 1,
+      "reviewed_alternative_not_parity": null,
       "runtime_verified": false,
       "source_candidate_count": 1,
       "source_candidates": [
@@ -4369,6 +4634,7 @@
       },
       "original_class_attribution": "indexed_not_runtime_verified",
       "original_same_selector_api_count": 1,
+      "reviewed_alternative_not_parity": null,
       "runtime_verified": false,
       "source_candidate_count": 1,
       "source_candidates": [
@@ -4398,6 +4664,7 @@
       },
       "original_class_attribution": "indexed_not_runtime_verified",
       "original_same_selector_api_count": 1,
+      "reviewed_alternative_not_parity": null,
       "runtime_verified": false,
       "source_candidate_count": 1,
       "source_candidates": [
@@ -4427,6 +4694,7 @@
       },
       "original_class_attribution": "indexed_not_runtime_verified",
       "original_same_selector_api_count": 1,
+      "reviewed_alternative_not_parity": null,
       "runtime_verified": false,
       "source_candidate_count": 1,
       "source_candidates": [
@@ -4456,6 +4724,7 @@
       },
       "original_class_attribution": "indexed_not_runtime_verified",
       "original_same_selector_api_count": 1,
+      "reviewed_alternative_not_parity": null,
       "runtime_verified": false,
       "source_candidate_count": 1,
       "source_candidates": [
@@ -4485,6 +4754,7 @@
       },
       "original_class_attribution": "indexed_not_runtime_verified",
       "original_same_selector_api_count": 1,
+      "reviewed_alternative_not_parity": null,
       "runtime_verified": false,
       "source_candidate_count": 1,
       "source_candidates": [
@@ -4516,6 +4786,7 @@
       },
       "original_class_attribution": "indexed_not_runtime_verified",
       "original_same_selector_api_count": 1,
+      "reviewed_alternative_not_parity": null,
       "runtime_verified": false,
       "source_candidate_count": 1,
       "source_candidates": [
@@ -4545,6 +4816,7 @@
       },
       "original_class_attribution": "indexed_not_runtime_verified",
       "original_same_selector_api_count": 1,
+      "reviewed_alternative_not_parity": null,
       "runtime_verified": false,
       "source_candidate_count": 1,
       "source_candidates": [
@@ -4574,6 +4846,7 @@
       },
       "original_class_attribution": "indexed_not_runtime_verified",
       "original_same_selector_api_count": 1,
+      "reviewed_alternative_not_parity": null,
       "runtime_verified": false,
       "source_candidate_count": 1,
       "source_candidates": [
@@ -4603,6 +4876,7 @@
       },
       "original_class_attribution": "indexed_not_runtime_verified",
       "original_same_selector_api_count": 1,
+      "reviewed_alternative_not_parity": null,
       "runtime_verified": false,
       "source_candidate_count": 1,
       "source_candidates": [
@@ -4632,6 +4906,7 @@
       },
       "original_class_attribution": "indexed_not_runtime_verified",
       "original_same_selector_api_count": 1,
+      "reviewed_alternative_not_parity": null,
       "runtime_verified": false,
       "source_candidate_count": 1,
       "source_candidates": [
@@ -4661,6 +4936,7 @@
       },
       "original_class_attribution": "indexed_not_runtime_verified",
       "original_same_selector_api_count": 1,
+      "reviewed_alternative_not_parity": null,
       "runtime_verified": false,
       "source_candidate_count": 1,
       "source_candidates": [
@@ -4690,6 +4966,7 @@
       },
       "original_class_attribution": "indexed_not_runtime_verified",
       "original_same_selector_api_count": 1,
+      "reviewed_alternative_not_parity": null,
       "runtime_verified": false,
       "source_candidate_count": 1,
       "source_candidates": [
@@ -4721,6 +4998,7 @@
       },
       "original_class_attribution": "indexed_not_runtime_verified",
       "original_same_selector_api_count": 1,
+      "reviewed_alternative_not_parity": null,
       "runtime_verified": false,
       "source_candidate_count": 1,
       "source_candidates": [
@@ -4752,6 +5030,7 @@
       },
       "original_class_attribution": "indexed_not_runtime_verified",
       "original_same_selector_api_count": 1,
+      "reviewed_alternative_not_parity": null,
       "runtime_verified": false,
       "source_candidate_count": 1,
       "source_candidates": [
@@ -4802,7 +5081,8 @@
   "schema": "crane_hook_source_audit_v1",
   "source_match_counts": {
     "ambiguous_original_duplicate": 10,
-    "no_installer_candidate": 16,
-    "textual_installer_candidate": 133
-  }
+    "no_installer_candidate": 12,
+    "textual_installer_candidate": 137
+  },
+  "unmatched_reviewed_alternative_count": 12
 }

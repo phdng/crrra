@@ -36,10 +36,43 @@ verification flags.
 
 | Evidence state | Registration rows | Meaning |
 | --- | ---: | --- |
-| `textual_installer_candidate` | 133 | A matching hook API and selector can be resolved at a concrete source registration expression. **No guarantee** that the class, receiver kind (metaclass vs instance), signature, iOS version gate or implementation behavior matches the original. |
+| `textual_installer_candidate` | 137 | A matching hook API and selector can be resolved at a concrete source registration expression. **No guarantee** that the class, receiver kind (metaclass vs instance), signature, iOS version gate or implementation behavior matches the original. |
 | `ambiguous_original_duplicate` | 10 | Multiple original registrations share a dylib/API/selector; textual evidence cannot prove which implementation/version-specific registration corresponds to which original row. |
-| `no_installer_candidate` | 16 | This bounded lexical scanner found no matching source installer. This **does not automatically mean missing functionality**: private-class adaptation, alternate hook APIs, dynamic selectors, and unsupported original UI classes can legitimately differ. |
+| `no_installer_candidate` | 12 | This bounded lexical scanner found no matching source installer. This **does not automatically mean missing functionality**: private-class adaptation, alternate hook APIs, dynamic selectors, and unsupported original UI classes can legitimately differ. |
 | **Total** | **159** | Original index: CraneSB 113, CraneSupport 45, CranePrefs 1. |
+
+**Follow-up after the user confirmed the first G-09 build:** the scanner
+now recognizes adjacent Objective-C string literals inside
+`NSSelectorFromString`. This restores three already-present direct APSd
+hook installer candidates: `sendTokenGenerateMessageWithTopicHash:...`
+and two `_handleMessageMessage:...` variants in `CRApsd.m`.
+No APSd runtime code was changed. A later inspection of the **original**
+`CraneSB.dylib_export_for_ai/decompile/14D18.c` and `15204.c` resolved
+one more scanner false negative: the original pre-iOS-13 branch hooks
+`SBUIAppIconForceTouchController` selector `init`, calls the original
+initializer, then resets `crane_provideContainerOptions` to false. That
+same sequence already exists in `CRMenuHooks.m` through
+`SEL initSelector = @selector(init)` and `CRLegacyForceTouchControllerInit`.
+The audit now recognizes local `@selector(...)` definitions, with exact
+original/source regression checks. **No duplicate runtime hook was added.**
+
+Of the remaining 12 original entries with no same-API/same-selector
+installer, all 12 carry reviewed `reviewed_alternative_not_parity`
+file/line evidence:
+
+- **Seven native badge/menu rows:** one `valueForUndefinedKey:` alternate
+  class method and six visual-only safe-adapter references. Private badge
+  getter/setter and layout hooks are **not** claimed equivalent.
+- **One notification row:** `containsObject:` uses an alternate
+  `CRCraneResolvingSet` subclass method in `CRBadgeStore.m`.
+- **Four support rows:** the C-level
+  `xpc_connection_set_event_handler` hook via `MSHookFunction`, the
+  cfprefsd ObjC hook wrapper, and two separate C-symbol hooks in
+  `CRCfprefs.m`. These are alternatives, not original ABI parity.
+
+The reviewed alternatives have explicit `equivalence_verified:false` and
+are kept in the JSON **without** altering the 12 `no_installer_candidate`
+statuses. The duplicate-original-selector 10 rows remain ambiguous.
 
 The indexed `_initNotificationSupport` group contains **52 rows**, not 40
 as an older hand-written comment suggests. Its `target_class` is collapsed
@@ -61,10 +94,11 @@ hook `UNSNotificationRecord` based solely on this index.
    installer candidate. The current `CRMenuHooks.m` layout is a documented
    safe approximation; do not copy fragile class swizzling without
    runtime class/signature evidence.
-3. **Support daemon functions:** unmatched `_handleMessageMessage:...`,
-   `sendTokenGenerateMessageWithTopicHash:...` and some C-level functions
-   need targeted review, not blind MSHookMessageEx additions. The existing
-   `CRApsd.m` implementation may use reconstructed adapters.
+3. **Support daemon functions:** three apparent APSd misses were only
+   concatenated-literal scanner false negatives, now resolved to source
+   installer candidates. The remaining function-level entries use
+   `MSHookFunction` / cfprefsd wrapper mechanisms, with reviewed anchors.
+   Do not blindly add `MSHookMessageEx` for them.
 4. **Repeated original registrations:** preserve each registration in the
    table; never assign identical class/implementation based only on selector
    equality.
@@ -74,12 +108,17 @@ semantics, callback lifecycle, filter selection, process launch test,
 production notification delivery test, or on-device class identity
 verification has been performed by this audit.
 
-**Local verification (2026-10-16):** nine hook-audit Python tests PASS; full
-reconstruction Python suite: 287 tests, 286 PASS, one platform SKIP, zero FAIL;
-matrix --check, menu/badge source contract, Python compileall and
-`git diff --check` PASS (only Windows line-ending warnings). CI's new
-matrix freshness/test steps and native Theos builds are not independently
-verified for this slice.
+**Earlier G-09 verification (2026-10-16):** the user reported the
+G-09 build PASS before this follow-up. The previous nine hook-audit tests
+and 287-test reconstruction Python suite passed (one platform skip).
+This follow-up added selector-literal parser tests and reviewed evidence.
+**Local follow-up verification:** 16/16 hook-audit tests PASS, including
+original decompile comparisons for legacy Force Touch `init`, its
+CoreFoundation version gate and existing hook implementation; full Python
+suite **294 tests, 293 PASS, one Windows/POSIX SKIP, zero failures**;
+regenerated matrix --check PASS, menu badge contract PASS, Python compileall
+PASS and git diff --check PASS (only Windows LF/CRLF warnings).
+CI native and on-device runtime checks remain necessary for any new hook.
 
 This work changes **no runtime hooks or daemon behavior**. Future patches
 should begin with a single proven discrepancy and an isolated device test,
