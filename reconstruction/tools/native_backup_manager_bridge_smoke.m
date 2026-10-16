@@ -7,6 +7,7 @@
 #import <objc/runtime.h>
 #import <stdlib.h>
 #import "CRBackupNativeManagerPreflight.h"
+#import "CRBackupDisposableDiagnostic.h"
 
 static id gManager = nil;
 static NSString *gAppRoot = nil;
@@ -46,6 +47,21 @@ static id CR6MockAssociated(id self, SEL selector,
         @"com.example.crane.native":gAppRoot,
         @"group.com.example.crane.native":(gDuplicate ? gAppRoot : gGroupRoot),
     };
+}
+static void CR6MockTypedEnumerate(id self, SEL selector,
+                                  void (^block)(NSInteger, NSString *, NSString *, BOOL *),
+                                  NSString *containerID, NSString *appID)
+{
+    (void)self; (void)selector;
+    if (![appID isEqualToString:@"com.example.crane.native"] ||
+        !([containerID isEqualToString:@"DEFAULT"] ||
+          [containerID isEqualToString:@"00000000-0000-4000-8000-000000000001"]))
+        return;
+    BOOL stop = NO;
+    block(0, @"com.example.crane.native", gAppRoot, &stop);
+    if (!stop)
+        block(1, @"group.com.example.crane.native",
+              gDuplicate ? gAppRoot : gGroupRoot, &stop);
 }
 static void Check(BOOL ok, NSString *reason)
 {
@@ -90,6 +106,10 @@ int main(void)
              @selector(pathsAssociatedToContainerWithIdentifier:ofApplicationWithIdentifier:),
              (IMP)CR6MockAssociated, "@@:@@"),
              @"missing mock associated paths selector");
+        Check(class_addMethod(cls,
+             @selector(enumerate:pathsAssociatedToContainerWithIdentifier:ofApplicationWithIdentifier:),
+             (IMP)CR6MockTypedEnumerate, "v@:@?@@"),
+             @"missing mock typed enumeration selector");
         objc_registerClassPair(cls);
 
         gManager = [[cls alloc] init];
@@ -121,6 +141,73 @@ int main(void)
               report.count == 9,
               @"must return N5 read-only redacted counters only");
 
+        error = nil;
+        NSDictionary *typed = [CRBackupNativeManagerPreflight
+            probeTypedRegisteredApplication:app containerIdentifier:container error:&error];
+        Check(typed && !error &&
+              [typed[@"applicationRootCount"] intValue] == 1 &&
+              [typed[@"appGroupRootCount"] intValue] == 1 &&
+              [typed[@"plugInKitRootCount"] intValue] == 0 &&
+              ![typed[@"sourceFilesEnumerated"] boolValue] &&
+              ![typed[@"backupReady"] boolValue],
+              @"N7 real singleton typed bridge should return counters only");
+
+        /* N8: no manager call without explicit consent AND an exact
+         * dedicated throwaway app with a registered UUID container. */
+        Check([CRBackupDisposableDiagnostic
+               isEligibleApplicationIdentifier:app
+                            containerIdentifier:container],
+              @"N8 dedicated test app must be selectable");
+        Check(![CRBackupDisposableDiagnostic
+               isEligibleApplicationIdentifier:app
+                            containerIdentifier:@"DEFAULT"],
+              @"N8 DEFAULT container must not be selectable");
+        NSInteger gatedCalls = gReadCalls;
+        NSError *diagnosticError = nil;
+        Check(![CRBackupDisposableDiagnostic
+               probeApplicationIdentifier:app containerIdentifier:container
+                         userConfirmedOnce:NO error:&diagnosticError] &&
+              diagnosticError.code == 1 && gReadCalls == gatedCalls,
+              @"N8 unconfirmed diagnostic must not call manager");
+        diagnosticError = nil;
+        Check(![CRBackupDisposableDiagnostic
+               probeApplicationIdentifier:@"com.example.other"
+                       containerIdentifier:container
+                         userConfirmedOnce:YES error:&diagnosticError] &&
+              diagnosticError.code == 1 && gReadCalls == gatedCalls,
+              @"N8 unrelated user apps must not be scanned");
+        diagnosticError = nil;
+        Check(![CRBackupDisposableDiagnostic
+               probeApplicationIdentifier:app containerIdentifier:@"DEFAULT"
+                         userConfirmedOnce:YES error:&diagnosticError] &&
+              diagnosticError.code == 1 && gReadCalls == gatedCalls,
+              @"N8 DEFAULT must not be scanned");
+
+        diagnosticError = nil;
+        NSDictionary *diagnostic = [CRBackupDisposableDiagnostic
+            probeApplicationIdentifier:app containerIdentifier:container
+                      userConfirmedOnce:YES error:&diagnosticError];
+        Check(diagnostic && !diagnosticError &&
+              [diagnostic[@"rootCount"] intValue] == 2 &&
+              [diagnostic[@"appGroupRootCount"] intValue] == 1 &&
+              [diagnostic[@"plugInKitRootCount"] intValue] == 0 &&
+              ![diagnostic[@"sourceFilesEnumerated"] boolValue] &&
+              ![diagnostic[@"keychainContentsRead"] boolValue] &&
+              ![diagnostic[@"backupReady"] boolValue] &&
+              ![diagnostic[@"restoreExecutable"] boolValue] &&
+              diagnostic.count == 10,
+              @"N8 must return redacted read-only counters, never backup readiness");
+        gDuplicate = YES;
+        diagnosticError = nil;
+        Check(![CRBackupDisposableDiagnostic
+                probeApplicationIdentifier:app containerIdentifier:container
+                          userConfirmedOnce:YES error:&diagnosticError] &&
+              diagnosticError.code == 2 &&
+              [diagnosticError.localizedDescription isEqualToString:
+               @"Read-only disposable source diagnostic unavailable"],
+              @"N8 must sanitize N5/N7 invalid source map errors");
+        gDuplicate = NO;
+
         NSInteger before = gReadCalls;
         NSDictionary *defaultReport = [CRBackupNativeManagerPreflight
             probeRegisteredApplication:app containerIdentifier:@"DEFAULT" error:&error];
@@ -137,6 +224,11 @@ int main(void)
         gSupported = YES;
         gManager = nil;
         ExpectFailure(app, container, 3);
+        NSError *typedError = nil;
+        Check(![CRBackupNativeManagerPreflight probeTypedRegisteredApplication:app
+              containerIdentifier:container error:&typedError] &&
+              typedError.code == 3,
+              @"N7 must refuse nil singleton");
 
         NSLog(@"G-11 N6 read-only real CraneManager bridge mock: PASS");
     }

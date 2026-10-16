@@ -12,6 +12,7 @@
  */
 #import "CRBackupNativeManagerPreflight.h"
 #import "CRBackupNativeSourcePreflight.h"
+#import "CRBackupNativeTypedPreflight.h"
 #import "CRManager.h"
 #import <objc/message.h>
 #import <objc/runtime.h>
@@ -80,6 +81,48 @@ static void CR6Fail(NSError **error, NSInteger code)
         ![report[@"sourceContentsRead"] isEqual:@NO] ||
         ![report[@"keychainContentsRead"] isEqual:@NO]) {
         CR6Fail(error, 5);
+        return nil;
+    }
+    return report;
+}
+
++ (NSDictionary<NSString *, id> *)probeTypedRegisteredApplication:(NSString *)applicationID
+                                               containerIdentifier:(NSString *)containerID
+                                                             error:(NSError **)error
+{
+    Class managerClass = NSClassFromString(@"CraneManager");
+    SEL sharedSEL = @selector(sharedManager);
+    if (!managerClass || ![managerClass respondsToSelector:sharedSEL]) {
+        CR6Fail(error, 1);
+        return nil;
+    }
+    id manager = nil;
+    @try {
+        typedef id (*CR6SharedManagerIMP)(id, SEL);
+        manager = ((CR6SharedManagerIMP)objc_msgSend)(managerClass, sharedSEL);
+    } @catch (NSException *exception) {
+        (void)exception;
+        CR6Fail(error, 2);
+        return nil;
+    }
+    if (!manager ||
+        ![manager respondsToSelector:
+            @selector(enumerate:pathsAssociatedToContainerWithIdentifier:ofApplicationWithIdentifier:)]) {
+        CR6Fail(error, 3);
+        return nil;
+    }
+    NSDictionary *report = [CRBackupNativeTypedPreflight
+        inspectApplicationIdentifier:applicationID
+        containerIdentifier:containerID
+        resolver:(id<CRBackupTypedSourceResolver>)manager
+        error:NULL];
+    if (!report ||
+        ![report[@"backupReady"] isEqual:@NO] ||
+        ![report[@"restoreExecutable"] isEqual:@NO] ||
+        ![report[@"sourceFilesEnumerated"] isEqual:@NO] ||
+        ![report[@"sourceContentsRead"] isEqual:@NO] ||
+        ![report[@"keychainContentsRead"] isEqual:@NO]) {
+        CR6Fail(error, 6);
         return nil;
     }
     return report;

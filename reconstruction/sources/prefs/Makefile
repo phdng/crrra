@@ -9,7 +9,7 @@ CranePrefs_INSTALL_PATH = /Library/PreferenceBundles
 
 include $(THEOS)/makefiles/common.mk
 
-CranePrefs_FILES  = CRPreferences.m CRCredits.m CRRootSuggestions.m CRChoicyEditor.m CRBackupNativeCore.m CRBackupArchiveSurvey.m CRBackupNativeFixtureWriter.m CRBackupNativeFixtureCollector.m CRBackupNativeSourcePreflight.m CRBackupNativeManagerPreflight.m ../common/CRCommon.m
+CranePrefs_FILES  = CRPreferences.m CRCredits.m CRRootSuggestions.m CRChoicyEditor.m CRBackupNativeCore.m CRBackupArchiveSurvey.m CRBackupNativeFixtureWriter.m CRBackupNativeFixtureCollector.m CRBackupNativeSourcePreflight.m CRBackupNativeManagerPreflight.m CRBackupNativeTypedPreflight.m CRBackupDisposableDiagnostic.m ../common/CRCommon.m
 CranePrefs_CFLAGS  = -fobjc-arc -I$(THEOS_PROJECT_DIR)/sources/common
 CranePrefs_CFLAGS += -I$(THEOS_PROJECT_DIR)/layout/Library/PreferenceBundles/CranePrefs.bundle
 CranePrefs_FRAMEWORKS = Foundation CoreFoundation UIKit Security CoreGraphics LocalAuthentication MobileCoreServices

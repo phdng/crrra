@@ -32,6 +32,7 @@
 #import "CRCommon.h"
 #import "CRChoicyEditor.h"
 #import "CRCreditsLinks.h"
+#import "CRBackupDisposableDiagnostic.h"
 
 /* AltList and the Preferences framework are linked by the original. They are
  * declared minimally here so the file can be read without their headers; the
@@ -889,6 +890,7 @@
 - (void)scheduleContainerConfigurationReload;
 - (void)updateContainerSize;
 - (void)updateSizeGroupSpecifierAndReload:(BOOL)reload;
+- (void)runDisposableSourceDiagnostic;
 @end
 
 @implementation CRPContainerConfigurationListController
@@ -1180,6 +1182,24 @@
                          forKey:@"containerIdentifier"];
             [rows addObject:browse];
         }
+        /* N8 opt-in diagnostic: dedicated throwaway bundle only, never
+         * probed during pane construction or app/container switching. */
+        if ([CRBackupDisposableDiagnostic
+                isEligibleApplicationIdentifier:self.applicationIdentifier
+                              containerIdentifier:self.containerIdentifier]) {
+            PSSpecifier *diagnosticGroup = [PSSpecifier emptyGroupSpecifier];
+            [diagnosticGroup setName:@"Disposable app source diagnostic"];
+            [diagnosticGroup setProperty:
+                @"Opt-in root metadata counts only. No file contents, Keychain, Backup or Restore. The test app must contain no personal data."
+                                  forKey:@"footerText"];
+            [rows addObject:diagnosticGroup];
+            PSSpecifier *runDiagnostic = [PSSpecifier preferenceSpecifierNamed:
+                @"Check source roots (read-only)" target:self
+                set:NULL get:NULL detail:NULL cell:13 edit:0];
+            [runDiagnostic setProperty:@YES forKey:@"enabled"];
+            [runDiagnostic setButtonAction:@selector(runDisposableSourceDiagnostic)];
+            [rows addObject:runDiagnostic];
+        }
         self.craneContainerSpecifiers = rows;
     }
     @try { [self setValue:self.craneContainerSpecifiers forKey:@"_specifiers"]; }
@@ -1189,6 +1209,52 @@
     if (shouldUpdateSize)
         [self updateContainerSize];
     return self.craneContainerSpecifiers;
+}
+
+/* N8: tap + confirm, then recheck that the dedicated test selection is
+ * still current. Cancelling or opening the pane performs no probe. */
+- (void)runDisposableSourceDiagnostic
+{
+    NSString *appID = [self.applicationIdentifier copy];
+    NSString *containerID = [self.containerIdentifier copy];
+    if (![CRBackupDisposableDiagnostic
+            isEligibleApplicationIdentifier:appID
+                          containerIdentifier:containerID])
+        return;
+
+    UIAlertController *confirm = [UIAlertController
+        alertControllerWithTitle:@"Read-only source diagnostic"
+        message:@"Only use this on a disposable com.example.crane.native test app with no personal data. Check root directory metadata only? No backup or restore will run."
+        preferredStyle:UIAlertControllerStyleAlert];
+    [confirm addAction:[UIAlertAction actionWithTitle:CRLocalize(@"CANCEL")
+        style:UIAlertActionStyleCancel handler:nil]];
+    __weak typeof(self) weakSelf = self;
+    [confirm addAction:[UIAlertAction actionWithTitle:@"Check roots"
+        style:UIAlertActionStyleDefault handler:^(__unused UIAlertAction *action) {
+            typeof(self) strongSelf = weakSelf;
+            if (!strongSelf ||
+                ![strongSelf.applicationIdentifier isEqualToString:appID] ||
+                ![strongSelf.containerIdentifier isEqualToString:containerID])
+                return;
+            NSError *error = nil;
+            NSDictionary *report = [CRBackupDisposableDiagnostic
+                probeApplicationIdentifier:appID containerIdentifier:containerID
+                        userConfirmedOnce:YES error:&error];
+            NSString *message = report ?
+                [NSString stringWithFormat:
+                    @"Root metadata checked. App: %@, App Groups: %@, PlugInKit: %@. No files or Keychain read. Backup and Restore remain unavailable.",
+                    report[@"applicationRootCount"], report[@"appGroupRootCount"],
+                    report[@"plugInKitRootCount"]] :
+                @"Read-only diagnostic failed safely. No data changed. Check test app registration and root accessibility.";
+            UIAlertController *result = [UIAlertController
+                alertControllerWithTitle:(report ? @"Diagnostic complete" : @"Diagnostic unavailable")
+                message:message preferredStyle:UIAlertControllerStyleAlert];
+            [result addAction:[UIAlertAction actionWithTitle:CRLocalize(@"CLOSE")
+                style:UIAlertActionStyleCancel handler:nil]];
+            [strongSelf presentViewController:result animated:YES completion:nil];
+            (void)error; /* Never display private lower-level exceptions. */
+        }]];
+    [self presentViewController:confirm animated:YES completion:nil];
 }
 
 /* Native CranePrefs 0x113A4/0x1148C/0x11520: calculate container size

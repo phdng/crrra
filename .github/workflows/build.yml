@@ -238,6 +238,18 @@ jobs:
       - name: Test N6 native CraneManager bridge safety regression
         run: python3 -m unittest discover -s reconstruction/tools -p test_crane_native_manager_bridge.py -v
 
+      - name: Verify N7 typed app-group PlugInKit preflight source contract
+        run: python3 reconstruction/tools/check_native_typed_preflight_contract.py
+
+      - name: Test N7 typed source map regression
+        run: python3 -m unittest discover -s reconstruction/tools -p test_crane_native_typed_preflight.py -v
+
+      - name: Verify N8 opt-in disposable source diagnostic contract
+        run: python3 reconstruction/tools/check_disposable_source_diagnostic_contract.py
+
+      - name: Test N8 consent and fixture-bound source diagnostics
+        run: python3 -m unittest discover -s reconstruction/tools -p test_crane_disposable_source_diagnostic.py -v
+
       - name: Verify native disposable ZIP writer contract
         run: python3 reconstruction/tools/check_native_backup_writer_contract.py
 
@@ -431,6 +443,19 @@ jobs:
             -o "$RUNNER_TEMP/native_backup_source_preflight_smoke"
           "$RUNNER_TEMP/native_backup_source_preflight_smoke"
 
+      - name: Smoke-test typed app-group and PlugInKit enumeration mapping
+        working-directory: reconstruction
+        run: |
+          set -euo pipefail
+          clang -fobjc-arc -fblocks -Wall -Wextra -Werror \
+            -I sources/prefs \
+            sources/prefs/CRBackupNativeSourcePreflight.m \
+            sources/prefs/CRBackupNativeTypedPreflight.m \
+            tools/native_backup_typed_preflight_smoke.m \
+            -framework Foundation \
+            -o "$RUNNER_TEMP/native_backup_typed_preflight_smoke"
+          "$RUNNER_TEMP/native_backup_typed_preflight_smoke"
+
       - name: Smoke-test real CraneManager adapter with disposable mock registry
         working-directory: reconstruction
         run: |
@@ -439,6 +464,8 @@ jobs:
             -I sources/prefs -I sources/common \
             sources/prefs/CRBackupNativeSourcePreflight.m \
             sources/prefs/CRBackupNativeManagerPreflight.m \
+            sources/prefs/CRBackupNativeTypedPreflight.m \
+            sources/prefs/CRBackupDisposableDiagnostic.m \
             tools/native_backup_manager_bridge_smoke.m \
             -framework Foundation \
             -o "$RUNNER_TEMP/native_backup_manager_bridge_smoke"

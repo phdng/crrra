@@ -13,5 +13,11 @@ NS_ASSUME_NONNULL_BEGIN
 + (nullable NSDictionary<NSString *, id> *)probeRegisteredApplication:(NSString *)applicationID
                                                    containerIdentifier:(NSString *)containerID
                                                                  error:(NSError * _Nullable * _Nullable)error;
+/* N7: inspect type 0 app, type 1 App Group and type 2 PlugInKit
+ * identities from the real manager's original enumerate API.
+ * Does NOT inspect file names/contents or establish backup readiness. */
++ (nullable NSDictionary<NSString *, id> *)probeTypedRegisteredApplication:(NSString *)applicationID
+                                                        containerIdentifier:(NSString *)containerID
+                                                                      error:(NSError * _Nullable * _Nullable)error;
 @end
 NS_ASSUME_NONNULL_END
