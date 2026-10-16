@@ -91,6 +91,44 @@ class TypedPreflightTests(unittest.TestCase):
         ):
             self.assertIn(marker, self.smoke)
 
+    def test_n9_final_registered_root_revalidation(self):
+        self.assertEqual(self.code.count("preflightApplicationIdentifier:applicationID"), 2)
+        self.assertIn("NSDictionary *lastRoots = [CRBackupNativeSourcePreflight", self.code)
+        self.assertIn('![lastRoots[@"sourceDirectoryRootsReadable"] isEqual:@YES]', self.code)
+        self.assertIn('lastRoots[@"rootCount"] unsignedIntegerValue', self.code)
+        self.assertIn('lastRoots[@"associatedGroupCount"] unsignedIntegerValue', self.code)
+        self.assertIn("CR7Fail(error, 8)", self.code)
+
+    def test_n9_flattened_mapping_copied_before_and_after_root_check(self):
+        self.assertIn("mapping = [[resolver pathsAssociatedToContainerWithIdentifier:", self.code)
+        self.assertIn("lastMapping = [[resolver pathsAssociatedToContainerWithIdentifier:", self.code)
+        self.assertIn("![mapping isEqualToDictionary:lastMapping]", self.code)
+        self.assertIn("CR7Fail(error, 9)", self.code)
+        self.assertLess(self.code.index("NSDictionary *lastRoots"),
+                        self.code.index("NSDictionary *lastMapping"))
+
+    def test_n9_late_registration_and_mapping_drift_in_native_smoke(self):
+        for marker in (
+            "resolver.mode = 7; resolver.supportCalls = 0;",
+            "resolver.mode = 8; resolver.mapReads = 0;",
+            "resolver.mode = 9; resolver.mapReads = 0;",
+            "Reject(resolver, 8)", "Reject(resolver, 9)",
+            "self.supportCalls >= 2", "self.mapReads >= 3",
+            "self.mapReads >= 4",
+        ):
+            self.assertIn(marker, self.smoke)
+
+    def test_n9_no_authorization_or_private_identity_in_report(self):
+        tail = self.code[self.code.index("NSDictionary *lastRoots"):]
+        for marker in (
+            '@"backupReady":@NO', '@"restoreExecutable":@NO',
+            '@"sourceFilesEnumerated":@NO', '@"sourceContentsRead":@NO',
+            '@"keychainContentsRead":@NO',
+        ):
+            self.assertIn(marker, tail)
+        self.assertNotIn('@"paths":', tail)
+        self.assertNotIn("NSLog(", tail)
+
     def test_static_no_data_read_or_mutation(self):
         for prohibited in (
             "readdir(", "open(", "fstatat(", "read(",

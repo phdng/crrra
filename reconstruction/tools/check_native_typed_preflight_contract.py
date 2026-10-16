@@ -42,6 +42,14 @@ for required in (
     '@"appGroupRootCount":@(groups)',
     '@"plugInKitRootCount":@(plugins)',
     '@"rootDirectoryMetadataChecked":@(first.count)',
+    "NSDictionary *lastRoots = [CRBackupNativeSourcePreflight",
+    '![lastRoots[@"sourceDirectoryRootsReadable"] isEqual:@YES]',
+    '[lastRoots[@"rootCount"] unsignedIntegerValue] != first.count',
+    '[lastRoots[@"associatedGroupCount"] unsignedIntegerValue] != groups + plugins',
+    "CR7Fail(error, 8)",
+    "NSDictionary *lastMapping = nil",
+    "![mapping isEqualToDictionary:lastMapping]",
+    "CR7Fail(error, 9)",
     '@"sourceFilesEnumerated":@NO',
     '@"sourceContentsRead":@NO',
     '@"keychainContentsRead":@NO',
@@ -63,6 +71,15 @@ assert "probeTypedRegisteredApplication:app" in n6smoke
 assert "CR6MockTypedEnumerate" in n6smoke
 assert "resolver.mode = 1; Reject(resolver, 3)" in smoke
 assert "resolver.mode = 5; resolver.passes = 0;" in smoke
+assert source.count("preflightApplicationIdentifier:applicationID") == 2
+assert source.index("NSDictionary *lastRoots") < source.index("NSDictionary *lastMapping")
+for marker in (
+    "resolver.mode = 7; resolver.supportCalls = 0;",
+    "resolver.mode = 8; resolver.mapReads = 0;",
+    "resolver.mode = 9; resolver.mapReads = 0;",
+    "Reject(resolver, 8)", "Reject(resolver, 9)",
+):
+    assert marker in smoke, marker
 assert "test_recovered_original_typed_api_from_manager" in tests
 assert "check_native_typed_preflight_contract.py" in ci
 assert "test_crane_native_typed_preflight.py" in ci
@@ -73,4 +90,4 @@ assert "probeTypedRegisteredApplication:" not in prefs
 assert '[self presentUnavailableBackupAction:@"CREATE_MULTI_CONTAINER_BACKUP"]' in prefs
 assert '[self presentUnavailableBackupAction:@"RESTORE_MULTI_CONTAINER_BACKUP"]' in prefs
 
-print("G-11 N7 typed app/group/PlugInKit root stability contract: PASS")
+print("G-11 N7/N9 typed root stability and terminal validation contract: PASS")

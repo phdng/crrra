@@ -15,12 +15,17 @@ static NSString * const ContainerID = @"00000000-0000-4000-8000-000000000001";
 @property (nonatomic, copy) NSArray<NSDictionary *> *items;
 @property (nonatomic) NSInteger mode;
 @property (nonatomic) NSInteger passes;
+@property (nonatomic) NSInteger supportCalls;
+@property (nonatomic) NSInteger mapReads;
 @end
 
 @implementation CR7FakeResolver
 - (BOOL)isApplicationSupportedByCrane:(NSString *)appID
 {
-    return [appID isEqualToString:AppID];
+    self.supportCalls++;
+    /* N9: revoke eligibility only AFTER the first N5 root validation. */
+    return [appID isEqualToString:AppID] &&
+           !(self.mode == 7 && self.supportCalls >= 2);
 }
 - (NSArray<NSString *> *)containerIdentifiersOfApplicationWithIdentifier:(NSString *)appID
 {
@@ -29,9 +34,23 @@ static NSString * const ContainerID = @"00000000-0000-4000-8000-000000000001";
 - (NSDictionary<NSString *, NSString *> *)pathsAssociatedToContainerWithIdentifier:(NSString *)container
                                                      ofApplicationWithIdentifier:(NSString *)appID
 {
-    return [appID isEqualToString:AppID] &&
-           ([container isEqualToString:ContainerID] ||
-            [container isEqualToString:@"DEFAULT"]) ? self.mapping : nil;
+    self.mapReads++;
+    if (![appID isEqualToString:AppID] ||
+        !([container isEqualToString:ContainerID] ||
+          [container isEqualToString:@"DEFAULT"]))
+        return nil;
+    /* N9: swap two different, still-readable root directories so the
+     * late N5 check passes its path safety gate. Re-read comparison MUST
+     * still catch that the mapping no longer matches typed enumeration. */
+    if ((self.mode == 8 && self.mapReads >= 3) ||
+        (self.mode == 9 && self.mapReads >= 4)) {
+        return @{AppID:self.mapping[AppID],
+                 @"group.com.example.crane.native":
+                    self.mapping[@"com.example.crane.extension"],
+                 @"com.example.crane.extension":
+                    self.mapping[@"group.com.example.crane.native"]};
+    }
+    return self.mapping;
 }
 - (void)enumerate:(void (^)(NSInteger type, NSString *identifier,
                             NSString *path, BOOL *stop))block
@@ -139,6 +158,13 @@ int main(void)
         resolver.mode = 5; resolver.passes = 0;
         Reject(resolver, 3); /* changes between enumeration passes */
         resolver.mode = 6; Reject(resolver, 3); /* app root with group type */
+
+        resolver.mode = 7; resolver.supportCalls = 0;
+        Reject(resolver, 8); /* source app revoked after initial N5 */
+        resolver.mode = 8; resolver.mapReads = 0;
+        Reject(resolver, 9); /* root mapping swaps at late N5 */
+        resolver.mode = 9; resolver.mapReads = 0;
+        Reject(resolver, 9); /* map swaps after late root validation */
 
         resolver.mode = 0;
         resolver.mapping = @{AppID:mapping[AppID], ids[1]:mapping[ids[1]],

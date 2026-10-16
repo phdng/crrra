@@ -3,6 +3,8 @@
  * CraneManager's flattened associated-path dictionary drops original
  * enumeration type and overwrites duplicate IDs. Cross-check that map
  * against TWO bounded typed enumerate passes, fail closed on mismatch.
+ * N9 re-checks registration, root accessibility and flattened map after
+ * enumeration; this is detection, NOT a stable filesystem snapshot.
  *
  * Only the N5 root-directory fstat metadata is inspected; no child files,
  * names, payload, Keychain, filesystems writes or process control.
@@ -104,8 +106,10 @@ CR7TypedSnapshot(id<CRBackupTypedSourceResolver> resolver,
      */
     NSDictionary *mapping = nil;
     @try {
-        mapping = [resolver pathsAssociatedToContainerWithIdentifier:containerID
-                                          ofApplicationWithIdentifier:applicationID];
+        /* Freeze the returned map: a mutable manager cache must not change
+         * the baseline while we compare it to the typed snapshots. */
+        mapping = [[resolver pathsAssociatedToContainerWithIdentifier:containerID
+                                           ofApplicationWithIdentifier:applicationID] copy];
     } @catch (NSException *exception) {
         (void)exception;
         CR7Fail(error, 4);
@@ -137,6 +141,45 @@ CR7TypedSnapshot(id<CRBackupTypedSourceResolver> resolver,
         CR7Fail(error, 7);
         return nil;
     }
+
+    /* N9: late registration or root state can change after the first N5
+     * validation. Re-evaluate the same manager-authorized roots after both
+     * typed enumerations. No file children are opened by N5.
+     *
+     * Even the final check is NOT atomic with a later backup. Never promote
+     * this result into an authorization to read data or perform Restore.
+     */
+    NSDictionary *lastRoots = [CRBackupNativeSourcePreflight
+        preflightApplicationIdentifier:applicationID
+        containerIdentifier:containerID resolver:resolver error:NULL];
+    if (!lastRoots ||
+        ![lastRoots[@"backupReady"] isEqual:@NO] ||
+        ![lastRoots[@"restoreExecutable"] isEqual:@NO] ||
+        ![lastRoots[@"sourceDirectoryRootsReadable"] isEqual:@YES] ||
+        [lastRoots[@"rootCount"] unsignedIntegerValue] != first.count ||
+        [lastRoots[@"associatedGroupCount"] unsignedIntegerValue] != groups + plugins) {
+        CR7Fail(error, 8);
+        return nil;
+    }
+
+    /* N5's report deliberately omits private paths. Take a final COPY
+     * from the resolver to prove that its late root check examined the
+     * same mapping already compared to the two typed snapshots. */
+    NSDictionary *lastMapping = nil;
+    @try {
+        lastMapping = [[resolver pathsAssociatedToContainerWithIdentifier:containerID
+                                              ofApplicationWithIdentifier:applicationID] copy];
+    } @catch (NSException *exception) {
+        (void)exception;
+        CR7Fail(error, 9);
+        return nil;
+    }
+    if (![lastMapping isKindOfClass:NSDictionary.class] ||
+        ![mapping isEqualToDictionary:lastMapping]) {
+        CR7Fail(error, 9);
+        return nil;
+    }
+
     return @{
         @"status":@"typed_roots_consistent_not_backup_ready",
         @"rootCount":@(first.count),
