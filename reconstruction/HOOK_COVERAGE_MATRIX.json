@@ -1,0 +1,4808 @@
+{
+  "by_binary": {
+    "CranePrefs": 1,
+    "CraneSB.dylib": 113,
+    "CraneSupport.dylib": 45
+  },
+  "interpretation": "Source-level selector+hook-API candidate ONLY; test file mentions are textual only, not proof of exercised behavior, class, ABI, runtime installation or device compatibility. Original 0xCBEC target class attribution is collapsed in the extracted index.",
+  "original_index": "analysis/hooks_index.csv",
+  "original_registrations": 159,
+  "rows": [
+    {
+      "behavior_verified": false,
+      "ordinal": 1,
+      "original": {
+        "binary": "CraneSB.dylib",
+        "hook_api": "MSHookMessageEx",
+        "hook_implementation": "sub_15D00",
+        "registering_function": "sub_14D18",
+        "registration_address": "0x14d18",
+        "target_class_as_indexed": "SBUIActionView",
+        "target_selector": "sbh_isSystemShortcut"
+      },
+      "original_class_attribution": "indexed_not_runtime_verified",
+      "original_same_selector_api_count": 1,
+      "runtime_verified": false,
+      "source_candidate_count": 1,
+      "source_candidates": [
+        {
+          "api": "MSHookMessageEx",
+          "file": "reconstruction/sources/cranesb/CRMenuHooks.m",
+          "impl_expression": "(IMP)CRShortcutIsSystem",
+          "line": 1881,
+          "selector": "sbh_isSystemShortcut",
+          "target_expression": "itemClass"
+        }
+      ],
+      "source_match_status": "textual_installer_candidate",
+      "test_source_selector_mentions_only": []
+    },
+    {
+      "behavior_verified": false,
+      "ordinal": 2,
+      "original": {
+        "binary": "CraneSB.dylib",
+        "hook_api": "MSHookMessageEx",
+        "hook_implementation": "sub_15D8C",
+        "registering_function": "sub_14D18",
+        "registration_address": "0x14d18",
+        "target_class_as_indexed": "SBUIActionView",
+        "target_selector": "sbh_shortcutSection"
+      },
+      "original_class_attribution": "indexed_not_runtime_verified",
+      "original_same_selector_api_count": 1,
+      "runtime_verified": false,
+      "source_candidate_count": 1,
+      "source_candidates": [
+        {
+          "api": "MSHookMessageEx",
+          "file": "reconstruction/sources/cranesb/CRMenuHooks.m",
+          "impl_expression": "(IMP)CRShortcutSection",
+          "line": 1889,
+          "selector": "sbh_shortcutSection",
+          "target_expression": "itemClass"
+        }
+      ],
+      "source_match_status": "textual_installer_candidate",
+      "test_source_selector_mentions_only": []
+    },
+    {
+      "behavior_verified": false,
+      "ordinal": 3,
+      "original": {
+        "binary": "CraneSB.dylib",
+        "hook_api": "MSHookMessageEx",
+        "hook_implementation": "sub_15E20",
+        "registering_function": "sub_14D18",
+        "registration_address": "0x14d18",
+        "target_class_as_indexed": "SBUIActionView",
+        "target_selector": "applicationShortcutItems"
+      },
+      "original_class_attribution": "indexed_not_runtime_verified",
+      "original_same_selector_api_count": 2,
+      "runtime_verified": false,
+      "source_candidate_count": 2,
+      "source_candidates": [
+        {
+          "api": "MSHookMessageEx",
+          "file": "reconstruction/sources/cranesb/CRMenuHooks.m",
+          "impl_expression": "(IMP)CRLegacyApplicationShortcutItems",
+          "line": 1251,
+          "selector": "applicationShortcutItems",
+          "target_expression": "dataProviderClass"
+        },
+        {
+          "api": "MSHookMessageEx",
+          "file": "reconstruction/sources/cranesb/CRMenuHooks.m",
+          "impl_expression": "(IMP)CRApplicationShortcutItems",
+          "line": 1901,
+          "selector": "applicationShortcutItems",
+          "target_expression": "iconViewClass"
+        }
+      ],
+      "source_match_status": "ambiguous_original_duplicate",
+      "test_source_selector_mentions_only": []
+    },
+    {
+      "behavior_verified": false,
+      "ordinal": 4,
+      "original": {
+        "binary": "CraneSB.dylib",
+        "hook_api": "MSHookMessageEx",
+        "hook_implementation": "sub_1611C",
+        "registering_function": "sub_14D18",
+        "registration_address": "0x14d18",
+        "target_class_as_indexed": "SBUIActionView",
+        "target_selector": "contextMenuInteraction:configurationForMenuAtLocation:"
+      },
+      "original_class_attribution": "indexed_not_runtime_verified",
+      "original_same_selector_api_count": 1,
+      "runtime_verified": false,
+      "source_candidate_count": 1,
+      "source_candidates": [
+        {
+          "api": "MSHookMessageEx",
+          "file": "reconstruction/sources/cranesb/CRMenuHooks.m",
+          "impl_expression": "(IMP)CRContextMenuConfiguration",
+          "line": 1911,
+          "selector": "contextMenuInteraction:configurationForMenuAtLocation:",
+          "target_expression": "iconViewClass"
+        }
+      ],
+      "source_match_status": "textual_installer_candidate",
+      "test_source_selector_mentions_only": []
+    },
+    {
+      "behavior_verified": false,
+      "ordinal": 5,
+      "original": {
+        "binary": "CraneSB.dylib",
+        "hook_api": "MSHookMessageEx",
+        "hook_implementation": "sub_1621C",
+        "registering_function": "sub_14D18",
+        "registration_address": "0x14d18",
+        "target_class_as_indexed": "SBUIActionView",
+        "target_selector": "_configureCell:inCollectionView:atIndexPath:forElement:section:size:"
+      },
+      "original_class_attribution": "indexed_not_runtime_verified",
+      "original_same_selector_api_count": 1,
+      "runtime_verified": false,
+      "source_candidate_count": 1,
+      "source_candidates": [
+        {
+          "api": "MSHookMessageEx",
+          "file": "reconstruction/sources/cranesb/CRMenuHooks.m",
+          "impl_expression": "(IMP)CRConfigureCellLong",
+          "line": 1932,
+          "selector": "_configureCell:inCollectionView:atIndexPath:forElement:section:size:",
+          "target_expression": "listClass"
+        }
+      ],
+      "source_match_status": "textual_installer_candidate",
+      "test_source_selector_mentions_only": []
+    },
+    {
+      "behavior_verified": false,
+      "ordinal": 6,
+      "original": {
+        "binary": "CraneSB.dylib",
+        "hook_api": "MSHookMessageEx",
+        "hook_implementation": "sub_16398",
+        "registering_function": "sub_14D18",
+        "registration_address": "0x14d18",
+        "target_class_as_indexed": "SBUIActionView",
+        "target_selector": "_configureCell:forElement:section:size:"
+      },
+      "original_class_attribution": "indexed_not_runtime_verified",
+      "original_same_selector_api_count": 1,
+      "runtime_verified": false,
+      "source_candidate_count": 1,
+      "source_candidates": [
+        {
+          "api": "MSHookMessageEx",
+          "file": "reconstruction/sources/cranesb/CRMenuHooks.m",
+          "impl_expression": "(IMP)CRConfigureCellSize",
+          "line": 1942,
+          "selector": "_configureCell:forElement:section:size:",
+          "target_expression": "listClass"
+        }
+      ],
+      "source_match_status": "textual_installer_candidate",
+      "test_source_selector_mentions_only": []
+    },
+    {
+      "behavior_verified": false,
+      "ordinal": 7,
+      "original": {
+        "binary": "CraneSB.dylib",
+        "hook_api": "MSHookMessageEx",
+        "hook_implementation": "sub_164A8",
+        "registering_function": "sub_14D18",
+        "registration_address": "0x14d18",
+        "target_class_as_indexed": "SBUIActionView",
+        "target_selector": "_configureCell:forElement:section:"
+      },
+      "original_class_attribution": "indexed_not_runtime_verified",
+      "original_same_selector_api_count": 1,
+      "runtime_verified": false,
+      "source_candidate_count": 1,
+      "source_candidates": [
+        {
+          "api": "MSHookMessageEx",
+          "file": "reconstruction/sources/cranesb/CRMenuHooks.m",
+          "impl_expression": "(IMP)CRConfigureCellSimple",
+          "line": 1952,
+          "selector": "_configureCell:forElement:section:",
+          "target_expression": "listClass"
+        }
+      ],
+      "source_match_status": "textual_installer_candidate",
+      "test_source_selector_mentions_only": []
+    },
+    {
+      "behavior_verified": false,
+      "ordinal": 8,
+      "original": {
+        "binary": "CraneSB.dylib",
+        "hook_api": "MSHookMessageEx",
+        "hook_implementation": "sub_16598",
+        "registering_function": "sub_14D18",
+        "registration_address": "0x14d18",
+        "target_class_as_indexed": "SBUIActionView",
+        "target_selector": "_interfaceActionGroupForActions:"
+      },
+      "original_class_attribution": "indexed_not_runtime_verified",
+      "original_same_selector_api_count": 1,
+      "runtime_verified": false,
+      "source_candidate_count": 1,
+      "source_candidates": [
+        {
+          "api": "MSHookMessageEx",
+          "file": "reconstruction/sources/cranesb/CRMenuHooks.m",
+          "impl_expression": "(IMP)CRInterfaceActionGroup",
+          "line": 1961,
+          "selector": "_interfaceActionGroupForActions:",
+          "target_expression": "listClass"
+        }
+      ],
+      "source_match_status": "textual_installer_candidate",
+      "test_source_selector_mentions_only": []
+    },
+    {
+      "behavior_verified": false,
+      "ordinal": 9,
+      "original": {
+        "binary": "CraneSB.dylib",
+        "hook_api": "MSHookMessageEx",
+        "hook_implementation": "sub_166B0",
+        "registering_function": "sub_14D18",
+        "registration_address": "0x14d18",
+        "target_class_as_indexed": "SBUIActionView",
+        "target_selector": "initWithMenu:overrideChildren:"
+      },
+      "original_class_attribution": "indexed_not_runtime_verified",
+      "original_same_selector_api_count": 1,
+      "runtime_verified": false,
+      "source_candidate_count": 1,
+      "source_candidates": [
+        {
+          "api": "MSHookMessageEx",
+          "file": "reconstruction/sources/cranesb/CRMenuHooks.m",
+          "impl_expression": "(IMP)CRMenuInitWithOverrideChildren",
+          "line": 1981,
+          "selector": "initWithMenu:overrideChildren:",
+          "target_expression": "menuClass"
+        }
+      ],
+      "source_match_status": "textual_installer_candidate",
+      "test_source_selector_mentions_only": []
+    },
+    {
+      "behavior_verified": false,
+      "ordinal": 10,
+      "original": {
+        "binary": "CraneSB.dylib",
+        "hook_api": "MSHookMessageEx",
+        "hook_implementation": "sub_16820",
+        "registering_function": "sub_14D18",
+        "registration_address": "0x14d18",
+        "target_class_as_indexed": "SBUIActionView",
+        "target_selector": "initWithAction:"
+      },
+      "original_class_attribution": "indexed_not_runtime_verified",
+      "original_same_selector_api_count": 1,
+      "runtime_verified": false,
+      "source_candidate_count": 1,
+      "source_candidates": [
+        {
+          "api": "MSHookMessageEx",
+          "file": "reconstruction/sources/cranesb/CRMenuHooks.m",
+          "impl_expression": "(IMP)CRBadgeActionCopyInit",
+          "line": 1971,
+          "selector": "initWithAction:",
+          "target_expression": "actionClass"
+        }
+      ],
+      "source_match_status": "textual_installer_candidate",
+      "test_source_selector_mentions_only": []
+    },
+    {
+      "behavior_verified": false,
+      "ordinal": 11,
+      "original": {
+        "binary": "CraneSB.dylib",
+        "hook_api": "MSHookMessageEx",
+        "hook_implementation": "sub_151E4",
+        "registering_function": "sub_14D18",
+        "registration_address": "0x14d18",
+        "target_class_as_indexed": "SBUIActionView",
+        "target_selector": "dismissAnimated:withCompletionHandler:"
+      },
+      "original_class_attribution": "indexed_not_runtime_verified",
+      "original_same_selector_api_count": 1,
+      "runtime_verified": false,
+      "source_candidate_count": 1,
+      "source_candidates": [
+        {
+          "api": "MSHookMessageEx",
+          "file": "reconstruction/sources/cranesb/CRMenuHooks.m",
+          "impl_expression": "(IMP)CRLegacyDismissHook",
+          "line": 1122,
+          "selector": "dismissAnimated:withCompletionHandler:",
+          "target_expression": "forceTouchViewController"
+        }
+      ],
+      "source_match_status": "textual_installer_candidate",
+      "test_source_selector_mentions_only": []
+    },
+    {
+      "behavior_verified": false,
+      "ordinal": 12,
+      "original": {
+        "binary": "CraneSB.dylib",
+        "hook_api": "MSHookMessageEx",
+        "hook_implementation": "sub_15204",
+        "registering_function": "sub_14D18",
+        "registration_address": "0x14d18",
+        "target_class_as_indexed": "SBUIActionView",
+        "target_selector": "init"
+      },
+      "original_class_attribution": "indexed_not_runtime_verified",
+      "original_same_selector_api_count": 1,
+      "runtime_verified": false,
+      "source_candidate_count": 0,
+      "source_candidates": [],
+      "source_match_status": "no_installer_candidate",
+      "test_source_selector_mentions_only": [
+        "reconstruction/tools/check_accountsd_isolation_contract.py",
+        "reconstruction/tools/check_app_runtime_probe_contract.py",
+        "reconstruction/tools/check_app_runtime_sandbox_contract.py",
+        "reconstruction/tools/check_choicy_integration_contract.py",
+        "reconstruction/tools/check_container_lifecycle_contract.py",
+        "reconstruction/tools/check_device_identifier_settings_contract.py",
+        "reconstruction/tools/check_disposable_source_diagnostic_contract.py",
+        "reconstruction/tools/check_gamecenter_unused_delete_contract.py",
+        "reconstruction/tools/check_helper_keychain_contract.py",
+        "reconstruction/tools/check_helper_privileged_contract.py",
+        "reconstruction/tools/check_keychain_isolation_contract.py",
+        "reconstruction/tools/check_libcrane_original_contract.py",
+        "reconstruction/tools/check_main_injection_diagnostics_contract.py",
+        "reconstruction/tools/check_menu_badge_contract.py",
+        "reconstruction/tools/check_native_typed_preflight_contract.py",
+        "reconstruction/tools/check_pkd_query_state_contract.py",
+        "reconstruction/tools/check_postlaunch_injection_contract.py",
+        "reconstruction/tools/check_restore_quarantine_verify_contract.py",
+        "reconstruction/tools/check_runningboard_contract.py",
+        "reconstruction/tools/check_ui_runtime_contract.py",
+        "reconstruction/tools/test_crane_backup_payload_parity.py",
+        "reconstruction/tools/test_crane_disposable_source_diagnostic.py",
+        "reconstruction/tools/test_crane_native_manager_bridge.py",
+        "reconstruction/tools/test_crane_native_typed_preflight.py"
+      ]
+    },
+    {
+      "behavior_verified": false,
+      "ordinal": 13,
+      "original": {
+        "binary": "CraneSB.dylib",
+        "hook_api": "MSHookMessageEx",
+        "hook_implementation": "sub_15240",
+        "registering_function": "sub_14D18",
+        "registration_address": "0x14d18",
+        "target_class_as_indexed": "SBUIActionView",
+        "target_selector": "setHighlighted:"
+      },
+      "original_class_attribution": "indexed_not_runtime_verified",
+      "original_same_selector_api_count": 1,
+      "runtime_verified": false,
+      "source_candidate_count": 1,
+      "source_candidates": [
+        {
+          "api": "MSHookMessageEx",
+          "file": "reconstruction/sources/cranesb/CRMenuHooks.m",
+          "impl_expression": "(IMP)CRLegacyActionViewSetHighlighted",
+          "line": 1186,
+          "selector": "setHighlighted:",
+          "target_expression": "actionViewClass"
+        }
+      ],
+      "source_match_status": "textual_installer_candidate",
+      "test_source_selector_mentions_only": []
+    },
+    {
+      "behavior_verified": false,
+      "ordinal": 14,
+      "original": {
+        "binary": "CraneSB.dylib",
+        "hook_api": "MSHookMessageEx",
+        "hook_implementation": "sub_152B8",
+        "registering_function": "sub_14D18",
+        "registration_address": "0x14d18",
+        "target_class_as_indexed": "SBUIActionView",
+        "target_selector": "_setupSubviews"
+      },
+      "original_class_attribution": "indexed_not_runtime_verified",
+      "original_same_selector_api_count": 1,
+      "runtime_verified": false,
+      "source_candidate_count": 1,
+      "source_candidates": [
+        {
+          "api": "MSHookMessageEx",
+          "file": "reconstruction/sources/cranesb/CRMenuHooks.m",
+          "impl_expression": "(IMP)CRLegacyActionViewSetupSubviews",
+          "line": 1194,
+          "selector": "_setupSubviews",
+          "target_expression": "actionViewClass"
+        }
+      ],
+      "source_match_status": "textual_installer_candidate",
+      "test_source_selector_mentions_only": []
+    },
+    {
+      "behavior_verified": false,
+      "ordinal": 15,
+      "original": {
+        "binary": "CraneSB.dylib",
+        "hook_api": "MSHookMessageEx",
+        "hook_implementation": "sub_15490",
+        "registering_function": "sub_14D18",
+        "registration_address": "0x14d18",
+        "target_class_as_indexed": "SBUIActionView",
+        "target_selector": "setBackgroundColor:"
+      },
+      "original_class_attribution": "indexed_not_runtime_verified",
+      "original_same_selector_api_count": 1,
+      "runtime_verified": false,
+      "source_candidate_count": 1,
+      "source_candidates": [
+        {
+          "api": "MSHookMessageEx",
+          "file": "reconstruction/sources/cranesb/CRMenuHooks.m",
+          "impl_expression": "(IMP)CRLegacyActionViewSetBackgroundColor",
+          "line": 1204,
+          "selector": "setBackgroundColor:",
+          "target_expression": "actionViewClass"
+        }
+      ],
+      "source_match_status": "textual_installer_candidate",
+      "test_source_selector_mentions_only": []
+    },
+    {
+      "behavior_verified": false,
+      "ordinal": 16,
+      "original": {
+        "binary": "CraneSB.dylib",
+        "hook_api": "MSHookMessageEx",
+        "hook_implementation": "sub_1555C",
+        "registering_function": "sub_14D18",
+        "registration_address": "0x14d18",
+        "target_class_as_indexed": "SBUIActionView",
+        "target_selector": "_actionFromApplicationShortcutItem:"
+      },
+      "original_class_attribution": "indexed_not_runtime_verified",
+      "original_same_selector_api_count": 1,
+      "runtime_verified": false,
+      "source_candidate_count": 1,
+      "source_candidates": [
+        {
+          "api": "MSHookMessageEx",
+          "file": "reconstruction/sources/cranesb/CRMenuHooks.m",
+          "impl_expression": "(IMP)CRLegacyActionFromShortcutItem",
+          "line": 1220,
+          "selector": "_actionFromApplicationShortcutItem:",
+          "target_expression": "shortcutViewController"
+        }
+      ],
+      "source_match_status": "textual_installer_candidate",
+      "test_source_selector_mentions_only": []
+    },
+    {
+      "behavior_verified": false,
+      "ordinal": 17,
+      "original": {
+        "binary": "CraneSB.dylib",
+        "hook_api": "class_addMethod",
+        "hook_implementation": "sub_13338",
+        "registering_function": "sub_14D18",
+        "registration_address": "0x14d18",
+        "target_class_as_indexed": "SBUIActionView",
+        "target_selector": "crane_provideContainerOptions"
+      },
+      "original_class_attribution": "indexed_not_runtime_verified",
+      "original_same_selector_api_count": 1,
+      "runtime_verified": false,
+      "source_candidate_count": 1,
+      "source_candidates": [
+        {
+          "api": "class_addMethod",
+          "file": "reconstruction/sources/cranesb/CRMenuHooks.m",
+          "impl_expression": "(IMP)CRLegacyProvidesContainerOptions",
+          "line": 1139,
+          "selector": "crane_provideContainerOptions",
+          "target_expression": "controllerClass"
+        }
+      ],
+      "source_match_status": "textual_installer_candidate",
+      "test_source_selector_mentions_only": []
+    },
+    {
+      "behavior_verified": false,
+      "ordinal": 18,
+      "original": {
+        "binary": "CraneSB.dylib",
+        "hook_api": "class_addMethod",
+        "hook_implementation": "sub_13390",
+        "registering_function": "sub_14D18",
+        "registration_address": "0x14d18",
+        "target_class_as_indexed": "SBUIActionView",
+        "target_selector": "setCrane_provideContainerOptions:"
+      },
+      "original_class_attribution": "indexed_not_runtime_verified",
+      "original_same_selector_api_count": 1,
+      "runtime_verified": false,
+      "source_candidate_count": 1,
+      "source_candidates": [
+        {
+          "api": "class_addMethod",
+          "file": "reconstruction/sources/cranesb/CRMenuHooks.m",
+          "impl_expression": "(IMP)CRLegacySetProvidesContainerOptions",
+          "line": 1144,
+          "selector": "setCrane_provideContainerOptions:",
+          "target_expression": "controllerClass"
+        }
+      ],
+      "source_match_status": "textual_installer_candidate",
+      "test_source_selector_mentions_only": []
+    },
+    {
+      "behavior_verified": false,
+      "ordinal": 19,
+      "original": {
+        "binary": "CraneSB.dylib",
+        "hook_api": "class_addMethod",
+        "hook_implementation": "sub_13420",
+        "registering_function": "sub_14D18",
+        "registration_address": "0x14d18",
+        "target_class_as_indexed": "SBUIActionView",
+        "target_selector": "crane_isSeparator"
+      },
+      "original_class_attribution": "indexed_not_runtime_verified",
+      "original_same_selector_api_count": 1,
+      "runtime_verified": false,
+      "source_candidate_count": 1,
+      "source_candidates": [
+        {
+          "api": "class_addMethod",
+          "file": "reconstruction/sources/cranesb/CRMenuHooks.m",
+          "impl_expression": "(IMP)CRLegacyActionIsSeparator",
+          "line": 1170,
+          "selector": "crane_isSeparator",
+          "target_expression": "actionClass"
+        }
+      ],
+      "source_match_status": "textual_installer_candidate",
+      "test_source_selector_mentions_only": []
+    },
+    {
+      "behavior_verified": false,
+      "ordinal": 20,
+      "original": {
+        "binary": "CraneSB.dylib",
+        "hook_api": "class_addMethod",
+        "hook_implementation": "sub_13478",
+        "registering_function": "sub_14D18",
+        "registration_address": "0x14d18",
+        "target_class_as_indexed": "SBUIActionView",
+        "target_selector": "setCrane_isSeparator:"
+      },
+      "original_class_attribution": "indexed_not_runtime_verified",
+      "original_same_selector_api_count": 1,
+      "runtime_verified": false,
+      "source_candidate_count": 1,
+      "source_candidates": [
+        {
+          "api": "class_addMethod",
+          "file": "reconstruction/sources/cranesb/CRMenuHooks.m",
+          "impl_expression": "(IMP)CRLegacySetActionIsSeparator",
+          "line": 1174,
+          "selector": "setCrane_isSeparator:",
+          "target_expression": "actionClass"
+        }
+      ],
+      "source_match_status": "textual_installer_candidate",
+      "test_source_selector_mentions_only": [
+        "reconstruction/tools/check_legacy_shortcut_contract.py"
+      ]
+    },
+    {
+      "behavior_verified": false,
+      "ordinal": 21,
+      "original": {
+        "binary": "CraneSB.dylib",
+        "hook_api": "MSHookMessageEx",
+        "hook_implementation": "sub_170A4",
+        "registering_function": "sub_169F0",
+        "registration_address": "0x169f0",
+        "target_class_as_indexed": "SBUIAppIconForceTouchControllerDataProvider",
+        "target_selector": "applicationShortcutItems"
+      },
+      "original_class_attribution": "indexed_not_runtime_verified",
+      "original_same_selector_api_count": 2,
+      "runtime_verified": false,
+      "source_candidate_count": 2,
+      "source_candidates": [
+        {
+          "api": "MSHookMessageEx",
+          "file": "reconstruction/sources/cranesb/CRMenuHooks.m",
+          "impl_expression": "(IMP)CRLegacyApplicationShortcutItems",
+          "line": 1251,
+          "selector": "applicationShortcutItems",
+          "target_expression": "dataProviderClass"
+        },
+        {
+          "api": "MSHookMessageEx",
+          "file": "reconstruction/sources/cranesb/CRMenuHooks.m",
+          "impl_expression": "(IMP)CRApplicationShortcutItems",
+          "line": 1901,
+          "selector": "applicationShortcutItems",
+          "target_expression": "iconViewClass"
+        }
+      ],
+      "source_match_status": "ambiguous_original_duplicate",
+      "test_source_selector_mentions_only": []
+    },
+    {
+      "behavior_verified": false,
+      "ordinal": 22,
+      "original": {
+        "binary": "CraneSB.dylib",
+        "hook_api": "class_addMethod",
+        "hook_implementation": "sub_16A90",
+        "registering_function": "sub_169F0",
+        "registration_address": "0x169f0",
+        "target_class_as_indexed": "SBUIAppIconForceTouchControllerDataProvider",
+        "target_selector": "craneContainersApplicationShortcutItems"
+      },
+      "original_class_attribution": "indexed_not_runtime_verified",
+      "original_same_selector_api_count": 1,
+      "runtime_verified": false,
+      "source_candidate_count": 1,
+      "source_candidates": [
+        {
+          "api": "class_addMethod",
+          "file": "reconstruction/sources/cranesb/CRMenuHooks.m",
+          "impl_expression": "(IMP)CRLegacyContainerShortcutItemsMethod",
+          "line": 1241,
+          "selector": "craneContainersApplicationShortcutItems",
+          "target_expression": "dataProviderClass"
+        }
+      ],
+      "source_match_status": "textual_installer_candidate",
+      "test_source_selector_mentions_only": []
+    },
+    {
+      "behavior_verified": false,
+      "ordinal": 23,
+      "original": {
+        "binary": "CraneSB.dylib",
+        "hook_api": "MSHookMessageEx",
+        "hook_implementation": "sub_17768",
+        "registering_function": "_initRunningboarddErrorAlertHooks",
+        "registration_address": "0x17620",
+        "target_class_as_indexed": "UNSUserNotificationServerConnectionListener",
+        "target_selector": "listener:shouldAcceptNewConnection:"
+      },
+      "original_class_attribution": "indexed_not_runtime_verified",
+      "original_same_selector_api_count": 1,
+      "runtime_verified": false,
+      "source_candidate_count": 1,
+      "source_candidates": [
+        {
+          "api": "MSHookMessageEx",
+          "file": "reconstruction/sources/cranesb/CRErrorAlerts.m",
+          "impl_expression": "(IMP)CRListenerShouldAcceptConnection",
+          "line": 779,
+          "selector": "listener:shouldAcceptNewConnection:",
+          "target_expression": "cls"
+        }
+      ],
+      "source_match_status": "textual_installer_candidate",
+      "test_source_selector_mentions_only": []
+    },
+    {
+      "behavior_verified": false,
+      "ordinal": 24,
+      "original": {
+        "binary": "CraneSB.dylib",
+        "hook_api": "class_addMethod",
+        "hook_implementation": "j__crane_presentLibSandyNotWorkingError",
+        "registering_function": "_initRunningboarddErrorAlertHooks",
+        "registration_address": "0x17620",
+        "target_class_as_indexed": "UNSUserNotificationServerConnectionListener",
+        "target_selector": "crane_presentLibSandyNotWorkingError"
+      },
+      "original_class_attribution": "indexed_not_runtime_verified",
+      "original_same_selector_api_count": 1,
+      "runtime_verified": false,
+      "source_candidate_count": 1,
+      "source_candidates": [
+        {
+          "api": "class_addMethod",
+          "file": "reconstruction/sources/cranesb/CRErrorAlerts.m",
+          "impl_expression": "(IMP)CRListenerPresentLibSandy",
+          "line": 785,
+          "selector": "crane_presentLibSandyNotWorkingError",
+          "target_expression": "cls"
+        }
+      ],
+      "source_match_status": "textual_installer_candidate",
+      "test_source_selector_mentions_only": []
+    },
+    {
+      "behavior_verified": false,
+      "ordinal": 25,
+      "original": {
+        "binary": "CraneSB.dylib",
+        "hook_api": "class_addMethod",
+        "hook_implementation": "sub_177D0",
+        "registering_function": "_initRunningboarddErrorAlertHooks",
+        "registration_address": "0x17620",
+        "target_class_as_indexed": "UNSUserNotificationServerConnectionListener",
+        "target_selector": "crane_presentDaemonErrorWithBrokenDaemons:error:connectionWorks:"
+      },
+      "original_class_attribution": "indexed_not_runtime_verified",
+      "original_same_selector_api_count": 1,
+      "runtime_verified": false,
+      "source_candidate_count": 1,
+      "source_candidates": [
+        {
+          "api": "class_addMethod",
+          "file": "reconstruction/sources/cranesb/CRErrorAlerts.m",
+          "impl_expression": "(IMP)CRListenerPresentDaemon",
+          "line": 790,
+          "selector": "crane_presentDaemonErrorWithBrokenDaemons:error:connectionWorks:",
+          "target_expression": "cls"
+        }
+      ],
+      "source_match_status": "textual_installer_candidate",
+      "test_source_selector_mentions_only": []
+    },
+    {
+      "behavior_verified": false,
+      "ordinal": 26,
+      "original": {
+        "binary": "CraneSB.dylib",
+        "hook_api": "class_addMethod",
+        "hook_implementation": "sub_17814",
+        "registering_function": "_initRunningboarddErrorAlertHooks",
+        "registration_address": "0x17620",
+        "target_class_as_indexed": "UNSUserNotificationServerConnectionListener",
+        "target_selector": "crane_presentMainDylibNotLoadedErrorForAppName:"
+      },
+      "original_class_attribution": "indexed_not_runtime_verified",
+      "original_same_selector_api_count": 1,
+      "runtime_verified": false,
+      "source_candidate_count": 1,
+      "source_candidates": [
+        {
+          "api": "class_addMethod",
+          "file": "reconstruction/sources/cranesb/CRErrorAlerts.m",
+          "impl_expression": "(IMP)CRListenerPresentMainDylib",
+          "line": 796,
+          "selector": "crane_presentMainDylibNotLoadedErrorForAppName:",
+          "target_expression": "cls"
+        }
+      ],
+      "source_match_status": "textual_installer_candidate",
+      "test_source_selector_mentions_only": []
+    },
+    {
+      "behavior_verified": false,
+      "ordinal": 27,
+      "original": {
+        "binary": "CraneSB.dylib",
+        "hook_api": "class_addMethod",
+        "hook_implementation": "sub_1781C",
+        "registering_function": "_initRunningboarddErrorAlertHooks",
+        "registration_address": "0x17620",
+        "target_class_as_indexed": "UNSUserNotificationServerConnectionListener",
+        "target_selector": "crane_presentApsdRegistrationErrorForAppId:"
+      },
+      "original_class_attribution": "indexed_not_runtime_verified",
+      "original_same_selector_api_count": 1,
+      "runtime_verified": false,
+      "source_candidate_count": 1,
+      "source_candidates": [
+        {
+          "api": "class_addMethod",
+          "file": "reconstruction/sources/cranesb/CRErrorAlerts.m",
+          "impl_expression": "(IMP)CRListenerPresentApsd",
+          "line": 802,
+          "selector": "crane_presentApsdRegistrationErrorForAppId:",
+          "target_expression": "cls"
+        }
+      ],
+      "source_match_status": "textual_installer_candidate",
+      "test_source_selector_mentions_only": []
+    },
+    {
+      "behavior_verified": false,
+      "ordinal": 28,
+      "original": {
+        "binary": "CraneSB.dylib",
+        "hook_api": "class_addMethod",
+        "hook_implementation": "sub_17824",
+        "registering_function": "_initRunningboarddErrorAlertHooks",
+        "registration_address": "0x17620",
+        "target_class_as_indexed": "UNSUserNotificationServerConnectionListener",
+        "target_selector": "crane_presentPkdRegistrationErrorForAppId:"
+      },
+      "original_class_attribution": "indexed_not_runtime_verified",
+      "original_same_selector_api_count": 1,
+      "runtime_verified": false,
+      "source_candidate_count": 1,
+      "source_candidates": [
+        {
+          "api": "class_addMethod",
+          "file": "reconstruction/sources/cranesb/CRErrorAlerts.m",
+          "impl_expression": "(IMP)CRListenerPresentPkd",
+          "line": 808,
+          "selector": "crane_presentPkdRegistrationErrorForAppId:",
+          "target_expression": "cls"
+        }
+      ],
+      "source_match_status": "textual_installer_candidate",
+      "test_source_selector_mentions_only": []
+    },
+    {
+      "behavior_verified": false,
+      "ordinal": 29,
+      "original": {
+        "binary": "CraneSB.dylib",
+        "hook_api": "MSHookMessageEx",
+        "hook_implementation": "sub_17DF4",
+        "registering_function": "_crane_initSpringBoard",
+        "registration_address": "0x17a14",
+        "target_class_as_indexed": "FBProcessManager",
+        "target_selector": "_bootstrapProcessWithExecutionContext:synchronously:error:"
+      },
+      "original_class_attribution": "indexed_not_runtime_verified",
+      "original_same_selector_api_count": 1,
+      "runtime_verified": false,
+      "source_candidate_count": 1,
+      "source_candidates": [
+        {
+          "api": "MSHookMessageEx",
+          "file": "reconstruction/sources/cranesb/CRSpringBoard.m",
+          "impl_expression": "(IMP)CRBootstrapProcess",
+          "line": 918,
+          "selector": "_bootstrapProcessWithExecutionContext:synchronously:error:",
+          "target_expression": "fbProcessManager"
+        }
+      ],
+      "source_match_status": "textual_installer_candidate",
+      "test_source_selector_mentions_only": []
+    },
+    {
+      "behavior_verified": false,
+      "ordinal": 30,
+      "original": {
+        "binary": "CraneSB.dylib",
+        "hook_api": "MSHookMessageEx",
+        "hook_implementation": "sub_17F14",
+        "registering_function": "_crane_initSpringBoard",
+        "registration_address": "0x17a14",
+        "target_class_as_indexed": "FBProcessManager",
+        "target_selector": "_createProcessWithExecutionContext:"
+      },
+      "original_class_attribution": "indexed_not_runtime_verified",
+      "original_same_selector_api_count": 1,
+      "runtime_verified": false,
+      "source_candidate_count": 1,
+      "source_candidates": [
+        {
+          "api": "MSHookMessageEx",
+          "file": "reconstruction/sources/cranesb/CRSpringBoard.m",
+          "impl_expression": "(IMP)CRCreateProcess",
+          "line": 921,
+          "selector": "_createProcessWithExecutionContext:",
+          "target_expression": "fbProcessManager"
+        }
+      ],
+      "source_match_status": "textual_installer_candidate",
+      "test_source_selector_mentions_only": []
+    },
+    {
+      "behavior_verified": false,
+      "ordinal": 31,
+      "original": {
+        "binary": "CraneSB.dylib",
+        "hook_api": "MSHookMessageEx",
+        "hook_implementation": "sub_1801C",
+        "registering_function": "_crane_initSpringBoard",
+        "registration_address": "0x17a14",
+        "target_class_as_indexed": "FBProcessManager",
+        "target_selector": "createApplicationProcessForBundleID:withExecutionContext:"
+      },
+      "original_class_attribution": "indexed_not_runtime_verified",
+      "original_same_selector_api_count": 1,
+      "runtime_verified": false,
+      "source_candidate_count": 1,
+      "source_candidates": [
+        {
+          "api": "MSHookMessageEx",
+          "file": "reconstruction/sources/cranesb/CRSpringBoard.m",
+          "impl_expression": "(IMP)CRCreateApplicationProcess",
+          "line": 924,
+          "selector": "createApplicationProcessForBundleID:withExecutionContext:",
+          "target_expression": "fbProcessManager"
+        }
+      ],
+      "source_match_status": "textual_installer_candidate",
+      "test_source_selector_mentions_only": []
+    },
+    {
+      "behavior_verified": false,
+      "ordinal": 32,
+      "original": {
+        "binary": "CraneSB.dylib",
+        "hook_api": "MSHookMessageEx",
+        "hook_implementation": "sub_18354",
+        "registering_function": "_crane_initSpringBoard",
+        "registration_address": "0x17a14",
+        "target_class_as_indexed": "FBProcessManager",
+        "target_selector": "_launchFromIconView:"
+      },
+      "original_class_attribution": "indexed_not_runtime_verified",
+      "original_same_selector_api_count": 1,
+      "runtime_verified": false,
+      "source_candidate_count": 1,
+      "source_candidates": [
+        {
+          "api": "MSHookMessageEx",
+          "file": "reconstruction/sources/cranesb/CRSpringBoard.m",
+          "impl_expression": "(IMP)CRLaunchFromIconView",
+          "line": 943,
+          "selector": "_launchFromIconView:",
+          "target_expression": "sbIconController"
+        }
+      ],
+      "source_match_status": "textual_installer_candidate",
+      "test_source_selector_mentions_only": [
+        "reconstruction/tools/check_shortcut_gate_contract.py"
+      ]
+    },
+    {
+      "behavior_verified": false,
+      "ordinal": 33,
+      "original": {
+        "binary": "CraneSB.dylib",
+        "hook_api": "MSHookMessageEx",
+        "hook_implementation": "sub_18580",
+        "registering_function": "_crane_initSpringBoard",
+        "registration_address": "0x17a14",
+        "target_class_as_indexed": "FBProcessManager",
+        "target_selector": "_launchFromIconView:withActions:"
+      },
+      "original_class_attribution": "indexed_not_runtime_verified",
+      "original_same_selector_api_count": 1,
+      "runtime_verified": false,
+      "source_candidate_count": 1,
+      "source_candidates": [
+        {
+          "api": "MSHookMessageEx",
+          "file": "reconstruction/sources/cranesb/CRSpringBoard.m",
+          "impl_expression": "(IMP)CRLaunchFromIconViewActions",
+          "line": 947,
+          "selector": "_launchFromIconView:withActions:",
+          "target_expression": "sbIconController"
+        }
+      ],
+      "source_match_status": "textual_installer_candidate",
+      "test_source_selector_mentions_only": [
+        "reconstruction/tools/check_shortcut_gate_contract.py"
+      ]
+    },
+    {
+      "behavior_verified": false,
+      "ordinal": 34,
+      "original": {
+        "binary": "CraneSB.dylib",
+        "hook_api": "MSHookMessageEx",
+        "hook_implementation": "sub_18710",
+        "registering_function": "_crane_initSpringBoard",
+        "registration_address": "0x17a14",
+        "target_class_as_indexed": "FBProcessManager",
+        "target_selector": "_launchFromIconView:withActions:modifierFlags:"
+      },
+      "original_class_attribution": "indexed_not_runtime_verified",
+      "original_same_selector_api_count": 1,
+      "runtime_verified": false,
+      "source_candidate_count": 1,
+      "source_candidates": [
+        {
+          "api": "MSHookMessageEx",
+          "file": "reconstruction/sources/cranesb/CRSpringBoard.m",
+          "impl_expression": "(IMP)CRLaunchFromIconViewActionsFlags",
+          "line": 951,
+          "selector": "_launchFromIconView:withActions:modifierFlags:",
+          "target_expression": "sbIconController"
+        }
+      ],
+      "source_match_status": "textual_installer_candidate",
+      "test_source_selector_mentions_only": [
+        "reconstruction/tools/check_shortcut_gate_contract.py"
+      ]
+    },
+    {
+      "behavior_verified": false,
+      "ordinal": 35,
+      "original": {
+        "binary": "CraneSB.dylib",
+        "hook_api": "class_addMethod",
+        "hook_implementation": "sub_17D28",
+        "registering_function": "_crane_initSpringBoard",
+        "registration_address": "0x17a14",
+        "target_class_as_indexed": "FBProcessManager",
+        "target_selector": "crane_containerIdentifier"
+      },
+      "original_class_attribution": "indexed_not_runtime_verified",
+      "original_same_selector_api_count": 1,
+      "runtime_verified": false,
+      "source_candidate_count": 1,
+      "source_candidates": [
+        {
+          "api": "class_addMethod",
+          "file": "reconstruction/sources/cranesb/CRSpringBoard.m",
+          "impl_expression": "(IMP)CRFBProcessContainerIdentifier",
+          "line": 908,
+          "selector": "crane_containerIdentifier",
+          "target_expression": "fbProcess"
+        }
+      ],
+      "source_match_status": "textual_installer_candidate",
+      "test_source_selector_mentions_only": []
+    },
+    {
+      "behavior_verified": false,
+      "ordinal": 36,
+      "original": {
+        "binary": "CraneSB.dylib",
+        "hook_api": "class_addMethod",
+        "hook_implementation": "sub_180F0",
+        "registering_function": "_crane_initSpringBoard",
+        "registration_address": "0x17a14",
+        "target_class_as_indexed": "FBProcessManager",
+        "target_selector": "crane_applyModificationsIfNeededToExecutionContext:withApplicationIdentifier:"
+      },
+      "original_class_attribution": "indexed_not_runtime_verified",
+      "original_same_selector_api_count": 1,
+      "runtime_verified": false,
+      "source_candidate_count": 1,
+      "source_candidates": [
+        {
+          "api": "class_addMethod",
+          "file": "reconstruction/sources/cranesb/CRSpringBoard.m",
+          "impl_expression": "(IMP)CRApplyModificationsIfNeededToExecutionContext",
+          "line": 926,
+          "selector": "crane_applyModificationsIfNeededToExecutionContext:withApplicationIdentifier:",
+          "target_expression": "fbProcessManager"
+        }
+      ],
+      "source_match_status": "textual_installer_candidate",
+      "test_source_selector_mentions_only": []
+    },
+    {
+      "behavior_verified": false,
+      "ordinal": 37,
+      "original": {
+        "binary": "CraneSB.dylib",
+        "hook_api": "class_addMethod",
+        "hook_implementation": "sub_18238",
+        "registering_function": "_crane_initSpringBoard",
+        "registration_address": "0x17a14",
+        "target_class_as_indexed": "FBProcessManager",
+        "target_selector": "crane_registerInjectionCheckForProcess:toBeLaunchedIntoContainer:"
+      },
+      "original_class_attribution": "indexed_not_runtime_verified",
+      "original_same_selector_api_count": 1,
+      "runtime_verified": false,
+      "source_candidate_count": 1,
+      "source_candidates": [
+        {
+          "api": "class_addMethod",
+          "file": "reconstruction/sources/cranesb/CRSpringBoard.m",
+          "impl_expression": "(IMP)CRRegisterInjectionCheckForProcess",
+          "line": 930,
+          "selector": "crane_registerInjectionCheckForProcess:toBeLaunchedIntoContainer:",
+          "target_expression": "fbProcessManager"
+        }
+      ],
+      "source_match_status": "textual_installer_candidate",
+      "test_source_selector_mentions_only": []
+    },
+    {
+      "behavior_verified": false,
+      "ordinal": 38,
+      "original": {
+        "binary": "CraneSB.dylib",
+        "hook_api": "MSHookMessageEx",
+        "hook_implementation": "sub_1BF74",
+        "registering_function": "_crane_initRunningBoardd",
+        "registration_address": "0x1bf10",
+        "target_class_as_indexed": "RBProcessManager",
+        "target_selector": "executeLaunchRequest:withError:"
+      },
+      "original_class_attribution": "indexed_not_runtime_verified",
+      "original_same_selector_api_count": 1,
+      "runtime_verified": false,
+      "source_candidate_count": 1,
+      "source_candidates": [
+        {
+          "api": "MSHookMessageEx",
+          "file": "reconstruction/sources/cranesb/CRSpringBoard.m",
+          "impl_expression": "(IMP)CRRBExecuteLaunchRequest",
+          "line": 1222,
+          "selector": "executeLaunchRequest:withError:",
+          "target_expression": "processManager"
+        }
+      ],
+      "source_match_status": "textual_installer_candidate",
+      "test_source_selector_mentions_only": [
+        "reconstruction/tools/check_main_injection_diagnostics_contract.py",
+        "reconstruction/tools/check_runningboard_contract.py"
+      ]
+    },
+    {
+      "behavior_verified": false,
+      "ordinal": 39,
+      "original": {
+        "binary": "CraneSB.dylib",
+        "hook_api": "MSHookMessageEx",
+        "hook_implementation": "sub_1BFEC",
+        "registering_function": "_crane_initRunningBoardd",
+        "registration_address": "0x1bf10",
+        "target_class_as_indexed": "RBProcessManager",
+        "target_selector": "_executeLaunchRequest:withError:"
+      },
+      "original_class_attribution": "indexed_not_runtime_verified",
+      "original_same_selector_api_count": 1,
+      "runtime_verified": false,
+      "source_candidate_count": 1,
+      "source_candidates": [
+        {
+          "api": "MSHookMessageEx",
+          "file": "reconstruction/sources/cranesb/CRSpringBoard.m",
+          "impl_expression": "(IMP)CRRBPrivateExecuteLaunchRequest",
+          "line": 1225,
+          "selector": "_executeLaunchRequest:withError:",
+          "target_expression": "processManager"
+        }
+      ],
+      "source_match_status": "textual_installer_candidate",
+      "test_source_selector_mentions_only": [
+        "reconstruction/tools/check_main_injection_diagnostics_contract.py",
+        "reconstruction/tools/check_runningboard_contract.py"
+      ]
+    },
+    {
+      "behavior_verified": false,
+      "ordinal": 40,
+      "original": {
+        "binary": "CraneSB.dylib",
+        "hook_api": "MSHookMessageEx",
+        "hook_implementation": "sub_84A0",
+        "registering_function": "_initCRBadgeContextMenuActionView",
+        "registration_address": "0x7f58",
+        "target_class_as_indexed": "SBApplicationIcon",
+        "target_selector": "valueForUndefinedKey:"
+      },
+      "original_class_attribution": "indexed_not_runtime_verified",
+      "original_same_selector_api_count": 1,
+      "runtime_verified": false,
+      "source_candidate_count": 0,
+      "source_candidates": [],
+      "source_match_status": "no_installer_candidate",
+      "test_source_selector_mentions_only": [
+        "reconstruction/tools/check_menu_badge_contract.py"
+      ]
+    },
+    {
+      "behavior_verified": false,
+      "ordinal": 41,
+      "original": {
+        "binary": "CraneSB.dylib",
+        "hook_api": "MSHookMessageEx",
+        "hook_implementation": "sub_9214",
+        "registering_function": "_initCRBadgeContextMenuActionView",
+        "registration_address": "0x7f58",
+        "target_class_as_indexed": "SBApplicationIcon",
+        "target_selector": "updateConstraints"
+      },
+      "original_class_attribution": "indexed_not_runtime_verified",
+      "original_same_selector_api_count": 1,
+      "runtime_verified": false,
+      "source_candidate_count": 0,
+      "source_candidates": [],
+      "source_match_status": "no_installer_candidate",
+      "test_source_selector_mentions_only": []
+    },
+    {
+      "behavior_verified": false,
+      "ordinal": 42,
+      "original": {
+        "binary": "CraneSB.dylib",
+        "hook_api": "MSHookMessageEx",
+        "hook_implementation": "sub_9360",
+        "registering_function": "_initCRBadgeContextMenuActionView",
+        "registration_address": "0x7f58",
+        "target_class_as_indexed": "SBApplicationIcon",
+        "target_selector": "layoutSubviews"
+      },
+      "original_class_attribution": "indexed_not_runtime_verified",
+      "original_same_selector_api_count": 1,
+      "runtime_verified": false,
+      "source_candidate_count": 0,
+      "source_candidates": [],
+      "source_match_status": "no_installer_candidate",
+      "test_source_selector_mentions_only": []
+    },
+    {
+      "behavior_verified": false,
+      "ordinal": 43,
+      "original": {
+        "binary": "CraneSB.dylib",
+        "hook_api": "class_addMethod",
+        "hook_implementation": "sub_7E80",
+        "registering_function": "_initCRBadgeContextMenuActionView",
+        "registration_address": "0x7f58",
+        "target_class_as_indexed": "SBApplicationIcon",
+        "target_selector": "text"
+      },
+      "original_class_attribution": "indexed_not_runtime_verified",
+      "original_same_selector_api_count": 1,
+      "runtime_verified": false,
+      "source_candidate_count": 1,
+      "source_candidates": [
+        {
+          "api": "class_addMethod",
+          "file": "reconstruction/sources/cranesb/CRMenuHooks.m",
+          "impl_expression": "(IMP)CRMenuFakeIconText",
+          "line": 1546,
+          "selector": "text",
+          "target_expression": "created"
+        }
+      ],
+      "source_match_status": "textual_installer_candidate",
+      "test_source_selector_mentions_only": [
+        "reconstruction/tools/check_accountsd_isolation_contract.py",
+        "reconstruction/tools/check_activator_contract.py",
+        "reconstruction/tools/check_app_runtime_probe_contract.py",
+        "reconstruction/tools/check_app_runtime_sandbox_contract.py",
+        "reconstruction/tools/check_apsd_topic_contract.py",
+        "reconstruction/tools/check_backup_fixture_writer_contract.py",
+        "reconstruction/tools/check_backup_inspector_contract.py",
+        "reconstruction/tools/check_backup_metadata_contract.py",
+        "reconstruction/tools/check_backup_payload_parity_contract.py",
+        "reconstruction/tools/check_backup_shape_compare_contract.py",
+        "reconstruction/tools/check_backup_zip_envelope_contract.py",
+        "reconstruction/tools/check_browse_container_contract.py",
+        "reconstruction/tools/check_choicy_integration_contract.py",
+        "reconstruction/tools/check_container_lifecycle_contract.py",
+        "reconstruction/tools/check_container_size_contract.py",
+        "reconstruction/tools/check_container_switch_contract.py",
+        "reconstruction/tools/check_credits_contract.py",
+        "reconstruction/tools/check_daemon_contract.py",
+        "reconstruction/tools/check_device_identifier_settings_contract.py",
+        "reconstruction/tools/check_disposable_source_diagnostic_contract.py",
+        "reconstruction/tools/check_gamecenter_account_schema_contract.py",
+        "reconstruction/tools/check_gamecenter_accounts_ui_contract.py",
+        "reconstruction/tools/check_gamecenter_picker_contract.py",
+        "reconstruction/tools/check_gamecenter_unused_delete_contract.py",
+        "reconstruction/tools/check_helper_keychain_contract.py",
+        "reconstruction/tools/check_helper_launch_registration_contract.py",
+        "reconstruction/tools/check_helper_privileged_contract.py",
+        "reconstruction/tools/check_helper_transport_contract.py",
+        "reconstruction/tools/check_keychain_isolation_contract.py",
+        "reconstruction/tools/check_legacy_shortcut_contract.py",
+        "reconstruction/tools/check_libcrane_original_contract.py",
+        "reconstruction/tools/check_main_injection_diagnostics_contract.py",
+        "reconstruction/tools/check_menu_badge_contract.py",
+        "reconstruction/tools/check_native_backup_core_contract.py",
+        "reconstruction/tools/check_native_backup_crc_contract.py",
+        "reconstruction/tools/check_native_backup_survey_contract.py",
+        "reconstruction/tools/check_native_backup_writer_contract.py",
+        "reconstruction/tools/check_native_fixture_collector_contract.py",
+        "reconstruction/tools/check_native_manager_bridge_contract.py",
+        "reconstruction/tools/check_native_source_preflight_contract.py",
+        "reconstruction/tools/check_native_typed_preflight_contract.py",
+        "reconstruction/tools/check_original_archive_audit_contract.py",
+        "reconstruction/tools/check_original_metadata_shape_contract.py",
+        "reconstruction/tools/check_pkd_lifecycle_contract.py",
+        "reconstruction/tools/check_pkd_query_state_contract.py",
+        "reconstruction/tools/check_pkd_shortcuts_contract.py",
+        "reconstruction/tools/check_postlaunch_injection_contract.py",
+        "reconstruction/tools/check_preferences_isolation_contract.py",
+        "reconstruction/tools/check_prefs_notification_contract.py",
+        "reconstruction/tools/check_prefs_settings_contract.py",
+        "reconstruction/tools/check_restore_fixture_materializer_contract.py",
+        "reconstruction/tools/check_restore_journal_lab_contract.py",
+        "reconstruction/tools/check_restore_preflight_contract.py",
+        "reconstruction/tools/check_restore_quarantine_verify_contract.py",
+        "reconstruction/tools/check_restore_transaction_model_contract.py",
+        "reconstruction/tools/check_restore_work_plan_contract.py",
+        "reconstruction/tools/check_root_actions_contract.py",
+        "reconstruction/tools/check_root_settings_contract.py",
+        "reconstruction/tools/check_root_suggestions_contract.py",
+        "reconstruction/tools/check_roothide_daemon_probe_contract.py",
+        "reconstruction/tools/check_roothide_launch_environment_contract.py",
+        "reconstruction/tools/check_runningboard_contract.py",
+        "reconstruction/tools/check_shortcut_gate_contract.py",
+        "reconstruction/tools/check_ui_runtime_contract.py",
+        "reconstruction/tools/check_xpc_ping_contract.py",
+        "reconstruction/tools/check_xpc_protocol_metadata_contract.py",
+        "reconstruction/tools/test_crane_backup_fixture_writer.py",
+        "reconstruction/tools/test_crane_backup_inspector.py",
+        "reconstruction/tools/test_crane_backup_payload_parity.py",
+        "reconstruction/tools/test_crane_backup_shape_compare.py",
+        "reconstruction/tools/test_crane_backup_zip_envelope.py",
+        "reconstruction/tools/test_crane_disposable_source_diagnostic.py",
+        "reconstruction/tools/test_crane_native_backup_core.py",
+        "reconstruction/tools/test_crane_native_crc_verification.py",
+        "reconstruction/tools/test_crane_native_fixture_collector.py",
+        "reconstruction/tools/test_crane_native_manager_bridge.py",
+        "reconstruction/tools/test_crane_native_source_preflight.py",
+        "reconstruction/tools/test_crane_native_typed_preflight.py",
+        "reconstruction/tools/test_crane_native_writer_verify.py",
+        "reconstruction/tools/test_crane_original_archive_audit.py",
+        "reconstruction/tools/test_crane_original_metadata_shape.py",
+        "reconstruction/tools/test_crane_restore_fixture_materializer.py",
+        "reconstruction/tools/test_crane_restore_journal_lab.py",
+        "reconstruction/tools/test_crane_restore_preflight.py",
+        "reconstruction/tools/test_crane_restore_quarantine_verify.py",
+        "reconstruction/tools/test_crane_restore_transaction_model.py",
+        "reconstruction/tools/test_crane_restore_work_plan.py"
+      ]
+    },
+    {
+      "behavior_verified": false,
+      "ordinal": 44,
+      "original": {
+        "binary": "CraneSB.dylib",
+        "hook_api": "class_addMethod",
+        "hook_implementation": "sub_7E8C",
+        "registering_function": "_initCRBadgeContextMenuActionView",
+        "registration_address": "0x7f58",
+        "target_class_as_indexed": "SBApplicationIcon",
+        "target_selector": "setText:"
+      },
+      "original_class_attribution": "indexed_not_runtime_verified",
+      "original_same_selector_api_count": 1,
+      "runtime_verified": false,
+      "source_candidate_count": 1,
+      "source_candidates": [
+        {
+          "api": "class_addMethod",
+          "file": "reconstruction/sources/cranesb/CRMenuHooks.m",
+          "impl_expression": "(IMP)CRMenuFakeIconSetText",
+          "line": 1548,
+          "selector": "setText:",
+          "target_expression": "created"
+        }
+      ],
+      "source_match_status": "textual_installer_candidate",
+      "test_source_selector_mentions_only": [
+        "reconstruction/tools/check_menu_badge_contract.py"
+      ]
+    },
+    {
+      "behavior_verified": false,
+      "ordinal": 45,
+      "original": {
+        "binary": "CraneSB.dylib",
+        "hook_api": "class_addMethod",
+        "hook_implementation": "sub_7EC8",
+        "registering_function": "_initCRBadgeContextMenuActionView",
+        "registration_address": "0x7f58",
+        "target_class_as_indexed": "SBApplicationIcon",
+        "target_selector": "badgeView"
+      },
+      "original_class_attribution": "indexed_not_runtime_verified",
+      "original_same_selector_api_count": 1,
+      "runtime_verified": false,
+      "source_candidate_count": 0,
+      "source_candidates": [],
+      "source_match_status": "no_installer_candidate",
+      "test_source_selector_mentions_only": []
+    },
+    {
+      "behavior_verified": false,
+      "ordinal": 46,
+      "original": {
+        "binary": "CraneSB.dylib",
+        "hook_api": "class_addMethod",
+        "hook_implementation": "sub_7ED4",
+        "registering_function": "_initCRBadgeContextMenuActionView",
+        "registration_address": "0x7f58",
+        "target_class_as_indexed": "SBApplicationIcon",
+        "target_selector": "setBadgeView:"
+      },
+      "original_class_attribution": "indexed_not_runtime_verified",
+      "original_same_selector_api_count": 1,
+      "runtime_verified": false,
+      "source_candidate_count": 0,
+      "source_candidates": [],
+      "source_match_status": "no_installer_candidate",
+      "test_source_selector_mentions_only": []
+    },
+    {
+      "behavior_verified": false,
+      "ordinal": 47,
+      "original": {
+        "binary": "CraneSB.dylib",
+        "hook_api": "class_addMethod",
+        "hook_implementation": "sub_7F10",
+        "registering_function": "_initCRBadgeContextMenuActionView",
+        "registration_address": "0x7f58",
+        "target_class_as_indexed": "SBApplicationIcon",
+        "target_selector": "associatedApplicationID"
+      },
+      "original_class_attribution": "indexed_not_runtime_verified",
+      "original_same_selector_api_count": 1,
+      "runtime_verified": false,
+      "source_candidate_count": 0,
+      "source_candidates": [],
+      "source_match_status": "no_installer_candidate",
+      "test_source_selector_mentions_only": []
+    },
+    {
+      "behavior_verified": false,
+      "ordinal": 48,
+      "original": {
+        "binary": "CraneSB.dylib",
+        "hook_api": "class_addMethod",
+        "hook_implementation": "sub_7F1C",
+        "registering_function": "_initCRBadgeContextMenuActionView",
+        "registration_address": "0x7f58",
+        "target_class_as_indexed": "SBApplicationIcon",
+        "target_selector": "setAssociatedApplicationID:"
+      },
+      "original_class_attribution": "indexed_not_runtime_verified",
+      "original_same_selector_api_count": 1,
+      "runtime_verified": false,
+      "source_candidate_count": 0,
+      "source_candidates": [],
+      "source_match_status": "no_installer_candidate",
+      "test_source_selector_mentions_only": []
+    },
+    {
+      "behavior_verified": false,
+      "ordinal": 49,
+      "original": {
+        "binary": "CraneSB.dylib",
+        "hook_api": "MSHookMessageEx",
+        "hook_implementation": "sub_9A60",
+        "registering_function": "InitFunc_0",
+        "registration_address": "0x9684",
+        "target_class_as_indexed": "SBAlertItem",
+        "target_selector": "configure:requirePasscodeForActions:"
+      },
+      "original_class_attribution": "indexed_not_runtime_verified",
+      "original_same_selector_api_count": 2,
+      "runtime_verified": false,
+      "source_candidate_count": 2,
+      "source_candidates": [
+        {
+          "api": "MSHookMessageEx",
+          "file": "reconstruction/sources/cranesb/CRErrorAlerts.m",
+          "impl_expression": "(IMP)CRNewContainerAlertConfigure",
+          "line": 281,
+          "selector": "configure:requirePasscodeForActions:",
+          "target_expression": "cls"
+        },
+        {
+          "api": "MSHookMessageEx",
+          "file": "reconstruction/sources/cranesb/CRErrorAlerts.m",
+          "impl_expression": "(IMP)CRErrorAlertConfigure",
+          "line": 363,
+          "selector": "configure:requirePasscodeForActions:",
+          "target_expression": "cls"
+        }
+      ],
+      "source_match_status": "ambiguous_original_duplicate",
+      "test_source_selector_mentions_only": []
+    },
+    {
+      "behavior_verified": false,
+      "ordinal": 50,
+      "original": {
+        "binary": "CraneSB.dylib",
+        "hook_api": "MSHookMessageEx",
+        "hook_implementation": "sub_9DA4",
+        "registering_function": "InitFunc_0",
+        "registration_address": "0x9684",
+        "target_class_as_indexed": "SBAlertItem",
+        "target_selector": "reappearsAfterUnlock"
+      },
+      "original_class_attribution": "indexed_not_runtime_verified",
+      "original_same_selector_api_count": 1,
+      "runtime_verified": false,
+      "source_candidate_count": 1,
+      "source_candidates": [
+        {
+          "api": "MSHookMessageEx",
+          "file": "reconstruction/sources/cranesb/CRErrorAlerts.m",
+          "impl_expression": "(IMP)CRErrorAlertReappearsAfterUnlock",
+          "line": 368,
+          "selector": "reappearsAfterUnlock",
+          "target_expression": "cls"
+        }
+      ],
+      "source_match_status": "textual_installer_candidate",
+      "test_source_selector_mentions_only": []
+    },
+    {
+      "behavior_verified": false,
+      "ordinal": 51,
+      "original": {
+        "binary": "CraneSB.dylib",
+        "hook_api": "class_addMethod",
+        "hook_implementation": "sub_94C4",
+        "registering_function": "InitFunc_0",
+        "registration_address": "0x9684",
+        "target_class_as_indexed": "SBAlertItem",
+        "target_selector": "errorTitle"
+      },
+      "original_class_attribution": "indexed_not_runtime_verified",
+      "original_same_selector_api_count": 1,
+      "runtime_verified": false,
+      "source_candidate_count": 1,
+      "source_candidates": [
+        {
+          "api": "class_addMethod",
+          "file": "reconstruction/sources/cranesb/CRErrorAlerts.m",
+          "impl_expression": "(IMP)CRErrorAlertErrorTitle",
+          "line": 319,
+          "selector": "errorTitle",
+          "target_expression": "cls"
+        }
+      ],
+      "source_match_status": "textual_installer_candidate",
+      "test_source_selector_mentions_only": []
+    },
+    {
+      "behavior_verified": false,
+      "ordinal": 52,
+      "original": {
+        "binary": "CraneSB.dylib",
+        "hook_api": "class_addMethod",
+        "hook_implementation": "sub_94D0",
+        "registering_function": "InitFunc_0",
+        "registration_address": "0x9684",
+        "target_class_as_indexed": "SBAlertItem",
+        "target_selector": "setErrorTitle:"
+      },
+      "original_class_attribution": "indexed_not_runtime_verified",
+      "original_same_selector_api_count": 1,
+      "runtime_verified": false,
+      "source_candidate_count": 1,
+      "source_candidates": [
+        {
+          "api": "class_addMethod",
+          "file": "reconstruction/sources/cranesb/CRErrorAlerts.m",
+          "impl_expression": "(IMP)CRErrorAlertSetErrorTitle",
+          "line": 323,
+          "selector": "setErrorTitle:",
+          "target_expression": "cls"
+        }
+      ],
+      "source_match_status": "textual_installer_candidate",
+      "test_source_selector_mentions_only": []
+    },
+    {
+      "behavior_verified": false,
+      "ordinal": 53,
+      "original": {
+        "binary": "CraneSB.dylib",
+        "hook_api": "class_addMethod",
+        "hook_implementation": "sub_950C",
+        "registering_function": "InitFunc_0",
+        "registration_address": "0x9684",
+        "target_class_as_indexed": "SBAlertItem",
+        "target_selector": "errorMessage"
+      },
+      "original_class_attribution": "indexed_not_runtime_verified",
+      "original_same_selector_api_count": 1,
+      "runtime_verified": false,
+      "source_candidate_count": 1,
+      "source_candidates": [
+        {
+          "api": "class_addMethod",
+          "file": "reconstruction/sources/cranesb/CRErrorAlerts.m",
+          "impl_expression": "(IMP)CRErrorAlertErrorMessage",
+          "line": 329,
+          "selector": "errorMessage",
+          "target_expression": "cls"
+        }
+      ],
+      "source_match_status": "textual_installer_candidate",
+      "test_source_selector_mentions_only": []
+    },
+    {
+      "behavior_verified": false,
+      "ordinal": 54,
+      "original": {
+        "binary": "CraneSB.dylib",
+        "hook_api": "class_addMethod",
+        "hook_implementation": "sub_9518",
+        "registering_function": "InitFunc_0",
+        "registration_address": "0x9684",
+        "target_class_as_indexed": "SBAlertItem",
+        "target_selector": "setErrorMessage:"
+      },
+      "original_class_attribution": "indexed_not_runtime_verified",
+      "original_same_selector_api_count": 1,
+      "runtime_verified": false,
+      "source_candidate_count": 1,
+      "source_candidates": [
+        {
+          "api": "class_addMethod",
+          "file": "reconstruction/sources/cranesb/CRErrorAlerts.m",
+          "impl_expression": "(IMP)CRErrorAlertSetErrorMessage",
+          "line": 333,
+          "selector": "setErrorMessage:",
+          "target_expression": "cls"
+        }
+      ],
+      "source_match_status": "textual_installer_candidate",
+      "test_source_selector_mentions_only": []
+    },
+    {
+      "behavior_verified": false,
+      "ordinal": 55,
+      "original": {
+        "binary": "CraneSB.dylib",
+        "hook_api": "class_addMethod",
+        "hook_implementation": "sub_9554",
+        "registering_function": "InitFunc_0",
+        "registration_address": "0x9684",
+        "target_class_as_indexed": "SBAlertItem",
+        "target_selector": "actions"
+      },
+      "original_class_attribution": "indexed_not_runtime_verified",
+      "original_same_selector_api_count": 1,
+      "runtime_verified": false,
+      "source_candidate_count": 1,
+      "source_candidates": [
+        {
+          "api": "class_addMethod",
+          "file": "reconstruction/sources/cranesb/CRErrorAlerts.m",
+          "impl_expression": "(IMP)CRErrorAlertActions",
+          "line": 339,
+          "selector": "actions",
+          "target_expression": "cls"
+        }
+      ],
+      "source_match_status": "textual_installer_candidate",
+      "test_source_selector_mentions_only": [
+        "reconstruction/tools/check_container_switch_contract.py",
+        "reconstruction/tools/check_credits_contract.py",
+        "reconstruction/tools/check_device_identifier_settings_contract.py",
+        "reconstruction/tools/check_helper_privileged_contract.py",
+        "reconstruction/tools/check_legacy_shortcut_contract.py",
+        "reconstruction/tools/check_pkd_query_state_contract.py",
+        "reconstruction/tools/check_root_actions_contract.py",
+        "reconstruction/tools/check_root_suggestions_contract.py",
+        "reconstruction/tools/check_shortcut_gate_contract.py"
+      ]
+    },
+    {
+      "behavior_verified": false,
+      "ordinal": 56,
+      "original": {
+        "binary": "CraneSB.dylib",
+        "hook_api": "class_addMethod",
+        "hook_implementation": "sub_9560",
+        "registering_function": "InitFunc_0",
+        "registration_address": "0x9684",
+        "target_class_as_indexed": "SBAlertItem",
+        "target_selector": "setActions:"
+      },
+      "original_class_attribution": "indexed_not_runtime_verified",
+      "original_same_selector_api_count": 1,
+      "runtime_verified": false,
+      "source_candidate_count": 1,
+      "source_candidates": [
+        {
+          "api": "class_addMethod",
+          "file": "reconstruction/sources/cranesb/CRErrorAlerts.m",
+          "impl_expression": "(IMP)CRErrorAlertSetActions",
+          "line": 343,
+          "selector": "setActions:",
+          "target_expression": "cls"
+        }
+      ],
+      "source_match_status": "textual_installer_candidate",
+      "test_source_selector_mentions_only": []
+    },
+    {
+      "behavior_verified": false,
+      "ordinal": 57,
+      "original": {
+        "binary": "CraneSB.dylib",
+        "hook_api": "class_addMethod",
+        "hook_implementation": "sub_959C",
+        "registering_function": "InitFunc_0",
+        "registration_address": "0x9684",
+        "target_class_as_indexed": "SBAlertItem",
+        "target_selector": "crane_reappearsAfterUnlock"
+      },
+      "original_class_attribution": "indexed_not_runtime_verified",
+      "original_same_selector_api_count": 1,
+      "runtime_verified": false,
+      "source_candidate_count": 1,
+      "source_candidates": [
+        {
+          "api": "class_addMethod",
+          "file": "reconstruction/sources/cranesb/CRErrorAlerts.m",
+          "impl_expression": "(IMP)CRErrorAlertReappears",
+          "line": 352,
+          "selector": "crane_reappearsAfterUnlock",
+          "target_expression": "cls"
+        }
+      ],
+      "source_match_status": "textual_installer_candidate",
+      "test_source_selector_mentions_only": []
+    },
+    {
+      "behavior_verified": false,
+      "ordinal": 58,
+      "original": {
+        "binary": "CraneSB.dylib",
+        "hook_api": "class_addMethod",
+        "hook_implementation": "sub_95F4",
+        "registering_function": "InitFunc_0",
+        "registration_address": "0x9684",
+        "target_class_as_indexed": "SBAlertItem",
+        "target_selector": "setCrane_reappearsAfterUnlock:"
+      },
+      "original_class_attribution": "indexed_not_runtime_verified",
+      "original_same_selector_api_count": 1,
+      "runtime_verified": false,
+      "source_candidate_count": 1,
+      "source_candidates": [
+        {
+          "api": "class_addMethod",
+          "file": "reconstruction/sources/cranesb/CRErrorAlerts.m",
+          "impl_expression": "(IMP)CRErrorAlertSetReappears",
+          "line": 356,
+          "selector": "setCrane_reappearsAfterUnlock:",
+          "target_expression": "cls"
+        }
+      ],
+      "source_match_status": "textual_installer_candidate",
+      "test_source_selector_mentions_only": []
+    },
+    {
+      "behavior_verified": false,
+      "ordinal": 59,
+      "original": {
+        "binary": "CraneSB.dylib",
+        "hook_api": "MSHookMessageEx",
+        "hook_implementation": "sub_9F8C",
+        "registering_function": "InitFunc_1",
+        "registration_address": "0x9e08",
+        "target_class_as_indexed": "SBAlertItem",
+        "target_selector": "configure:requirePasscodeForActions:"
+      },
+      "original_class_attribution": "indexed_not_runtime_verified",
+      "original_same_selector_api_count": 2,
+      "runtime_verified": false,
+      "source_candidate_count": 2,
+      "source_candidates": [
+        {
+          "api": "MSHookMessageEx",
+          "file": "reconstruction/sources/cranesb/CRErrorAlerts.m",
+          "impl_expression": "(IMP)CRNewContainerAlertConfigure",
+          "line": 281,
+          "selector": "configure:requirePasscodeForActions:",
+          "target_expression": "cls"
+        },
+        {
+          "api": "MSHookMessageEx",
+          "file": "reconstruction/sources/cranesb/CRErrorAlerts.m",
+          "impl_expression": "(IMP)CRErrorAlertConfigure",
+          "line": 363,
+          "selector": "configure:requirePasscodeForActions:",
+          "target_expression": "cls"
+        }
+      ],
+      "source_match_status": "ambiguous_original_duplicate",
+      "test_source_selector_mentions_only": []
+    },
+    {
+      "behavior_verified": false,
+      "ordinal": 60,
+      "original": {
+        "binary": "CraneSB.dylib",
+        "hook_api": "class_addMethod",
+        "hook_implementation": "sub_9DC0",
+        "registering_function": "InitFunc_1",
+        "registration_address": "0x9e08",
+        "target_class_as_indexed": "SBAlertItem",
+        "target_selector": "applicationID"
+      },
+      "original_class_attribution": "indexed_not_runtime_verified",
+      "original_same_selector_api_count": 1,
+      "runtime_verified": false,
+      "source_candidate_count": 1,
+      "source_candidates": [
+        {
+          "api": "class_addMethod",
+          "file": "reconstruction/sources/cranesb/CRErrorAlerts.m",
+          "impl_expression": "(IMP)CRNewContainerAlertApplicationID",
+          "line": 271,
+          "selector": "applicationID",
+          "target_expression": "cls"
+        }
+      ],
+      "source_match_status": "textual_installer_candidate",
+      "test_source_selector_mentions_only": [
+        "reconstruction/tools/check_disposable_source_diagnostic_contract.py",
+        "reconstruction/tools/check_legacy_shortcut_contract.py",
+        "reconstruction/tools/check_native_source_preflight_contract.py",
+        "reconstruction/tools/check_native_typed_preflight_contract.py",
+        "reconstruction/tools/test_crane_disposable_source_diagnostic.py",
+        "reconstruction/tools/test_crane_native_source_preflight.py",
+        "reconstruction/tools/test_crane_native_typed_preflight.py"
+      ]
+    },
+    {
+      "behavior_verified": false,
+      "ordinal": 61,
+      "original": {
+        "binary": "CraneSB.dylib",
+        "hook_api": "class_addMethod",
+        "hook_implementation": "sub_9DCC",
+        "registering_function": "InitFunc_1",
+        "registration_address": "0x9e08",
+        "target_class_as_indexed": "SBAlertItem",
+        "target_selector": "setApplicationID:"
+      },
+      "original_class_attribution": "indexed_not_runtime_verified",
+      "original_same_selector_api_count": 1,
+      "runtime_verified": false,
+      "source_candidate_count": 1,
+      "source_candidates": [
+        {
+          "api": "class_addMethod",
+          "file": "reconstruction/sources/cranesb/CRErrorAlerts.m",
+          "impl_expression": "(IMP)CRNewContainerAlertSetApplicationID",
+          "line": 275,
+          "selector": "setApplicationID:",
+          "target_expression": "cls"
+        }
+      ],
+      "source_match_status": "textual_installer_candidate",
+      "test_source_selector_mentions_only": [
+        "reconstruction/tools/check_legacy_shortcut_contract.py"
+      ]
+    },
+    {
+      "behavior_verified": false,
+      "ordinal": 62,
+      "original": {
+        "binary": "CraneSB.dylib",
+        "hook_api": "MSHookMessageEx",
+        "hook_implementation": "sub_D958",
+        "registering_function": "_initNotificationSupport",
+        "registration_address": "0xcbec",
+        "target_class_as_indexed": "UNSNotificationRecord",
+        "target_selector": "un_applicationBundleIdentifier"
+      },
+      "original_class_attribution": "alias_collapsed_unverified",
+      "original_same_selector_api_count": 1,
+      "runtime_verified": false,
+      "source_candidate_count": 1,
+      "source_candidates": [
+        {
+          "api": "MSHookMessageEx",
+          "file": "reconstruction/sources/cranesb/CRBadgeStore.m",
+          "impl_expression": "(IMP)CRBadgeProxyBundleID",
+          "line": 2302,
+          "selector": "un_applicationBundleIdentifier",
+          "target_expression": "proxyClass"
+        }
+      ],
+      "source_match_status": "textual_installer_candidate",
+      "test_source_selector_mentions_only": [
+        "reconstruction/tools/check_runningboard_contract.py"
+      ]
+    },
+    {
+      "behavior_verified": false,
+      "ordinal": 63,
+      "original": {
+        "binary": "CraneSB.dylib",
+        "hook_api": "MSHookMessageEx",
+        "hook_implementation": "sub_DA30",
+        "registering_function": "_initNotificationSupport",
+        "registration_address": "0xcbec",
+        "target_class_as_indexed": "UNSNotificationRecord",
+        "target_selector": "requestTokenForRemoteNotificationsForBundleIdentifier:withCompletionHandler:"
+      },
+      "original_class_attribution": "alias_collapsed_unverified",
+      "original_same_selector_api_count": 2,
+      "runtime_verified": false,
+      "source_candidate_count": 1,
+      "source_candidates": [
+        {
+          "api": "MSHookMessageEx",
+          "file": "reconstruction/sources/cranesb/CRBadgeStore.m",
+          "impl_expression": "(IMP)CRBadgeRequestToken",
+          "line": 2411,
+          "selector": "requestTokenForRemoteNotificationsForBundleIdentifier:withCompletionHandler:",
+          "target_expression": "tokenListener"
+        }
+      ],
+      "source_match_status": "ambiguous_original_duplicate",
+      "test_source_selector_mentions_only": []
+    },
+    {
+      "behavior_verified": false,
+      "ordinal": 64,
+      "original": {
+        "binary": "CraneSB.dylib",
+        "hook_api": "MSHookMessageEx",
+        "hook_implementation": "sub_DC5C",
+        "registering_function": "_initNotificationSupport",
+        "registration_address": "0xcbec",
+        "target_class_as_indexed": "UNSNotificationRecord",
+        "target_selector": "invalidateTokenForRemoteNotificationsForBundleIdentifier:"
+      },
+      "original_class_attribution": "alias_collapsed_unverified",
+      "original_same_selector_api_count": 2,
+      "runtime_verified": false,
+      "source_candidate_count": 1,
+      "source_candidates": [
+        {
+          "api": "MSHookMessageEx",
+          "file": "reconstruction/sources/cranesb/CRBadgeStore.m",
+          "impl_expression": "(IMP)CRBadgeInvalidateToken",
+          "line": 2417,
+          "selector": "invalidateTokenForRemoteNotificationsForBundleIdentifier:",
+          "target_expression": "tokenListener"
+        }
+      ],
+      "source_match_status": "ambiguous_original_duplicate",
+      "test_source_selector_mentions_only": [
+        "reconstruction/tools/check_runningboard_contract.py"
+      ]
+    },
+    {
+      "behavior_verified": false,
+      "ordinal": 65,
+      "original": {
+        "binary": "CraneSB.dylib",
+        "hook_api": "MSHookMessageEx",
+        "hook_implementation": "sub_DE54",
+        "registering_function": "_initNotificationSupport",
+        "registration_address": "0xcbec",
+        "target_class_as_indexed": "UNSNotificationRecord",
+        "target_selector": "sourceDescriptionWithBundleIdentifier:"
+      },
+      "original_class_attribution": "alias_collapsed_unverified",
+      "original_same_selector_api_count": 1,
+      "runtime_verified": false,
+      "source_candidate_count": 1,
+      "source_candidates": [
+        {
+          "api": "MSHookMessageEx",
+          "file": "reconstruction/sources/cranesb/CRBadgeStore.m",
+          "impl_expression": "(IMP)CRBadgeSourceDescription",
+          "line": 2313,
+          "selector": "sourceDescriptionWithBundleIdentifier:",
+          "target_expression": "object_getClass(descriptionClass)"
+        }
+      ],
+      "source_match_status": "textual_installer_candidate",
+      "test_source_selector_mentions_only": []
+    },
+    {
+      "behavior_verified": false,
+      "ordinal": 66,
+      "original": {
+        "binary": "CraneSB.dylib",
+        "hook_api": "MSHookMessageEx",
+        "hook_implementation": "sub_DF68",
+        "registering_function": "_initNotificationSupport",
+        "registration_address": "0xcbec",
+        "target_class_as_indexed": "UNSNotificationRecord",
+        "target_selector": "requestTokenForRemoteNotificationsForBundleIdentifier:withCompletionHandler:"
+      },
+      "original_class_attribution": "alias_collapsed_unverified",
+      "original_same_selector_api_count": 2,
+      "runtime_verified": false,
+      "source_candidate_count": 1,
+      "source_candidates": [
+        {
+          "api": "MSHookMessageEx",
+          "file": "reconstruction/sources/cranesb/CRBadgeStore.m",
+          "impl_expression": "(IMP)CRBadgeRequestToken",
+          "line": 2411,
+          "selector": "requestTokenForRemoteNotificationsForBundleIdentifier:withCompletionHandler:",
+          "target_expression": "tokenListener"
+        }
+      ],
+      "source_match_status": "ambiguous_original_duplicate",
+      "test_source_selector_mentions_only": []
+    },
+    {
+      "behavior_verified": false,
+      "ordinal": 67,
+      "original": {
+        "binary": "CraneSB.dylib",
+        "hook_api": "MSHookMessageEx",
+        "hook_implementation": "sub_E194",
+        "registering_function": "_initNotificationSupport",
+        "registration_address": "0xcbec",
+        "target_class_as_indexed": "UNSNotificationRecord",
+        "target_selector": "invalidateTokenForRemoteNotificationsForBundleIdentifier:"
+      },
+      "original_class_attribution": "alias_collapsed_unverified",
+      "original_same_selector_api_count": 2,
+      "runtime_verified": false,
+      "source_candidate_count": 1,
+      "source_candidates": [
+        {
+          "api": "MSHookMessageEx",
+          "file": "reconstruction/sources/cranesb/CRBadgeStore.m",
+          "impl_expression": "(IMP)CRBadgeInvalidateToken",
+          "line": 2417,
+          "selector": "invalidateTokenForRemoteNotificationsForBundleIdentifier:",
+          "target_expression": "tokenListener"
+        }
+      ],
+      "source_match_status": "ambiguous_original_duplicate",
+      "test_source_selector_mentions_only": [
+        "reconstruction/tools/check_runningboard_contract.py"
+      ]
+    },
+    {
+      "behavior_verified": false,
+      "ordinal": 68,
+      "original": {
+        "binary": "CraneSB.dylib",
+        "hook_api": "MSHookMessageEx",
+        "hook_implementation": "sub_E2C4",
+        "registering_function": "_initNotificationSupport",
+        "registration_address": "0xcbec",
+        "target_class_as_indexed": "UNSNotificationRecord",
+        "target_selector": "_queue_connection:didReceiveToken:forTopic:identifier:"
+      },
+      "original_class_attribution": "alias_collapsed_unverified",
+      "original_same_selector_api_count": 1,
+      "runtime_verified": false,
+      "source_candidate_count": 1,
+      "source_candidates": [
+        {
+          "api": "MSHookMessageEx",
+          "file": "reconstruction/sources/cranesb/CRBadgeStore.m",
+          "impl_expression": "(IMP)CRBadgeReceiveToken",
+          "line": 2395,
+          "selector": "_queue_connection:didReceiveToken:forTopic:identifier:",
+          "target_expression": "remoteClass"
+        }
+      ],
+      "source_match_status": "textual_installer_candidate",
+      "test_source_selector_mentions_only": []
+    },
+    {
+      "behavior_verified": false,
+      "ordinal": 69,
+      "original": {
+        "binary": "CraneSB.dylib",
+        "hook_api": "MSHookMessageEx",
+        "hook_implementation": "sub_E448",
+        "registering_function": "_initNotificationSupport",
+        "registration_address": "0xcbec",
+        "target_class_as_indexed": "UNSNotificationRecord",
+        "target_selector": "_queue_isContentAvailableRemoteNotificationSupportedForBundleIdentifier:"
+      },
+      "original_class_attribution": "alias_collapsed_unverified",
+      "original_same_selector_api_count": 1,
+      "runtime_verified": false,
+      "source_candidate_count": 1,
+      "source_candidates": [
+        {
+          "api": "MSHookMessageEx",
+          "file": "reconstruction/sources/cranesb/CRBadgeStore.m",
+          "impl_expression": "(IMP)CRBadgeContentAvailable",
+          "line": 2349,
+          "selector": "_queue_isContentAvailableRemoteNotificationSupportedForBundleIdentifier:",
+          "target_expression": "remoteClass"
+        }
+      ],
+      "source_match_status": "textual_installer_candidate",
+      "test_source_selector_mentions_only": []
+    },
+    {
+      "behavior_verified": false,
+      "ordinal": 70,
+      "original": {
+        "binary": "CraneSB.dylib",
+        "hook_api": "MSHookMessageEx",
+        "hook_implementation": "sub_E4DC",
+        "registering_function": "_initNotificationSupport",
+        "registration_address": "0xcbec",
+        "target_class_as_indexed": "UNSNotificationRecord",
+        "target_selector": "_queue_isBackgroundAppRefreshAllowedForBundleIdentifier:"
+      },
+      "original_class_attribution": "alias_collapsed_unverified",
+      "original_same_selector_api_count": 1,
+      "runtime_verified": false,
+      "source_candidate_count": 1,
+      "source_candidates": [
+        {
+          "api": "MSHookMessageEx",
+          "file": "reconstruction/sources/cranesb/CRBadgeStore.m",
+          "impl_expression": "(IMP)CRBadgeBackgroundRefresh",
+          "line": 2355,
+          "selector": "_queue_isBackgroundAppRefreshAllowedForBundleIdentifier:",
+          "target_expression": "remoteClass"
+        }
+      ],
+      "source_match_status": "textual_installer_candidate",
+      "test_source_selector_mentions_only": []
+    },
+    {
+      "behavior_verified": false,
+      "ordinal": 71,
+      "original": {
+        "binary": "CraneSB.dylib",
+        "hook_api": "MSHookMessageEx",
+        "hook_implementation": "sub_E570",
+        "registering_function": "_initNotificationSupport",
+        "registration_address": "0xcbec",
+        "target_class_as_indexed": "UNSNotificationRecord",
+        "target_selector": "_queue_isUserNotificationEnabledForApplication:"
+      },
+      "original_class_attribution": "alias_collapsed_unverified",
+      "original_same_selector_api_count": 1,
+      "runtime_verified": false,
+      "source_candidate_count": 1,
+      "source_candidates": [
+        {
+          "api": "MSHookMessageEx",
+          "file": "reconstruction/sources/cranesb/CRBadgeStore.m",
+          "impl_expression": "(IMP)CRBadgeUserNotificationEnabled",
+          "line": 2361,
+          "selector": "_queue_isUserNotificationEnabledForApplication:",
+          "target_expression": "remoteClass"
+        }
+      ],
+      "source_match_status": "textual_installer_candidate",
+      "test_source_selector_mentions_only": []
+    },
+    {
+      "behavior_verified": false,
+      "ordinal": 72,
+      "original": {
+        "binary": "CraneSB.dylib",
+        "hook_api": "MSHookMessageEx",
+        "hook_implementation": "sub_E604",
+        "registering_function": "_initNotificationSupport",
+        "registration_address": "0xcbec",
+        "target_class_as_indexed": "UNSNotificationRecord",
+        "target_selector": "_queue_isApplicationForeground:"
+      },
+      "original_class_attribution": "alias_collapsed_unverified",
+      "original_same_selector_api_count": 1,
+      "runtime_verified": false,
+      "source_candidate_count": 1,
+      "source_candidates": [
+        {
+          "api": "MSHookMessageEx",
+          "file": "reconstruction/sources/cranesb/CRBadgeStore.m",
+          "impl_expression": "(IMP)CRBadgeApplicationForeground",
+          "line": 2367,
+          "selector": "_queue_isApplicationForeground:",
+          "target_expression": "remoteClass"
+        }
+      ],
+      "source_match_status": "textual_installer_candidate",
+      "test_source_selector_mentions_only": []
+    },
+    {
+      "behavior_verified": false,
+      "ordinal": 73,
+      "original": {
+        "binary": "CraneSB.dylib",
+        "hook_api": "MSHookMessageEx",
+        "hook_implementation": "sub_E730",
+        "registering_function": "_initNotificationSupport",
+        "registration_address": "0xcbec",
+        "target_class_as_indexed": "UNSNotificationRecord",
+        "target_selector": "title"
+      },
+      "original_class_attribution": "alias_collapsed_unverified",
+      "original_same_selector_api_count": 1,
+      "runtime_verified": false,
+      "source_candidate_count": 1,
+      "source_candidates": [
+        {
+          "api": "MSHookMessageEx",
+          "file": "reconstruction/sources/cranesb/CRBadgeStore.m",
+          "impl_expression": "(IMP)CRBadgeNotificationTitle",
+          "line": 2295,
+          "selector": "title",
+          "target_expression": "provider"
+        }
+      ],
+      "source_match_status": "textual_installer_candidate",
+      "test_source_selector_mentions_only": [
+        "reconstruction/tools/check_browse_container_contract.py",
+        "reconstruction/tools/check_gamecenter_picker_contract.py",
+        "reconstruction/tools/check_helper_transport_contract.py",
+        "reconstruction/tools/check_menu_badge_contract.py",
+        "reconstruction/tools/check_root_settings_contract.py",
+        "reconstruction/tools/check_root_suggestions_contract.py",
+        "reconstruction/tools/check_runningboard_contract.py",
+        "reconstruction/tools/check_shortcut_gate_contract.py"
+      ]
+    },
+    {
+      "behavior_verified": false,
+      "ordinal": 74,
+      "original": {
+        "binary": "CraneSB.dylib",
+        "hook_api": "MSHookMessageEx",
+        "hook_implementation": "sub_E94C",
+        "registering_function": "_initNotificationSupport",
+        "registration_address": "0xcbec",
+        "target_class_as_indexed": "UNSNotificationRecord",
+        "target_selector": "containsObject:"
+      },
+      "original_class_attribution": "alias_collapsed_unverified",
+      "original_same_selector_api_count": 1,
+      "runtime_verified": false,
+      "source_candidate_count": 0,
+      "source_candidates": [],
+      "source_match_status": "no_installer_candidate",
+      "test_source_selector_mentions_only": [
+        "reconstruction/tools/check_activator_contract.py",
+        "reconstruction/tools/check_backup_metadata_contract.py",
+        "reconstruction/tools/check_browse_container_contract.py",
+        "reconstruction/tools/check_choicy_integration_contract.py",
+        "reconstruction/tools/check_container_lifecycle_contract.py",
+        "reconstruction/tools/check_daemon_contract.py",
+        "reconstruction/tools/check_gamecenter_account_schema_contract.py",
+        "reconstruction/tools/check_gamecenter_picker_contract.py",
+        "reconstruction/tools/check_native_backup_survey_contract.py",
+        "reconstruction/tools/check_native_source_preflight_contract.py",
+        "reconstruction/tools/check_prefs_settings_contract.py",
+        "reconstruction/tools/check_runningboard_contract.py",
+        "reconstruction/tools/check_shortcut_gate_contract.py",
+        "reconstruction/tools/test_crane_native_source_preflight.py"
+      ]
+    },
+    {
+      "behavior_verified": false,
+      "ordinal": 75,
+      "original": {
+        "binary": "CraneSB.dylib",
+        "hook_api": "MSHookMessageEx",
+        "hook_implementation": "sub_EA50",
+        "registering_function": "_initNotificationSupport",
+        "registration_address": "0xcbec",
+        "target_class_as_indexed": "UNSNotificationRecord",
+        "target_selector": "uns_isAllowedToRequestUserNotificationsForBundleIdentifier:"
+      },
+      "original_class_attribution": "alias_collapsed_unverified",
+      "original_same_selector_api_count": 1,
+      "runtime_verified": false,
+      "source_candidate_count": 1,
+      "source_candidates": [
+        {
+          "api": "MSHookMessageEx",
+          "file": "reconstruction/sources/cranesb/CRBadgeStore.m",
+          "impl_expression": "(IMP)CRBadgeNotificationPermission",
+          "line": 2215,
+          "selector": "uns_isAllowedToRequestUserNotificationsForBundleIdentifier:",
+          "target_expression": "xpcClass"
+        }
+      ],
+      "source_match_status": "textual_installer_candidate",
+      "test_source_selector_mentions_only": [
+        "reconstruction/tools/check_runningboard_contract.py"
+      ]
+    },
+    {
+      "behavior_verified": false,
+      "ordinal": 76,
+      "original": {
+        "binary": "CraneSB.dylib",
+        "hook_api": "MSHookMessageEx",
+        "hook_implementation": "sub_EBA0",
+        "registering_function": "_initNotificationSupport",
+        "registration_address": "0xcbec",
+        "target_class_as_indexed": "UNSNotificationRecord",
+        "target_selector": "_queue_allTopicsForApplication:"
+      },
+      "original_class_attribution": "alias_collapsed_unverified",
+      "original_same_selector_api_count": 1,
+      "runtime_verified": false,
+      "source_candidate_count": 1,
+      "source_candidates": [
+        {
+          "api": "MSHookMessageEx",
+          "file": "reconstruction/sources/cranesb/CRBadgeStore.m",
+          "impl_expression": "(IMP)CRBadgeAllTopics",
+          "line": 2383,
+          "selector": "_queue_allTopicsForApplication:",
+          "target_expression": "remoteClass"
+        }
+      ],
+      "source_match_status": "textual_installer_candidate",
+      "test_source_selector_mentions_only": []
+    },
+    {
+      "behavior_verified": false,
+      "ordinal": 77,
+      "original": {
+        "binary": "CraneSB.dylib",
+        "hook_api": "MSHookMessageEx",
+        "hook_implementation": "sub_EDF4",
+        "registering_function": "_initNotificationSupport",
+        "registration_address": "0xcbec",
+        "target_class_as_indexed": "UNSNotificationRecord",
+        "target_selector": "connection:didReceiveIncomingMessage:"
+      },
+      "original_class_attribution": "alias_collapsed_unverified",
+      "original_same_selector_api_count": 1,
+      "runtime_verified": false,
+      "source_candidate_count": 1,
+      "source_candidates": [
+        {
+          "api": "MSHookMessageEx",
+          "file": "reconstruction/sources/cranesb/CRBadgeStore.m",
+          "impl_expression": "(IMP)CRBadgeIncomingMessage",
+          "line": 2342,
+          "selector": "connection:didReceiveIncomingMessage:",
+          "target_expression": "remoteClass"
+        }
+      ],
+      "source_match_status": "textual_installer_candidate",
+      "test_source_selector_mentions_only": []
+    },
+    {
+      "behavior_verified": false,
+      "ordinal": 78,
+      "original": {
+        "binary": "CraneSB.dylib",
+        "hook_api": "MSHookMessageEx",
+        "hook_implementation": "sub_EF84",
+        "registering_function": "_initNotificationSupport",
+        "registration_address": "0xcbec",
+        "target_class_as_indexed": "UNSNotificationRecord",
+        "target_selector": "_queue_tryToModifyNotificationRequest:bundleIdentifier:message:enforcePushType:"
+      },
+      "original_class_attribution": "alias_collapsed_unverified",
+      "original_same_selector_api_count": 1,
+      "runtime_verified": false,
+      "source_candidate_count": 1,
+      "source_candidates": [
+        {
+          "api": "MSHookMessageEx",
+          "file": "reconstruction/sources/cranesb/CRBadgeStore.m",
+          "impl_expression": "(IMP)CRBadgeModifyPush",
+          "line": 2332,
+          "selector": "_queue_tryToModifyNotificationRequest:bundleIdentifier:message:enforcePushType:",
+          "target_expression": "remoteClass"
+        }
+      ],
+      "source_match_status": "textual_installer_candidate",
+      "test_source_selector_mentions_only": []
+    },
+    {
+      "behavior_verified": false,
+      "ordinal": 79,
+      "original": {
+        "binary": "CraneSB.dylib",
+        "hook_api": "MSHookMessageEx",
+        "hook_implementation": "sub_F094",
+        "registering_function": "_initNotificationSupport",
+        "registration_address": "0xcbec",
+        "target_class_as_indexed": "UNSNotificationRecord",
+        "target_selector": "_queue_tryToModifyNotificationRequest:bundleIdentifier:message:"
+      },
+      "original_class_attribution": "alias_collapsed_unverified",
+      "original_same_selector_api_count": 1,
+      "runtime_verified": false,
+      "source_candidate_count": 1,
+      "source_candidates": [
+        {
+          "api": "MSHookMessageEx",
+          "file": "reconstruction/sources/cranesb/CRBadgeStore.m",
+          "impl_expression": "(IMP)CRBadgeModifyLegacy",
+          "line": 2337,
+          "selector": "_queue_tryToModifyNotificationRequest:bundleIdentifier:message:",
+          "target_expression": "remoteClass"
+        }
+      ],
+      "source_match_status": "textual_installer_candidate",
+      "test_source_selector_mentions_only": []
+    },
+    {
+      "behavior_verified": false,
+      "ordinal": 80,
+      "original": {
+        "binary": "CraneSB.dylib",
+        "hook_api": "MSHookMessageEx",
+        "hook_implementation": "sub_F19C",
+        "registering_function": "_initNotificationSupport",
+        "registration_address": "0xcbec",
+        "target_class_as_indexed": "UNSNotificationRecord",
+        "target_selector": "notificationSourcesDidUninstall:"
+      },
+      "original_class_attribution": "alias_collapsed_unverified",
+      "original_same_selector_api_count": 1,
+      "runtime_verified": false,
+      "source_candidate_count": 1,
+      "source_candidates": [
+        {
+          "api": "MSHookMessageEx",
+          "file": "reconstruction/sources/cranesb/CRBadgeStore.m",
+          "impl_expression": "(IMP)CRBadgeSourcesUninstalled",
+          "line": 2372,
+          "selector": "notificationSourcesDidUninstall:",
+          "target_expression": "remoteClass"
+        }
+      ],
+      "source_match_status": "textual_installer_candidate",
+      "test_source_selector_mentions_only": [
+        "reconstruction/tools/check_runningboard_contract.py"
+      ]
+    },
+    {
+      "behavior_verified": false,
+      "ordinal": 81,
+      "original": {
+        "binary": "CraneSB.dylib",
+        "hook_api": "MSHookMessageEx",
+        "hook_implementation": "sub_F1F8",
+        "registering_function": "_initNotificationSupport",
+        "registration_address": "0xcbec",
+        "target_class_as_indexed": "UNSNotificationRecord",
+        "target_selector": "applicationsDidUninstall:"
+      },
+      "original_class_attribution": "alias_collapsed_unverified",
+      "original_same_selector_api_count": 1,
+      "runtime_verified": false,
+      "source_candidate_count": 1,
+      "source_candidates": [
+        {
+          "api": "MSHookMessageEx",
+          "file": "reconstruction/sources/cranesb/CRBadgeStore.m",
+          "impl_expression": "(IMP)CRBadgeApplicationsUninstalled",
+          "line": 2377,
+          "selector": "applicationsDidUninstall:",
+          "target_expression": "remoteClass"
+        }
+      ],
+      "source_match_status": "textual_installer_candidate",
+      "test_source_selector_mentions_only": [
+        "reconstruction/tools/check_runningboard_contract.py"
+      ]
+    },
+    {
+      "behavior_verified": false,
+      "ordinal": 82,
+      "original": {
+        "binary": "CraneSB.dylib",
+        "hook_api": "MSHookMessageEx",
+        "hook_implementation": "sub_F254",
+        "registering_function": "_initNotificationSupport",
+        "registration_address": "0xcbec",
+        "target_class_as_indexed": "UNSNotificationRecord",
+        "target_selector": "saveNotificationRecord:shouldRepost:forBundleIdentifier:withCompletionHandler:"
+      },
+      "original_class_attribution": "alias_collapsed_unverified",
+      "original_same_selector_api_count": 1,
+      "runtime_verified": false,
+      "source_candidate_count": 1,
+      "source_candidates": [
+        {
+          "api": "MSHookMessageEx",
+          "file": "reconstruction/sources/cranesb/CRBadgeStore.m",
+          "impl_expression": "(IMP)CRBadgeOuterSave",
+          "line": 667,
+          "selector": "saveNotificationRecord:shouldRepost:forBundleIdentifier:withCompletionHandler:",
+          "target_expression": "repository"
+        }
+      ],
+      "source_match_status": "textual_installer_candidate",
+      "test_source_selector_mentions_only": []
+    },
+    {
+      "behavior_verified": false,
+      "ordinal": 83,
+      "original": {
+        "binary": "CraneSB.dylib",
+        "hook_api": "MSHookMessageEx",
+        "hook_implementation": "sub_F398",
+        "registering_function": "_initNotificationSupport",
+        "registration_address": "0xcbec",
+        "target_class_as_indexed": "UNSNotificationRecord",
+        "target_selector": "removeNotificationRecordsPassingTest:forBundleIdentifier:"
+      },
+      "original_class_attribution": "alias_collapsed_unverified",
+      "original_same_selector_api_count": 1,
+      "runtime_verified": false,
+      "source_candidate_count": 1,
+      "source_candidates": [
+        {
+          "api": "MSHookMessageEx",
+          "file": "reconstruction/sources/cranesb/CRBadgeStore.m",
+          "impl_expression": "(IMP)CRBadgeRemoveRecordsPassingTest",
+          "line": 2235,
+          "selector": "removeNotificationRecordsPassingTest:forBundleIdentifier:",
+          "target_expression": "repositoryClass"
+        }
+      ],
+      "source_match_status": "textual_installer_candidate",
+      "test_source_selector_mentions_only": [
+        "reconstruction/tools/check_runningboard_contract.py"
+      ]
+    },
+    {
+      "behavior_verified": false,
+      "ordinal": 84,
+      "original": {
+        "binary": "CraneSB.dylib",
+        "hook_api": "MSHookMessageEx",
+        "hook_implementation": "sub_F524",
+        "registering_function": "_initNotificationSupport",
+        "registration_address": "0xcbec",
+        "target_class_as_indexed": "UNSNotificationRecord",
+        "target_selector": "removeAllNotificationRecordsForBundleIdentifier:"
+      },
+      "original_class_attribution": "alias_collapsed_unverified",
+      "original_same_selector_api_count": 1,
+      "runtime_verified": false,
+      "source_candidate_count": 1,
+      "source_candidates": [
+        {
+          "api": "MSHookMessageEx",
+          "file": "reconstruction/sources/cranesb/CRBadgeStore.m",
+          "impl_expression": "(IMP)CRBadgeRemoveAllRecords",
+          "line": 2229,
+          "selector": "removeAllNotificationRecordsForBundleIdentifier:",
+          "target_expression": "repositoryClass"
+        }
+      ],
+      "source_match_status": "textual_installer_candidate",
+      "test_source_selector_mentions_only": [
+        "reconstruction/tools/check_runningboard_contract.py"
+      ]
+    },
+    {
+      "behavior_verified": false,
+      "ordinal": 85,
+      "original": {
+        "binary": "CraneSB.dylib",
+        "hook_api": "MSHookMessageEx",
+        "hook_implementation": "sub_F59C",
+        "registering_function": "_initNotificationSupport",
+        "registration_address": "0xcbec",
+        "target_class_as_indexed": "UNSNotificationRecord",
+        "target_selector": "notificationRecordForForIdentifier:bundleIdentifier:"
+      },
+      "original_class_attribution": "alias_collapsed_unverified",
+      "original_same_selector_api_count": 1,
+      "runtime_verified": false,
+      "source_candidate_count": 1,
+      "source_candidates": [
+        {
+          "api": "MSHookMessageEx",
+          "file": "reconstruction/sources/cranesb/CRBadgeStore.m",
+          "impl_expression": "(IMP)CRBadgeRecordLookup",
+          "line": 2240,
+          "selector": "notificationRecordForForIdentifier:bundleIdentifier:",
+          "target_expression": "repositoryClass"
+        }
+      ],
+      "source_match_status": "textual_installer_candidate",
+      "test_source_selector_mentions_only": [
+        "reconstruction/tools/check_runningboard_contract.py"
+      ]
+    },
+    {
+      "behavior_verified": false,
+      "ordinal": 86,
+      "original": {
+        "binary": "CraneSB.dylib",
+        "hook_api": "MSHookMessageEx",
+        "hook_implementation": "sub_F750",
+        "registering_function": "_initNotificationSupport",
+        "registration_address": "0xcbec",
+        "target_class_as_indexed": "UNSNotificationRecord",
+        "target_selector": "notificationRecordsForBundleIdentifier:"
+      },
+      "original_class_attribution": "alias_collapsed_unverified",
+      "original_same_selector_api_count": 1,
+      "runtime_verified": false,
+      "source_candidate_count": 1,
+      "source_candidates": [
+        {
+          "api": "MSHookMessageEx",
+          "file": "reconstruction/sources/cranesb/CRBadgeStore.m",
+          "impl_expression": "(IMP)CRBadgeRecordsLookup",
+          "line": 2250,
+          "selector": "notificationRecordsForBundleIdentifier:",
+          "target_expression": "repositoryClass"
+        }
+      ],
+      "source_match_status": "textual_installer_candidate",
+      "test_source_selector_mentions_only": [
+        "reconstruction/tools/check_runningboard_contract.py"
+      ]
+    },
+    {
+      "behavior_verified": false,
+      "ordinal": 87,
+      "original": {
+        "binary": "CraneSB.dylib",
+        "hook_api": "MSHookMessageEx",
+        "hook_implementation": "sub_FA20",
+        "registering_function": "_initNotificationSupport",
+        "registration_address": "0xcbec",
+        "target_class_as_indexed": "UNSNotificationRecord",
+        "target_selector": "notificationRecordsForBundleIdentifier:withCompletionHandler:"
+      },
+      "original_class_attribution": "alias_collapsed_unverified",
+      "original_same_selector_api_count": 1,
+      "runtime_verified": false,
+      "source_candidate_count": 1,
+      "source_candidates": [
+        {
+          "api": "MSHookMessageEx",
+          "file": "reconstruction/sources/cranesb/CRBadgeStore.m",
+          "impl_expression": "(IMP)CRBadgeRecordsLookupWithReply",
+          "line": 2245,
+          "selector": "notificationRecordsForBundleIdentifier:withCompletionHandler:",
+          "target_expression": "repositoryClass"
+        }
+      ],
+      "source_match_status": "textual_installer_candidate",
+      "test_source_selector_mentions_only": [
+        "reconstruction/tools/check_runningboard_contract.py"
+      ]
+    },
+    {
+      "behavior_verified": false,
+      "ordinal": 88,
+      "original": {
+        "binary": "CraneSB.dylib",
+        "hook_api": "MSHookMessageEx",
+        "hook_implementation": "sub_FBB4",
+        "registering_function": "_initNotificationSupport",
+        "registration_address": "0xcbec",
+        "target_class_as_indexed": "UNSNotificationRecord",
+        "target_selector": "_queue_setBadgeNumber:forBundleIdentifier:withCompletionHandler:"
+      },
+      "original_class_attribution": "alias_collapsed_unverified",
+      "original_same_selector_api_count": 1,
+      "runtime_verified": false,
+      "source_candidate_count": 1,
+      "source_candidates": [
+        {
+          "api": "MSHookMessageEx",
+          "file": "reconstruction/sources/cranesb/CRBadgeStore.m",
+          "impl_expression": "(IMP)CRBadgeQueueSet",
+          "line": 689,
+          "selector": "_queue_setBadgeNumber:forBundleIdentifier:withCompletionHandler:",
+          "target_expression": "repository"
+        }
+      ],
+      "source_match_status": "textual_installer_candidate",
+      "test_source_selector_mentions_only": []
+    },
+    {
+      "behavior_verified": false,
+      "ordinal": 89,
+      "original": {
+        "binary": "CraneSB.dylib",
+        "hook_api": "MSHookMessageEx",
+        "hook_implementation": "sub_FCA8",
+        "registering_function": "_initNotificationSupport",
+        "registration_address": "0xcbec",
+        "target_class_as_indexed": "UNSNotificationRecord",
+        "target_selector": "_setBadgeNumber:forBundleIdentifier:withCompletionHandler:"
+      },
+      "original_class_attribution": "alias_collapsed_unverified",
+      "original_same_selector_api_count": 1,
+      "runtime_verified": false,
+      "source_candidate_count": 1,
+      "source_candidates": [
+        {
+          "api": "MSHookMessageEx",
+          "file": "reconstruction/sources/cranesb/CRBadgeStore.m",
+          "impl_expression": "(IMP)CRBadgeNonQueueSet",
+          "line": 692,
+          "selector": "_setBadgeNumber:forBundleIdentifier:withCompletionHandler:",
+          "target_expression": "repository"
+        }
+      ],
+      "source_match_status": "textual_installer_candidate",
+      "test_source_selector_mentions_only": []
+    },
+    {
+      "behavior_verified": false,
+      "ordinal": 90,
+      "original": {
+        "binary": "CraneSB.dylib",
+        "hook_api": "MSHookMessageEx",
+        "hook_implementation": "sub_FD9C",
+        "registering_function": "_initNotificationSupport",
+        "registration_address": "0xcbec",
+        "target_class_as_indexed": "UNSNotificationRecord",
+        "target_selector": "setBadgeNumber:forBundleIdentifier:withCompletionHandler:"
+      },
+      "original_class_attribution": "alias_collapsed_unverified",
+      "original_same_selector_api_count": 1,
+      "runtime_verified": false,
+      "source_candidate_count": 1,
+      "source_candidates": [
+        {
+          "api": "MSHookMessageEx",
+          "file": "reconstruction/sources/cranesb/CRBadgeStore.m",
+          "impl_expression": "(IMP)CRBadgePublicSet",
+          "line": 697,
+          "selector": "setBadgeNumber:forBundleIdentifier:withCompletionHandler:",
+          "target_expression": "repository"
+        }
+      ],
+      "source_match_status": "textual_installer_candidate",
+      "test_source_selector_mentions_only": []
+    },
+    {
+      "behavior_verified": false,
+      "ordinal": 91,
+      "original": {
+        "binary": "CraneSB.dylib",
+        "hook_api": "MSHookMessageEx",
+        "hook_implementation": "sub_FF30",
+        "registering_function": "_initNotificationSupport",
+        "registration_address": "0xcbec",
+        "target_class_as_indexed": "UNSNotificationRecord",
+        "target_selector": "_queue_saveNotificationRecord:targetRevisionNumber:shouldRepost:withOptions:forBundleIdentifier:"
+      },
+      "original_class_attribution": "alias_collapsed_unverified",
+      "original_same_selector_api_count": 1,
+      "runtime_verified": false,
+      "source_candidate_count": 1,
+      "source_candidates": [
+        {
+          "api": "MSHookMessageEx",
+          "file": "reconstruction/sources/cranesb/CRBadgeStore.m",
+          "impl_expression": "(IMP)CRBadgeSaveRevision",
+          "line": 677,
+          "selector": "_queue_saveNotificationRecord:targetRevisionNumber:shouldRepost:withOptions:forBundleIdentifier:",
+          "target_expression": "repository"
+        }
+      ],
+      "source_match_status": "textual_installer_candidate",
+      "test_source_selector_mentions_only": []
+    },
+    {
+      "behavior_verified": false,
+      "ordinal": 92,
+      "original": {
+        "binary": "CraneSB.dylib",
+        "hook_api": "MSHookMessageEx",
+        "hook_implementation": "sub_10050",
+        "registering_function": "_initNotificationSupport",
+        "registration_address": "0xcbec",
+        "target_class_as_indexed": "UNSNotificationRecord",
+        "target_selector": "_queue_saveNotificationRecord:shouldRepost:withOptions:forBundleIdentifier:"
+      },
+      "original_class_attribution": "alias_collapsed_unverified",
+      "original_same_selector_api_count": 1,
+      "runtime_verified": false,
+      "source_candidate_count": 1,
+      "source_candidates": [
+        {
+          "api": "MSHookMessageEx",
+          "file": "reconstruction/sources/cranesb/CRBadgeStore.m",
+          "impl_expression": "(IMP)CRBadgeSaveOptions",
+          "line": 682,
+          "selector": "_queue_saveNotificationRecord:shouldRepost:withOptions:forBundleIdentifier:",
+          "target_expression": "repository"
+        }
+      ],
+      "source_match_status": "textual_installer_candidate",
+      "test_source_selector_mentions_only": []
+    },
+    {
+      "behavior_verified": false,
+      "ordinal": 93,
+      "original": {
+        "binary": "CraneSB.dylib",
+        "hook_api": "MSHookMessageEx",
+        "hook_implementation": "sub_10138",
+        "registering_function": "_initNotificationSupport",
+        "registration_address": "0xcbec",
+        "target_class_as_indexed": "UNSNotificationRecord",
+        "target_selector": "_queue_saveNotificationRecord:withOptions:forBundleIdentifier:"
+      },
+      "original_class_attribution": "alias_collapsed_unverified",
+      "original_same_selector_api_count": 1,
+      "runtime_verified": false,
+      "source_candidate_count": 1,
+      "source_candidates": [
+        {
+          "api": "MSHookMessageEx",
+          "file": "reconstruction/sources/cranesb/CRBadgeStore.m",
+          "impl_expression": "(IMP)CRBadgeSaveRecord",
+          "line": 672,
+          "selector": "_queue_saveNotificationRecord:withOptions:forBundleIdentifier:",
+          "target_expression": "repository"
+        }
+      ],
+      "source_match_status": "textual_installer_candidate",
+      "test_source_selector_mentions_only": []
+    },
+    {
+      "behavior_verified": false,
+      "ordinal": 94,
+      "original": {
+        "binary": "CraneSB.dylib",
+        "hook_api": "MSHookMessageEx",
+        "hook_implementation": "sub_10218",
+        "registering_function": "_initNotificationSupport",
+        "registration_address": "0xcbec",
+        "target_class_as_indexed": "UNSNotificationRecord",
+        "target_selector": "isApplicationForeground:"
+      },
+      "original_class_attribution": "alias_collapsed_unverified",
+      "original_same_selector_api_count": 1,
+      "runtime_verified": false,
+      "source_candidate_count": 1,
+      "source_candidates": [
+        {
+          "api": "MSHookMessageEx",
+          "file": "reconstruction/sources/cranesb/CRBadgeStore.m",
+          "impl_expression": "(IMP)CRBadgeSystemForeground",
+          "line": 2277,
+          "selector": "isApplicationForeground:",
+          "target_expression": "notificationServer"
+        }
+      ],
+      "source_match_status": "textual_installer_candidate",
+      "test_source_selector_mentions_only": [
+        "reconstruction/tools/check_runningboard_contract.py"
+      ]
+    },
+    {
+      "behavior_verified": false,
+      "ordinal": 95,
+      "original": {
+        "binary": "CraneSB.dylib",
+        "hook_api": "MSHookMessageEx",
+        "hook_implementation": "sub_10350",
+        "registering_function": "_initNotificationSupport",
+        "registration_address": "0xcbec",
+        "target_class_as_indexed": "UNSNotificationRecord",
+        "target_selector": "_deliverMessage:"
+      },
+      "original_class_attribution": "alias_collapsed_unverified",
+      "original_same_selector_api_count": 1,
+      "runtime_verified": false,
+      "source_candidate_count": 1,
+      "source_candidates": [
+        {
+          "api": "MSHookMessageEx",
+          "file": "reconstruction/sources/cranesb/CRBadgeStore.m",
+          "impl_expression": "(IMP)CRBadgeDeliverMessage",
+          "line": 2400,
+          "selector": "_deliverMessage:",
+          "target_expression": "apsClass"
+        }
+      ],
+      "source_match_status": "textual_installer_candidate",
+      "test_source_selector_mentions_only": []
+    },
+    {
+      "behavior_verified": false,
+      "ordinal": 96,
+      "original": {
+        "binary": "CraneSB.dylib",
+        "hook_api": "MSHookMessageEx",
+        "hook_implementation": "sub_104AC",
+        "registering_function": "_initNotificationSupport",
+        "registration_address": "0xcbec",
+        "target_class_as_indexed": "UNSNotificationRecord",
+        "target_selector": "_addNotificationRequests:forBundleIdentifier:withCompletionHandler:"
+      },
+      "original_class_attribution": "alias_collapsed_unverified",
+      "original_same_selector_api_count": 1,
+      "runtime_verified": false,
+      "source_candidate_count": 1,
+      "source_candidates": [
+        {
+          "api": "MSHookMessageEx",
+          "file": "reconstruction/sources/cranesb/CRBadgeStore.m",
+          "impl_expression": "(IMP)CRBadgeAddRequests",
+          "line": 2438,
+          "selector": "_addNotificationRequests:forBundleIdentifier:withCompletionHandler:",
+          "target_expression": "listener"
+        }
+      ],
+      "source_match_status": "textual_installer_candidate",
+      "test_source_selector_mentions_only": []
+    },
+    {
+      "behavior_verified": false,
+      "ordinal": 97,
+      "original": {
+        "binary": "CraneSB.dylib",
+        "hook_api": "MSHookMessageEx",
+        "hook_implementation": "sub_1072C",
+        "registering_function": "_initNotificationSupport",
+        "registration_address": "0xcbec",
+        "target_class_as_indexed": "UNSNotificationRecord",
+        "target_selector": "_saveNotificationRequest:shouldRepost:forBundleIdentifier:withCompletionHandler:"
+      },
+      "original_class_attribution": "alias_collapsed_unverified",
+      "original_same_selector_api_count": 1,
+      "runtime_verified": false,
+      "source_candidate_count": 1,
+      "source_candidates": [
+        {
+          "api": "MSHookMessageEx",
+          "file": "reconstruction/sources/cranesb/CRBadgeStore.m",
+          "impl_expression": "(IMP)CRBadgeSaveRequest",
+          "line": 2427,
+          "selector": "_saveNotificationRequest:shouldRepost:forBundleIdentifier:withCompletionHandler:",
+          "target_expression": "listener"
+        }
+      ],
+      "source_match_status": "textual_installer_candidate",
+      "test_source_selector_mentions_only": []
+    },
+    {
+      "behavior_verified": false,
+      "ordinal": 98,
+      "original": {
+        "binary": "CraneSB.dylib",
+        "hook_api": "MSHookMessageEx",
+        "hook_implementation": "sub_108F4",
+        "registering_function": "_initNotificationSupport",
+        "registration_address": "0xcbec",
+        "target_class_as_indexed": "UNSNotificationRecord",
+        "target_selector": "_saveNotificationRequest:shouldRepost:deliveredDate:forBundleIdentifier:withCompletionHandler:"
+      },
+      "original_class_attribution": "alias_collapsed_unverified",
+      "original_same_selector_api_count": 1,
+      "runtime_verified": false,
+      "source_candidate_count": 1,
+      "source_candidates": [
+        {
+          "api": "MSHookMessageEx",
+          "file": "reconstruction/sources/cranesb/CRBadgeStore.m",
+          "impl_expression": "(IMP)CRBadgeSaveDatedRequest",
+          "line": 2432,
+          "selector": "_saveNotificationRequest:shouldRepost:deliveredDate:forBundleIdentifier:withCompletionHandler:",
+          "target_expression": "listener"
+        }
+      ],
+      "source_match_status": "textual_installer_candidate",
+      "test_source_selector_mentions_only": [
+        "reconstruction/tools/check_runningboard_contract.py"
+      ]
+    },
+    {
+      "behavior_verified": false,
+      "ordinal": 99,
+      "original": {
+        "binary": "CraneSB.dylib",
+        "hook_api": "MSHookMessageEx",
+        "hook_implementation": "sub_10D10",
+        "registering_function": "_initNotificationSupport",
+        "registration_address": "0xcbec",
+        "target_class_as_indexed": "UNSNotificationRecord",
+        "target_selector": "getPendingNotificationRequestsForBundleIdentifier:withCompletionHandler:"
+      },
+      "original_class_attribution": "alias_collapsed_unverified",
+      "original_same_selector_api_count": 1,
+      "runtime_verified": false,
+      "source_candidate_count": 1,
+      "source_candidates": [
+        {
+          "api": "MSHookMessageEx",
+          "file": "reconstruction/sources/cranesb/CRBadgeStore.m",
+          "impl_expression": "(IMP)CRBadgePendingRequests",
+          "line": 2442,
+          "selector": "getPendingNotificationRequestsForBundleIdentifier:withCompletionHandler:",
+          "target_expression": "listener"
+        }
+      ],
+      "source_match_status": "textual_installer_candidate",
+      "test_source_selector_mentions_only": [
+        "reconstruction/tools/check_runningboard_contract.py"
+      ]
+    },
+    {
+      "behavior_verified": false,
+      "ordinal": 100,
+      "original": {
+        "binary": "CraneSB.dylib",
+        "hook_api": "MSHookMessageEx",
+        "hook_implementation": "sub_10EA4",
+        "registering_function": "_initNotificationSupport",
+        "registration_address": "0xcbec",
+        "target_class_as_indexed": "UNSNotificationRecord",
+        "target_selector": "removePendingNotificationRequestsWithIdentifiers:forBundleIdentifier:completionHandler:"
+      },
+      "original_class_attribution": "alias_collapsed_unverified",
+      "original_same_selector_api_count": 1,
+      "runtime_verified": false,
+      "source_candidate_count": 1,
+      "source_candidates": [
+        {
+          "api": "MSHookMessageEx",
+          "file": "reconstruction/sources/cranesb/CRBadgeStore.m",
+          "impl_expression": "(IMP)CRBadgeRemovePendingWithReply",
+          "line": 2447,
+          "selector": "removePendingNotificationRequestsWithIdentifiers:forBundleIdentifier:completionHandler:",
+          "target_expression": "listener"
+        }
+      ],
+      "source_match_status": "textual_installer_candidate",
+      "test_source_selector_mentions_only": [
+        "reconstruction/tools/check_runningboard_contract.py"
+      ]
+    },
+    {
+      "behavior_verified": false,
+      "ordinal": 101,
+      "original": {
+        "binary": "CraneSB.dylib",
+        "hook_api": "MSHookMessageEx",
+        "hook_implementation": "sub_10F94",
+        "registering_function": "_initNotificationSupport",
+        "registration_address": "0xcbec",
+        "target_class_as_indexed": "UNSNotificationRecord",
+        "target_selector": "removePendingNotificationRequestsWithIdentifiers:forBundleIdentifier:"
+      },
+      "original_class_attribution": "alias_collapsed_unverified",
+      "original_same_selector_api_count": 1,
+      "runtime_verified": false,
+      "source_candidate_count": 1,
+      "source_candidates": [
+        {
+          "api": "MSHookMessageEx",
+          "file": "reconstruction/sources/cranesb/CRBadgeStore.m",
+          "impl_expression": "(IMP)CRBadgeRemovePending",
+          "line": 2453,
+          "selector": "removePendingNotificationRequestsWithIdentifiers:forBundleIdentifier:",
+          "target_expression": "listener"
+        }
+      ],
+      "source_match_status": "textual_installer_candidate",
+      "test_source_selector_mentions_only": [
+        "reconstruction/tools/check_runningboard_contract.py"
+      ]
+    },
+    {
+      "behavior_verified": false,
+      "ordinal": 102,
+      "original": {
+        "binary": "CraneSB.dylib",
+        "hook_api": "MSHookMessageEx",
+        "hook_implementation": "sub_11044",
+        "registering_function": "_initNotificationSupport",
+        "registration_address": "0xcbec",
+        "target_class_as_indexed": "UNSNotificationRecord",
+        "target_selector": "removeAllPendingNotificationRequestsForBundleIdentifier:completionHandler:"
+      },
+      "original_class_attribution": "alias_collapsed_unverified",
+      "original_same_selector_api_count": 1,
+      "runtime_verified": false,
+      "source_candidate_count": 1,
+      "source_candidates": [
+        {
+          "api": "MSHookMessageEx",
+          "file": "reconstruction/sources/cranesb/CRBadgeStore.m",
+          "impl_expression": "(IMP)CRBadgeRemoveAllPendingWithReply",
+          "line": 2459,
+          "selector": "removeAllPendingNotificationRequestsForBundleIdentifier:completionHandler:",
+          "target_expression": "listener"
+        }
+      ],
+      "source_match_status": "textual_installer_candidate",
+      "test_source_selector_mentions_only": [
+        "reconstruction/tools/check_runningboard_contract.py"
+      ]
+    },
+    {
+      "behavior_verified": false,
+      "ordinal": 103,
+      "original": {
+        "binary": "CraneSB.dylib",
+        "hook_api": "MSHookMessageEx",
+        "hook_implementation": "sub_11110",
+        "registering_function": "_initNotificationSupport",
+        "registration_address": "0xcbec",
+        "target_class_as_indexed": "UNSNotificationRecord",
+        "target_selector": "removeAllPendingNotificationRequestsForBundleIdentifier:"
+      },
+      "original_class_attribution": "alias_collapsed_unverified",
+      "original_same_selector_api_count": 1,
+      "runtime_verified": false,
+      "source_candidate_count": 1,
+      "source_candidates": [
+        {
+          "api": "MSHookMessageEx",
+          "file": "reconstruction/sources/cranesb/CRBadgeStore.m",
+          "impl_expression": "(IMP)CRBadgeRemoveAllPending",
+          "line": 2465,
+          "selector": "removeAllPendingNotificationRequestsForBundleIdentifier:",
+          "target_expression": "listener"
+        }
+      ],
+      "source_match_status": "textual_installer_candidate",
+      "test_source_selector_mentions_only": [
+        "reconstruction/tools/check_runningboard_contract.py"
+      ]
+    },
+    {
+      "behavior_verified": false,
+      "ordinal": 104,
+      "original": {
+        "binary": "CraneSB.dylib",
+        "hook_api": "MSHookMessageEx",
+        "hook_implementation": "sub_1119C",
+        "registering_function": "_initNotificationSupport",
+        "registration_address": "0xcbec",
+        "target_class_as_indexed": "UNSNotificationRecord",
+        "target_selector": "_queue_bulletinForNotification:"
+      },
+      "original_class_attribution": "alias_collapsed_unverified",
+      "original_same_selector_api_count": 1,
+      "runtime_verified": false,
+      "source_candidate_count": 1,
+      "source_candidates": [
+        {
+          "api": "MSHookMessageEx",
+          "file": "reconstruction/sources/cranesb/CRBadgeStore.m",
+          "impl_expression": "(IMP)CRBadgeBulletinForNotification",
+          "line": 2286,
+          "selector": "_queue_bulletinForNotification:",
+          "target_expression": "dataProvider"
+        }
+      ],
+      "source_match_status": "textual_installer_candidate",
+      "test_source_selector_mentions_only": [
+        "reconstruction/tools/check_runningboard_contract.py"
+      ]
+    },
+    {
+      "behavior_verified": false,
+      "ordinal": 105,
+      "original": {
+        "binary": "CraneSB.dylib",
+        "hook_api": "MSHookMessageEx",
+        "hook_implementation": "sub_11420",
+        "registering_function": "_initNotificationSupport",
+        "registration_address": "0xcbec",
+        "target_class_as_indexed": "UNSNotificationRecord",
+        "target_selector": "handleBulletinActionResponse:withCompletion:"
+      },
+      "original_class_attribution": "alias_collapsed_unverified",
+      "original_same_selector_api_count": 1,
+      "runtime_verified": false,
+      "source_candidate_count": 1,
+      "source_candidates": [
+        {
+          "api": "MSHookMessageEx",
+          "file": "reconstruction/sources/cranesb/CRBadgeStore.m",
+          "impl_expression": "(IMP)CRBadgeBulletinAction",
+          "line": 2282,
+          "selector": "handleBulletinActionResponse:withCompletion:",
+          "target_expression": "dataProvider"
+        }
+      ],
+      "source_match_status": "textual_installer_candidate",
+      "test_source_selector_mentions_only": [
+        "reconstruction/tools/check_runningboard_contract.py"
+      ]
+    },
+    {
+      "behavior_verified": false,
+      "ordinal": 106,
+      "original": {
+        "binary": "CraneSB.dylib",
+        "hook_api": "MSHookMessageEx",
+        "hook_implementation": "sub_115F4",
+        "registering_function": "_initNotificationSupport",
+        "registration_address": "0xcbec",
+        "target_class_as_indexed": "UNSNotificationRecord",
+        "target_selector": "mutateContentForNotificationRequest:error:"
+      },
+      "original_class_attribution": "alias_collapsed_unverified",
+      "original_same_selector_api_count": 1,
+      "runtime_verified": false,
+      "source_candidate_count": 1,
+      "source_candidates": [
+        {
+          "api": "MSHookMessageEx",
+          "file": "reconstruction/sources/cranesb/CRBadgeStore.m",
+          "impl_expression": "(IMP)CRBadgeMutateContent",
+          "line": 2272,
+          "selector": "mutateContentForNotificationRequest:error:",
+          "target_expression": "extension"
+        }
+      ],
+      "source_match_status": "textual_installer_candidate",
+      "test_source_selector_mentions_only": [
+        "reconstruction/tools/check_runningboard_contract.py"
+      ]
+    },
+    {
+      "behavior_verified": false,
+      "ordinal": 107,
+      "original": {
+        "binary": "CraneSB.dylib",
+        "hook_api": "MSHookMessageEx",
+        "hook_implementation": "sub_11884",
+        "registering_function": "_initNotificationSupport",
+        "registration_address": "0xcbec",
+        "target_class_as_indexed": "UNSNotificationRecord",
+        "target_selector": "isSimilar:"
+      },
+      "original_class_attribution": "alias_collapsed_unverified",
+      "original_same_selector_api_count": 1,
+      "runtime_verified": false,
+      "source_candidate_count": 1,
+      "source_candidates": [
+        {
+          "api": "MSHookMessageEx",
+          "file": "reconstruction/sources/cranesb/CRBadgeStore.m",
+          "impl_expression": "(IMP)CRBadgeRecordIsSimilar",
+          "line": 2259,
+          "selector": "isSimilar:",
+          "target_expression": "recordClass"
+        }
+      ],
+      "source_match_status": "textual_installer_candidate",
+      "test_source_selector_mentions_only": [
+        "reconstruction/tools/check_runningboard_contract.py"
+      ]
+    },
+    {
+      "behavior_verified": false,
+      "ordinal": 108,
+      "original": {
+        "binary": "CraneSB.dylib",
+        "hook_api": "MSHookMessageEx",
+        "hook_implementation": "sub_11AF8",
+        "registering_function": "_initNotificationSupport",
+        "registration_address": "0xcbec",
+        "target_class_as_indexed": "UNSNotificationRecord",
+        "target_selector": "setProtocol:"
+      },
+      "original_class_attribution": "alias_collapsed_unverified",
+      "original_same_selector_api_count": 1,
+      "runtime_verified": false,
+      "source_candidate_count": 1,
+      "source_candidates": [
+        {
+          "api": "MSHookMessageEx",
+          "file": "reconstruction/sources/cranesb/CRBadgeStore.m",
+          "impl_expression": "(IMP)CRBadgeXPCSetProtocol",
+          "line": 2221,
+          "selector": "setProtocol:",
+          "target_expression": "xpcInterface"
+        }
+      ],
+      "source_match_status": "textual_installer_candidate",
+      "test_source_selector_mentions_only": [
+        "reconstruction/tools/check_runningboard_contract.py"
+      ]
+    },
+    {
+      "behavior_verified": false,
+      "ordinal": 109,
+      "original": {
+        "binary": "CraneSB.dylib",
+        "hook_api": "class_addMethod",
+        "hook_implementation": "sub_10AD8",
+        "registering_function": "_initNotificationSupport",
+        "registration_address": "0xcbec",
+        "target_class_as_indexed": "UNSNotificationRecord",
+        "target_selector": "crane_unregisterFromNotificationsIfNeededForContainerIdentifier:ofApplicationWithIdentifier:"
+      },
+      "original_class_attribution": "alias_collapsed_unverified",
+      "original_same_selector_api_count": 1,
+      "runtime_verified": false,
+      "source_candidate_count": 1,
+      "source_candidates": [
+        {
+          "api": "class_addMethod",
+          "file": "reconstruction/sources/cranesb/CRBadgeStore.m",
+          "impl_expression": "(IMP)CRBadgeUnregisterNotifications",
+          "line": 2468,
+          "selector": "crane_unregisterFromNotificationsIfNeededForContainerIdentifier:ofApplicationWithIdentifier:",
+          "target_expression": "listener"
+        }
+      ],
+      "source_match_status": "textual_installer_candidate",
+      "test_source_selector_mentions_only": []
+    },
+    {
+      "behavior_verified": false,
+      "ordinal": 110,
+      "original": {
+        "binary": "CraneSB.dylib",
+        "hook_api": "class_addMethod",
+        "hook_implementation": "sub_10BEC",
+        "registering_function": "_initNotificationSupport",
+        "registration_address": "0xcbec",
+        "target_class_as_indexed": "UNSNotificationRecord",
+        "target_selector": "crane_switchBadgesOfContainerWithIdentifier:andContainerWithIdentifier:ofApplicationWithIdentifier:"
+      },
+      "original_class_attribution": "alias_collapsed_unverified",
+      "original_same_selector_api_count": 1,
+      "runtime_verified": false,
+      "source_candidate_count": 1,
+      "source_candidates": [
+        {
+          "api": "class_addMethod",
+          "file": "reconstruction/sources/cranesb/CRBadgeStore.m",
+          "impl_expression": "(IMP)CRSwitchContainerBadges",
+          "line": 2471,
+          "selector": "crane_switchBadgesOfContainerWithIdentifier:andContainerWithIdentifier:ofApplicationWithIdentifier:",
+          "target_expression": "listener"
+        }
+      ],
+      "source_match_status": "textual_installer_candidate",
+      "test_source_selector_mentions_only": []
+    },
+    {
+      "behavior_verified": false,
+      "ordinal": 111,
+      "original": {
+        "binary": "CraneSB.dylib",
+        "hook_api": "class_addMethod",
+        "hook_implementation": "sub_10CB0",
+        "registering_function": "_initNotificationSupport",
+        "registration_address": "0xcbec",
+        "target_class_as_indexed": "UNSNotificationRecord",
+        "target_selector": "crane_resetBadgeOfContainerWithIdentifier:ofApplicationWithIdentifier:"
+      },
+      "original_class_attribution": "alias_collapsed_unverified",
+      "original_same_selector_api_count": 1,
+      "runtime_verified": false,
+      "source_candidate_count": 1,
+      "source_candidates": [
+        {
+          "api": "class_addMethod",
+          "file": "reconstruction/sources/cranesb/CRBadgeStore.m",
+          "impl_expression": "(IMP)CRResetContainerBadge",
+          "line": 2474,
+          "selector": "crane_resetBadgeOfContainerWithIdentifier:ofApplicationWithIdentifier:",
+          "target_expression": "listener"
+        }
+      ],
+      "source_match_status": "textual_installer_candidate",
+      "test_source_selector_mentions_only": []
+    },
+    {
+      "behavior_verified": false,
+      "ordinal": 112,
+      "original": {
+        "binary": "CraneSB.dylib",
+        "hook_api": "class_addMethod",
+        "hook_implementation": "sub_1172C",
+        "registering_function": "_initNotificationSupport",
+        "registration_address": "0xcbec",
+        "target_class_as_indexed": "UNSNotificationRecord",
+        "target_selector": "crane_copyWithoutContainerID"
+      },
+      "original_class_attribution": "alias_collapsed_unverified",
+      "original_same_selector_api_count": 2,
+      "runtime_verified": false,
+      "source_candidate_count": 2,
+      "source_candidates": [
+        {
+          "api": "class_addMethod",
+          "file": "reconstruction/sources/cranesb/CRBadgeStore.m",
+          "impl_expression": "(IMP)CRBadgeRecordCopyWithoutContainer",
+          "line": 2255,
+          "selector": "crane_copyWithoutContainerID",
+          "target_expression": "recordClass"
+        },
+        {
+          "api": "class_addMethod",
+          "file": "reconstruction/sources/cranesb/CRBadgeStore.m",
+          "impl_expression": "(IMP)CRBadgeRequestCopyWithoutContainer",
+          "line": 2265,
+          "selector": "crane_copyWithoutContainerID",
+          "target_expression": "requestClass"
+        }
+      ],
+      "source_match_status": "ambiguous_original_duplicate",
+      "test_source_selector_mentions_only": [
+        "reconstruction/tools/check_runningboard_contract.py"
+      ]
+    },
+    {
+      "behavior_verified": false,
+      "ordinal": 113,
+      "original": {
+        "binary": "CraneSB.dylib",
+        "hook_api": "class_addMethod",
+        "hook_implementation": "sub_11984",
+        "registering_function": "_initNotificationSupport",
+        "registration_address": "0xcbec",
+        "target_class_as_indexed": "UNSNotificationRecord",
+        "target_selector": "crane_copyWithoutContainerID"
+      },
+      "original_class_attribution": "alias_collapsed_unverified",
+      "original_same_selector_api_count": 2,
+      "runtime_verified": false,
+      "source_candidate_count": 2,
+      "source_candidates": [
+        {
+          "api": "class_addMethod",
+          "file": "reconstruction/sources/cranesb/CRBadgeStore.m",
+          "impl_expression": "(IMP)CRBadgeRecordCopyWithoutContainer",
+          "line": 2255,
+          "selector": "crane_copyWithoutContainerID",
+          "target_expression": "recordClass"
+        },
+        {
+          "api": "class_addMethod",
+          "file": "reconstruction/sources/cranesb/CRBadgeStore.m",
+          "impl_expression": "(IMP)CRBadgeRequestCopyWithoutContainer",
+          "line": 2265,
+          "selector": "crane_copyWithoutContainerID",
+          "target_expression": "requestClass"
+        }
+      ],
+      "source_match_status": "ambiguous_original_duplicate",
+      "test_source_selector_mentions_only": [
+        "reconstruction/tools/check_runningboard_contract.py"
+      ]
+    },
+    {
+      "behavior_verified": false,
+      "ordinal": 114,
+      "original": {
+        "binary": "CraneSupport.dylib",
+        "hook_api": "MSHookFunction",
+        "hook_implementation": "_xpc_connection_set_event_handler",
+        "registering_function": "_initCraneProxy",
+        "registration_address": "0x6c40",
+        "target_class_as_indexed": "",
+        "target_selector": "_xpc_connection_set_event_handler"
+      },
+      "original_class_attribution": "indexed_not_runtime_verified",
+      "original_same_selector_api_count": 1,
+      "runtime_verified": false,
+      "source_candidate_count": 0,
+      "source_candidates": [],
+      "source_match_status": "no_installer_candidate",
+      "test_source_selector_mentions_only": []
+    },
+    {
+      "behavior_verified": false,
+      "ordinal": 115,
+      "original": {
+        "binary": "CraneSupport.dylib",
+        "hook_api": "MSHookMessageEx",
+        "hook_implementation": "sub_7AE8",
+        "registering_function": "_initAccountsd",
+        "registration_address": "0x7200",
+        "target_class_as_indexed": "ACDDatabase",
+        "target_selector": "initWithClient:databaseConnection:"
+      },
+      "original_class_attribution": "indexed_not_runtime_verified",
+      "original_same_selector_api_count": 1,
+      "runtime_verified": false,
+      "source_candidate_count": 1,
+      "source_candidates": [
+        {
+          "api": "MSHookMessageEx",
+          "file": "reconstruction/sources/support/CRAccountsd.m",
+          "impl_expression": "(IMP)CraneAccountsdModernInit",
+          "line": 666,
+          "selector": "initWithClient:databaseConnection:",
+          "target_expression": "accountStoreClass"
+        }
+      ],
+      "source_match_status": "textual_installer_candidate",
+      "test_source_selector_mentions_only": []
+    },
+    {
+      "behavior_verified": false,
+      "ordinal": 116,
+      "original": {
+        "binary": "CraneSupport.dylib",
+        "hook_api": "MSHookMessageEx",
+        "hook_implementation": "sub_8104",
+        "registering_function": "_initAccountsd",
+        "registration_address": "0x7200",
+        "target_class_as_indexed": "ACDDatabase",
+        "target_selector": "_sharedPersistentCoordinatorForStoreAtPath:"
+      },
+      "original_class_attribution": "indexed_not_runtime_verified",
+      "original_same_selector_api_count": 1,
+      "runtime_verified": false,
+      "source_candidate_count": 1,
+      "source_candidates": [
+        {
+          "api": "MSHookMessageEx",
+          "file": "reconstruction/sources/support/CRAccountsd.m",
+          "impl_expression": "(IMP)CraneAccountsdSharedPersistentCoordinator",
+          "line": 693,
+          "selector": "_sharedPersistentCoordinatorForStoreAtPath:",
+          "target_expression": "object_getClass(databaseClass)"
+        }
+      ],
+      "source_match_status": "textual_installer_candidate",
+      "test_source_selector_mentions_only": []
+    },
+    {
+      "behavior_verified": false,
+      "ordinal": 117,
+      "original": {
+        "binary": "CraneSupport.dylib",
+        "hook_api": "MSHookMessageEx",
+        "hook_implementation": "sub_8204",
+        "registering_function": "_initAccountsd",
+        "registration_address": "0x7200",
+        "target_class_as_indexed": "ACDDatabase",
+        "target_selector": "initWithClient:"
+      },
+      "original_class_attribution": "indexed_not_runtime_verified",
+      "original_same_selector_api_count": 1,
+      "runtime_verified": false,
+      "source_candidate_count": 1,
+      "source_candidates": [
+        {
+          "api": "MSHookMessageEx",
+          "file": "reconstruction/sources/support/CRAccountsd.m",
+          "impl_expression": "(IMP)CraneAccountsdLegacyInit",
+          "line": 722,
+          "selector": "initWithClient:",
+          "target_expression": "accountStoreClass"
+        }
+      ],
+      "source_match_status": "textual_installer_candidate",
+      "test_source_selector_mentions_only": []
+    },
+    {
+      "behavior_verified": false,
+      "ordinal": 118,
+      "original": {
+        "binary": "CraneSupport.dylib",
+        "hook_api": "class_addMethod",
+        "hook_implementation": "sub_6F4C",
+        "registering_function": "_initAccountsd",
+        "registration_address": "0x7200",
+        "target_class_as_indexed": "ACDDatabase",
+        "target_selector": "crane_activeContainer"
+      },
+      "original_class_attribution": "indexed_not_runtime_verified",
+      "original_same_selector_api_count": 1,
+      "runtime_verified": false,
+      "source_candidate_count": 1,
+      "source_candidates": [
+        {
+          "api": "class_addMethod",
+          "file": "reconstruction/sources/support/CRAccountsd.m",
+          "impl_expression": "(IMP)CraneAccountsdActiveContainer",
+          "line": 623,
+          "selector": "crane_activeContainer",
+          "target_expression": "accountStoreClass"
+        }
+      ],
+      "source_match_status": "textual_installer_candidate",
+      "test_source_selector_mentions_only": [
+        "reconstruction/tools/check_accountsd_isolation_contract.py",
+        "reconstruction/tools/check_pkd_lifecycle_contract.py"
+      ]
+    },
+    {
+      "behavior_verified": false,
+      "ordinal": 119,
+      "original": {
+        "binary": "CraneSupport.dylib",
+        "hook_api": "class_addMethod",
+        "hook_implementation": "sub_6F58",
+        "registering_function": "_initAccountsd",
+        "registration_address": "0x7200",
+        "target_class_as_indexed": "ACDDatabase",
+        "target_selector": "setCrane_activeContainer:"
+      },
+      "original_class_attribution": "indexed_not_runtime_verified",
+      "original_same_selector_api_count": 1,
+      "runtime_verified": false,
+      "source_candidate_count": 1,
+      "source_candidates": [
+        {
+          "api": "class_addMethod",
+          "file": "reconstruction/sources/support/CRAccountsd.m",
+          "impl_expression": "(IMP)CraneAccountsdSetActiveContainer",
+          "line": 627,
+          "selector": "setCrane_activeContainer:",
+          "target_expression": "accountStoreClass"
+        }
+      ],
+      "source_match_status": "textual_installer_candidate",
+      "test_source_selector_mentions_only": [
+        "reconstruction/tools/check_accountsd_isolation_contract.py"
+      ]
+    },
+    {
+      "behavior_verified": false,
+      "ordinal": 120,
+      "original": {
+        "binary": "CraneSupport.dylib",
+        "hook_api": "class_addMethod",
+        "hook_implementation": "sub_6F94",
+        "registering_function": "_initAccountsd",
+        "registration_address": "0x7200",
+        "target_class_as_indexed": "ACDDatabase",
+        "target_selector": "crane_storeCoordinatorsByContainerIdentifiers"
+      },
+      "original_class_attribution": "indexed_not_runtime_verified",
+      "original_same_selector_api_count": 1,
+      "runtime_verified": false,
+      "source_candidate_count": 1,
+      "source_candidates": [
+        {
+          "api": "class_addMethod",
+          "file": "reconstruction/sources/support/CRAccountsd.m",
+          "impl_expression": "(IMP)CraneAccountsdStoreCoordinators",
+          "line": 653,
+          "selector": "crane_storeCoordinatorsByContainerIdentifiers",
+          "target_expression": "accountStoreClass"
+        }
+      ],
+      "source_match_status": "textual_installer_candidate",
+      "test_source_selector_mentions_only": []
+    },
+    {
+      "behavior_verified": false,
+      "ordinal": 121,
+      "original": {
+        "binary": "CraneSupport.dylib",
+        "hook_api": "class_addMethod",
+        "hook_implementation": "sub_6FA0",
+        "registering_function": "_initAccountsd",
+        "registration_address": "0x7200",
+        "target_class_as_indexed": "ACDDatabase",
+        "target_selector": "setCrane_storeCoordinatorsByContainerIdentifiers:"
+      },
+      "original_class_attribution": "indexed_not_runtime_verified",
+      "original_same_selector_api_count": 1,
+      "runtime_verified": false,
+      "source_candidate_count": 1,
+      "source_candidates": [
+        {
+          "api": "class_addMethod",
+          "file": "reconstruction/sources/support/CRAccountsd.m",
+          "impl_expression": "(IMP)CraneAccountsdSetStoreCoordinators",
+          "line": 659,
+          "selector": "setCrane_storeCoordinatorsByContainerIdentifiers:",
+          "target_expression": "accountStoreClass"
+        }
+      ],
+      "source_match_status": "textual_installer_candidate",
+      "test_source_selector_mentions_only": []
+    },
+    {
+      "behavior_verified": false,
+      "ordinal": 122,
+      "original": {
+        "binary": "CraneSupport.dylib",
+        "hook_api": "class_addMethod",
+        "hook_implementation": "sub_6FDC",
+        "registering_function": "_initAccountsd",
+        "registration_address": "0x7200",
+        "target_class_as_indexed": "ACDDatabase",
+        "target_selector": "crane_databasesByContainerIdentifiers"
+      },
+      "original_class_attribution": "indexed_not_runtime_verified",
+      "original_same_selector_api_count": 1,
+      "runtime_verified": false,
+      "source_candidate_count": 1,
+      "source_candidates": [
+        {
+          "api": "class_addMethod",
+          "file": "reconstruction/sources/support/CRAccountsd.m",
+          "impl_expression": "(IMP)CraneAccountsdDatabases",
+          "line": 710,
+          "selector": "crane_databasesByContainerIdentifiers",
+          "target_expression": "accountStoreClass"
+        }
+      ],
+      "source_match_status": "textual_installer_candidate",
+      "test_source_selector_mentions_only": []
+    },
+    {
+      "behavior_verified": false,
+      "ordinal": 123,
+      "original": {
+        "binary": "CraneSupport.dylib",
+        "hook_api": "class_addMethod",
+        "hook_implementation": "sub_6FE8",
+        "registering_function": "_initAccountsd",
+        "registration_address": "0x7200",
+        "target_class_as_indexed": "ACDDatabase",
+        "target_selector": "setCrane_databasesByContainerIdentifiers:"
+      },
+      "original_class_attribution": "indexed_not_runtime_verified",
+      "original_same_selector_api_count": 1,
+      "runtime_verified": false,
+      "source_candidate_count": 1,
+      "source_candidates": [
+        {
+          "api": "class_addMethod",
+          "file": "reconstruction/sources/support/CRAccountsd.m",
+          "impl_expression": "(IMP)CraneAccountsdSetDatabases",
+          "line": 715,
+          "selector": "setCrane_databasesByContainerIdentifiers:",
+          "target_expression": "accountStoreClass"
+        }
+      ],
+      "source_match_status": "textual_installer_candidate",
+      "test_source_selector_mentions_only": []
+    },
+    {
+      "behavior_verified": false,
+      "ordinal": 124,
+      "original": {
+        "binary": "CraneSupport.dylib",
+        "hook_api": "MSHookMessageEx",
+        "hook_implementation": "sub_9F84",
+        "registering_function": "_initApsd",
+        "registration_address": "0x9c4c",
+        "target_class_as_indexed": "APSCourierConnection",
+        "target_selector": "sendAppTokenGenerateMessageWithTopicHash:baseToken:appId:onInterface:"
+      },
+      "original_class_attribution": "indexed_not_runtime_verified",
+      "original_same_selector_api_count": 1,
+      "runtime_verified": false,
+      "source_candidate_count": 1,
+      "source_candidates": [
+        {
+          "api": "MSHookMessageEx",
+          "file": "reconstruction/sources/support/CRApsd.m",
+          "impl_expression": "(IMP)CraneApsdSendAppTokenGenerate",
+          "line": 855,
+          "selector": "sendAppTokenGenerateMessageWithTopicHash:baseToken:appId:onInterface:",
+          "target_expression": "connectionClass"
+        }
+      ],
+      "source_match_status": "textual_installer_candidate",
+      "test_source_selector_mentions_only": []
+    },
+    {
+      "behavior_verified": false,
+      "ordinal": 125,
+      "original": {
+        "binary": "CraneSupport.dylib",
+        "hook_api": "MSHookMessageEx",
+        "hook_implementation": "sub_A0B4",
+        "registering_function": "_initApsd",
+        "registration_address": "0x9c4c",
+        "target_class_as_indexed": "APSCourierConnection",
+        "target_selector": "sendTokenGenerateMessageWithTopicHash:baseToken:appId:expirationTTL:vapidPublicKeyHash:type:onInterface:"
+      },
+      "original_class_attribution": "indexed_not_runtime_verified",
+      "original_same_selector_api_count": 1,
+      "runtime_verified": false,
+      "source_candidate_count": 0,
+      "source_candidates": [],
+      "source_match_status": "no_installer_candidate",
+      "test_source_selector_mentions_only": []
+    },
+    {
+      "behavior_verified": false,
+      "ordinal": 126,
+      "original": {
+        "binary": "CraneSupport.dylib",
+        "hook_api": "MSHookMessageEx",
+        "hook_implementation": "sub_A308",
+        "registering_function": "_initApsd",
+        "registration_address": "0x9c4c",
+        "target_class_as_indexed": "APSCourierConnection",
+        "target_selector": "connection:didRequestPerAppTokenForTopic:identifier:"
+      },
+      "original_class_attribution": "indexed_not_runtime_verified",
+      "original_same_selector_api_count": 1,
+      "runtime_verified": false,
+      "source_candidate_count": 1,
+      "source_candidates": [
+        {
+          "api": "MSHookMessageEx",
+          "file": "reconstruction/sources/support/CRApsd.m",
+          "impl_expression": "(IMP)CraneApsdRequestPerAppToken",
+          "line": 895,
+          "selector": "connection:didRequestPerAppTokenForTopic:identifier:",
+          "target_expression": "courierClass"
+        }
+      ],
+      "source_match_status": "textual_installer_candidate",
+      "test_source_selector_mentions_only": []
+    },
+    {
+      "behavior_verified": false,
+      "ordinal": 127,
+      "original": {
+        "binary": "CraneSupport.dylib",
+        "hook_api": "MSHookMessageEx",
+        "hook_implementation": "sub_A4FC",
+        "registering_function": "_initApsd",
+        "registration_address": "0x9c4c",
+        "target_class_as_indexed": "APSCourierConnection",
+        "target_selector": "connection:didRequestTokenForInfo:"
+      },
+      "original_class_attribution": "indexed_not_runtime_verified",
+      "original_same_selector_api_count": 1,
+      "runtime_verified": false,
+      "source_candidate_count": 1,
+      "source_candidates": [
+        {
+          "api": "MSHookMessageEx",
+          "file": "reconstruction/sources/support/CRApsd.m",
+          "impl_expression": "(IMP)CraneApsdRequestTokenForInfo",
+          "line": 901,
+          "selector": "connection:didRequestTokenForInfo:",
+          "target_expression": "courierClass"
+        }
+      ],
+      "source_match_status": "textual_installer_candidate",
+      "test_source_selector_mentions_only": []
+    },
+    {
+      "behavior_verified": false,
+      "ordinal": 128,
+      "original": {
+        "binary": "CraneSupport.dylib",
+        "hook_api": "MSHookMessageEx",
+        "hook_implementation": "sub_A758",
+        "registering_function": "_initApsd",
+        "registration_address": "0x9c4c",
+        "target_class_as_indexed": "APSCourierConnection",
+        "target_selector": "_handleAppTokenGenerateResponse:onInterface:"
+      },
+      "original_class_attribution": "indexed_not_runtime_verified",
+      "original_same_selector_api_count": 1,
+      "runtime_verified": false,
+      "source_candidate_count": 1,
+      "source_candidates": [
+        {
+          "api": "MSHookMessageEx",
+          "file": "reconstruction/sources/support/CRApsd.m",
+          "impl_expression": "(IMP)CraneApsdAppTokenResponseInterface",
+          "line": 906,
+          "selector": "_handleAppTokenGenerateResponse:onInterface:",
+          "target_expression": "courierClass"
+        }
+      ],
+      "source_match_status": "textual_installer_candidate",
+      "test_source_selector_mentions_only": []
+    },
+    {
+      "behavior_verified": false,
+      "ordinal": 129,
+      "original": {
+        "binary": "CraneSupport.dylib",
+        "hook_api": "MSHookMessageEx",
+        "hook_implementation": "sub_A7B4",
+        "registering_function": "_initApsd",
+        "registration_address": "0x9c4c",
+        "target_class_as_indexed": "APSCourierConnection",
+        "target_selector": "_handleAppTokenGenerateResponse:onProtocolConnection:"
+      },
+      "original_class_attribution": "indexed_not_runtime_verified",
+      "original_same_selector_api_count": 1,
+      "runtime_verified": false,
+      "source_candidate_count": 1,
+      "source_candidates": [
+        {
+          "api": "MSHookMessageEx",
+          "file": "reconstruction/sources/support/CRApsd.m",
+          "impl_expression": "(IMP)CraneApsdAppTokenResponseProtocolConnection",
+          "line": 911,
+          "selector": "_handleAppTokenGenerateResponse:onProtocolConnection:",
+          "target_expression": "courierClass"
+        }
+      ],
+      "source_match_status": "textual_installer_candidate",
+      "test_source_selector_mentions_only": []
+    },
+    {
+      "behavior_verified": false,
+      "ordinal": 130,
+      "original": {
+        "binary": "CraneSupport.dylib",
+        "hook_api": "MSHookMessageEx",
+        "hook_implementation": "sub_A860",
+        "registering_function": "_initApsd",
+        "registration_address": "0x9c4c",
+        "target_class_as_indexed": "APSCourierConnection",
+        "target_selector": "_handleMessageMessage:onProtocolConnection:withGeneration:isWakingMessage:fromAgent:"
+      },
+      "original_class_attribution": "indexed_not_runtime_verified",
+      "original_same_selector_api_count": 1,
+      "runtime_verified": false,
+      "source_candidate_count": 0,
+      "source_candidates": [],
+      "source_match_status": "no_installer_candidate",
+      "test_source_selector_mentions_only": []
+    },
+    {
+      "behavior_verified": false,
+      "ordinal": 131,
+      "original": {
+        "binary": "CraneSupport.dylib",
+        "hook_api": "MSHookMessageEx",
+        "hook_implementation": "sub_A930",
+        "registering_function": "_initApsd",
+        "registration_address": "0x9c4c",
+        "target_class_as_indexed": "APSCourierConnection",
+        "target_selector": "_handleMessageMessage:onInterface:withGeneration:isWakingMessage:fromAgent:"
+      },
+      "original_class_attribution": "indexed_not_runtime_verified",
+      "original_same_selector_api_count": 1,
+      "runtime_verified": false,
+      "source_candidate_count": 0,
+      "source_candidates": [],
+      "source_match_status": "no_installer_candidate",
+      "test_source_selector_mentions_only": []
+    },
+    {
+      "behavior_verified": false,
+      "ordinal": 132,
+      "original": {
+        "binary": "CraneSupport.dylib",
+        "hook_api": "MSHookMessageEx",
+        "hook_implementation": "sub_A994",
+        "registering_function": "_initApsd",
+        "registration_address": "0x9c4c",
+        "target_class_as_indexed": "APSCourierConnection",
+        "target_selector": "_handleMessageMessage:onInterface:withGeneration:fromAgent:"
+      },
+      "original_class_attribution": "indexed_not_runtime_verified",
+      "original_same_selector_api_count": 1,
+      "runtime_verified": false,
+      "source_candidate_count": 1,
+      "source_candidates": [
+        {
+          "api": "MSHookMessageEx",
+          "file": "reconstruction/sources/support/CRApsd.m",
+          "impl_expression": "(IMP)CraneApsdMessageInterfaceAgent",
+          "line": 931,
+          "selector": "_handleMessageMessage:onInterface:withGeneration:fromAgent:",
+          "target_expression": "courierClass"
+        }
+      ],
+      "source_match_status": "textual_installer_candidate",
+      "test_source_selector_mentions_only": []
+    },
+    {
+      "behavior_verified": false,
+      "ordinal": 133,
+      "original": {
+        "binary": "CraneSupport.dylib",
+        "hook_api": "MSHookMessageEx",
+        "hook_implementation": "sub_A9F4",
+        "registering_function": "_initApsd",
+        "registration_address": "0x9c4c",
+        "target_class_as_indexed": "APSCourierConnection",
+        "target_selector": "_handleMessageMessage:onInterface:withGeneration:fromMaster:"
+      },
+      "original_class_attribution": "indexed_not_runtime_verified",
+      "original_same_selector_api_count": 1,
+      "runtime_verified": false,
+      "source_candidate_count": 1,
+      "source_candidates": [
+        {
+          "api": "MSHookMessageEx",
+          "file": "reconstruction/sources/support/CRApsd.m",
+          "impl_expression": "(IMP)CraneApsdMessageInterfaceMaster",
+          "line": 937,
+          "selector": "_handleMessageMessage:onInterface:withGeneration:fromMaster:",
+          "target_expression": "courierClass"
+        }
+      ],
+      "source_match_status": "textual_installer_candidate",
+      "test_source_selector_mentions_only": []
+    },
+    {
+      "behavior_verified": false,
+      "ordinal": 134,
+      "original": {
+        "binary": "CraneSupport.dylib",
+        "hook_api": "class_addMethod",
+        "hook_implementation": "sub_9680",
+        "registering_function": "_initApsd",
+        "registration_address": "0x9c4c",
+        "target_class_as_indexed": "APSCourierConnection",
+        "target_selector": "crane_topicStorage"
+      },
+      "original_class_attribution": "indexed_not_runtime_verified",
+      "original_same_selector_api_count": 1,
+      "runtime_verified": false,
+      "source_candidate_count": 1,
+      "source_candidates": [
+        {
+          "api": "class_addMethod",
+          "file": "reconstruction/sources/support/CRApsd.m",
+          "impl_expression": "(IMP)CraneApsdTopicStorageGetter",
+          "line": 886,
+          "selector": "crane_topicStorage",
+          "target_expression": "courierClass"
+        }
+      ],
+      "source_match_status": "textual_installer_candidate",
+      "test_source_selector_mentions_only": []
+    },
+    {
+      "behavior_verified": false,
+      "ordinal": 135,
+      "original": {
+        "binary": "CraneSupport.dylib",
+        "hook_api": "class_addMethod",
+        "hook_implementation": "sub_968C",
+        "registering_function": "_initApsd",
+        "registration_address": "0x9c4c",
+        "target_class_as_indexed": "APSCourierConnection",
+        "target_selector": "setCrane_topicStorage:"
+      },
+      "original_class_attribution": "indexed_not_runtime_verified",
+      "original_same_selector_api_count": 1,
+      "runtime_verified": false,
+      "source_candidate_count": 1,
+      "source_candidates": [
+        {
+          "api": "class_addMethod",
+          "file": "reconstruction/sources/support/CRApsd.m",
+          "impl_expression": "(IMP)CraneApsdTopicStorageSetter",
+          "line": 890,
+          "selector": "setCrane_topicStorage:",
+          "target_expression": "courierClass"
+        }
+      ],
+      "source_match_status": "textual_installer_candidate",
+      "test_source_selector_mentions_only": []
+    },
+    {
+      "behavior_verified": false,
+      "ordinal": 136,
+      "original": {
+        "binary": "CraneSupport.dylib",
+        "hook_api": "MSHookMessageEx",
+        "hook_implementation": "sub_B7EC",
+        "registering_function": "_initHandleSourceMessage",
+        "registration_address": "0xb6e0",
+        "target_class_as_indexed": "CFPrefsDaemon",
+        "target_selector": "handleSourceMessage:replyHandler:"
+      },
+      "original_class_attribution": "indexed_not_runtime_verified",
+      "original_same_selector_api_count": 1,
+      "runtime_verified": false,
+      "source_candidate_count": 0,
+      "source_candidates": [],
+      "source_match_status": "no_installer_candidate",
+      "test_source_selector_mentions_only": []
+    },
+    {
+      "behavior_verified": false,
+      "ordinal": 137,
+      "original": {
+        "binary": "CraneSupport.dylib",
+        "hook_api": "MSHookFunction",
+        "hook_implementation": "handleSourceMessageHook_v2",
+        "registering_function": "_initHandleSourceMessage",
+        "registration_address": "0xb6e0",
+        "target_class_as_indexed": "",
+        "target_selector": "gHandleSourceMessageSym"
+      },
+      "original_class_attribution": "indexed_not_runtime_verified",
+      "original_same_selector_api_count": 1,
+      "runtime_verified": false,
+      "source_candidate_count": 0,
+      "source_candidates": [],
+      "source_match_status": "no_installer_candidate",
+      "test_source_selector_mentions_only": []
+    },
+    {
+      "behavior_verified": false,
+      "ordinal": 138,
+      "original": {
+        "binary": "CraneSupport.dylib",
+        "hook_api": "MSHookFunction",
+        "hook_implementation": "withSourceForDomainHook_v3",
+        "registering_function": "_initWithSourceForDomain",
+        "registration_address": "0xb848",
+        "target_class_as_indexed": "",
+        "target_selector": "gWithSourceForDomainHookSym"
+      },
+      "original_class_attribution": "indexed_not_runtime_verified",
+      "original_same_selector_api_count": 1,
+      "runtime_verified": false,
+      "source_candidate_count": 0,
+      "source_candidates": [],
+      "source_match_status": "no_installer_candidate",
+      "test_source_selector_mentions_only": []
+    },
+    {
+      "behavior_verified": false,
+      "ordinal": 139,
+      "original": {
+        "binary": "CraneSupport.dylib",
+        "hook_api": "MSHookMessageEx",
+        "hook_implementation": "sub_CE44",
+        "registering_function": "_initContainermanagerd",
+        "registration_address": "0xcc88",
+        "target_class_as_indexed": "MCMContainerFactory",
+        "target_selector": "containerForContainerIdentity:createIfNecessary:updateLinks:error:"
+      },
+      "original_class_attribution": "indexed_not_runtime_verified",
+      "original_same_selector_api_count": 1,
+      "runtime_verified": false,
+      "source_candidate_count": 1,
+      "source_candidates": [
+        {
+          "api": "MSHookMessageEx",
+          "file": "reconstruction/sources/support/CRMCM.m",
+          "impl_expression": "(IMP)CRMCMFactoryWithUpdate",
+          "line": 802,
+          "selector": "containerForContainerIdentity:createIfNecessary:updateLinks:error:",
+          "target_expression": "factoryClass"
+        }
+      ],
+      "source_match_status": "textual_installer_candidate",
+      "test_source_selector_mentions_only": []
+    },
+    {
+      "behavior_verified": false,
+      "ordinal": 140,
+      "original": {
+        "binary": "CraneSupport.dylib",
+        "hook_api": "MSHookMessageEx",
+        "hook_implementation": "sub_CF68",
+        "registering_function": "_initContainermanagerd",
+        "registration_address": "0xcc88",
+        "target_class_as_indexed": "MCMContainerFactory",
+        "target_selector": "containerForContainerIdentity:createIfNecessary:error:"
+      },
+      "original_class_attribution": "indexed_not_runtime_verified",
+      "original_same_selector_api_count": 1,
+      "runtime_verified": false,
+      "source_candidate_count": 1,
+      "source_candidates": [
+        {
+          "api": "MSHookMessageEx",
+          "file": "reconstruction/sources/support/CRMCM.m",
+          "impl_expression": "(IMP)CRMCMFactoryNoUpdate",
+          "line": 806,
+          "selector": "containerForContainerIdentity:createIfNecessary:error:",
+          "target_expression": "factoryClass"
+        }
+      ],
+      "source_match_status": "textual_installer_candidate",
+      "test_source_selector_mentions_only": []
+    },
+    {
+      "behavior_verified": false,
+      "ordinal": 141,
+      "original": {
+        "binary": "CraneSupport.dylib",
+        "hook_api": "MSHookMessageEx",
+        "hook_implementation": "sub_D2BC",
+        "registering_function": "_initContainermanagerd",
+        "registration_address": "0xcc88",
+        "target_class_as_indexed": "MCMContainerFactory",
+        "target_selector": "groupContainerPathsForUser:clientConnection:identifier:withError:"
+      },
+      "original_class_attribution": "indexed_not_runtime_verified",
+      "original_same_selector_api_count": 1,
+      "runtime_verified": false,
+      "source_candidate_count": 1,
+      "source_candidates": [
+        {
+          "api": "MSHookMessageEx",
+          "file": "reconstruction/sources/support/CRMCM.m",
+          "impl_expression": "(IMP)CRMCMGroupContainerPaths",
+          "line": 849,
+          "selector": "groupContainerPathsForUser:clientConnection:identifier:withError:",
+          "target_expression": "groupManagerClass"
+        }
+      ],
+      "source_match_status": "textual_installer_candidate",
+      "test_source_selector_mentions_only": []
+    },
+    {
+      "behavior_verified": false,
+      "ordinal": 142,
+      "original": {
+        "binary": "CraneSupport.dylib",
+        "hook_api": "MSHookMessageEx",
+        "hook_implementation": "sub_D8E4",
+        "registering_function": "_initLsd",
+        "registration_address": "0xd7d8",
+        "target_class_as_indexed": "_LSDDeviceIdentifierClient",
+        "target_selector": "setProtocol:"
+      },
+      "original_class_attribution": "indexed_not_runtime_verified",
+      "original_same_selector_api_count": 1,
+      "runtime_verified": false,
+      "source_candidate_count": 1,
+      "source_candidates": [
+        {
+          "api": "MSHookMessageEx",
+          "file": "reconstruction/sources/support/CRLsd.m",
+          "impl_expression": "(IMP)CraneLSDSetProtocol",
+          "line": 382,
+          "selector": "setProtocol:",
+          "target_expression": "interfaceClass"
+        }
+      ],
+      "source_match_status": "textual_installer_candidate",
+      "test_source_selector_mentions_only": [
+        "reconstruction/tools/check_runningboard_contract.py"
+      ]
+    },
+    {
+      "behavior_verified": false,
+      "ordinal": 143,
+      "original": {
+        "binary": "CraneSupport.dylib",
+        "hook_api": "MSHookMessageEx",
+        "hook_implementation": "sub_D9A4",
+        "registering_function": "_initLsd",
+        "registration_address": "0xd7d8",
+        "target_class_as_indexed": "_LSDDeviceIdentifierClient",
+        "target_selector": "getIdentifierOfType:completionHandler:"
+      },
+      "original_class_attribution": "indexed_not_runtime_verified",
+      "original_same_selector_api_count": 1,
+      "runtime_verified": false,
+      "source_candidate_count": 1,
+      "source_candidates": [
+        {
+          "api": "MSHookMessageEx",
+          "file": "reconstruction/sources/support/CRLsd.m",
+          "impl_expression": "(IMP)CraneLSDGetIdentifier",
+          "line": 393,
+          "selector": "getIdentifierOfType:completionHandler:",
+          "target_expression": "clientClass"
+        }
+      ],
+      "source_match_status": "textual_installer_candidate",
+      "test_source_selector_mentions_only": []
+    },
+    {
+      "behavior_verified": false,
+      "ordinal": 144,
+      "original": {
+        "binary": "CraneSupport.dylib",
+        "hook_api": "class_addMethod",
+        "hook_implementation": "sub_DC94",
+        "registering_function": "_initLsd",
+        "registration_address": "0xd7d8",
+        "target_class_as_indexed": "_LSDDeviceIdentifierClient",
+        "target_selector": "crane_getIdentifier:ofType:forVendorName:andBundleIdentifier:"
+      },
+      "original_class_attribution": "indexed_not_runtime_verified",
+      "original_same_selector_api_count": 1,
+      "runtime_verified": false,
+      "source_candidate_count": 1,
+      "source_candidates": [
+        {
+          "api": "class_addMethod",
+          "file": "reconstruction/sources/support/CRLsd.m",
+          "impl_expression": "(IMP)CraneLSDGetIdentifierForHelper",
+          "line": 399,
+          "selector": "crane_getIdentifier:ofType:forVendorName:andBundleIdentifier:",
+          "target_expression": "clientClass"
+        }
+      ],
+      "source_match_status": "textual_installer_candidate",
+      "test_source_selector_mentions_only": [
+        "reconstruction/tools/check_device_identifier_settings_contract.py",
+        "reconstruction/tools/check_helper_privileged_contract.py"
+      ]
+    },
+    {
+      "behavior_verified": false,
+      "ordinal": 145,
+      "original": {
+        "binary": "CraneSupport.dylib",
+        "hook_api": "class_addMethod",
+        "hook_implementation": "sub_E0F4",
+        "registering_function": "_initLsd",
+        "registration_address": "0xd7d8",
+        "target_class_as_indexed": "_LSDDeviceIdentifierClient",
+        "target_selector": "crane_setIdentifier:ofType:forVendorName:andBundleIdentifier:"
+      },
+      "original_class_attribution": "indexed_not_runtime_verified",
+      "original_same_selector_api_count": 1,
+      "runtime_verified": false,
+      "source_candidate_count": 1,
+      "source_candidates": [
+        {
+          "api": "class_addMethod",
+          "file": "reconstruction/sources/support/CRLsd.m",
+          "impl_expression": "(IMP)CraneLSDSetIdentifierForHelper",
+          "line": 406,
+          "selector": "crane_setIdentifier:ofType:forVendorName:andBundleIdentifier:",
+          "target_expression": "clientClass"
+        }
+      ],
+      "source_match_status": "textual_installer_candidate",
+      "test_source_selector_mentions_only": [
+        "reconstruction/tools/check_device_identifier_settings_contract.py",
+        "reconstruction/tools/check_helper_privileged_contract.py"
+      ]
+    },
+    {
+      "behavior_verified": false,
+      "ordinal": 146,
+      "original": {
+        "binary": "CraneSupport.dylib",
+        "hook_api": "MSHookMessageEx",
+        "hook_implementation": "sub_F768",
+        "registering_function": "_initPkd",
+        "registration_address": "0xf2b4",
+        "target_class_as_indexed": "PKDServer",
+        "target_selector": "enableForClient:environment:languages:oneShotUUID:persona:sandbox:pid:error:"
+      },
+      "original_class_attribution": "indexed_not_runtime_verified",
+      "original_same_selector_api_count": 1,
+      "runtime_verified": false,
+      "source_candidate_count": 1,
+      "source_candidates": [
+        {
+          "api": "MSHookMessageEx",
+          "file": "reconstruction/sources/support/CRPkd.m",
+          "impl_expression": "(IMP)CRPkdEnableFull",
+          "line": 501,
+          "selector": "enableForClient:environment:languages:oneShotUUID:persona:sandbox:pid:error:",
+          "target_expression": "plugInClass"
+        }
+      ],
+      "source_match_status": "textual_installer_candidate",
+      "test_source_selector_mentions_only": []
+    },
+    {
+      "behavior_verified": false,
+      "ordinal": 147,
+      "original": {
+        "binary": "CraneSupport.dylib",
+        "hook_api": "MSHookMessageEx",
+        "hook_implementation": "sub_F964",
+        "registering_function": "_initPkd",
+        "registration_address": "0xf2b4",
+        "target_class_as_indexed": "PKDServer",
+        "target_selector": "enableForClient:environment:languages:oneShotUUID:pid:error:"
+      },
+      "original_class_attribution": "indexed_not_runtime_verified",
+      "original_same_selector_api_count": 1,
+      "runtime_verified": false,
+      "source_candidate_count": 1,
+      "source_candidates": [
+        {
+          "api": "MSHookMessageEx",
+          "file": "reconstruction/sources/support/CRPkd.m",
+          "impl_expression": "(IMP)CRPkdEnableLanguages",
+          "line": 506,
+          "selector": "enableForClient:environment:languages:oneShotUUID:pid:error:",
+          "target_expression": "plugInClass"
+        }
+      ],
+      "source_match_status": "textual_installer_candidate",
+      "test_source_selector_mentions_only": []
+    },
+    {
+      "behavior_verified": false,
+      "ordinal": 148,
+      "original": {
+        "binary": "CraneSupport.dylib",
+        "hook_api": "MSHookMessageEx",
+        "hook_implementation": "sub_FAEC",
+        "registering_function": "_initPkd",
+        "registration_address": "0xf2b4",
+        "target_class_as_indexed": "PKDServer",
+        "target_selector": "enableForClient:environment:oneShotUUID:pid:error:"
+      },
+      "original_class_attribution": "indexed_not_runtime_verified",
+      "original_same_selector_api_count": 1,
+      "runtime_verified": false,
+      "source_candidate_count": 1,
+      "source_candidates": [
+        {
+          "api": "MSHookMessageEx",
+          "file": "reconstruction/sources/support/CRPkd.m",
+          "impl_expression": "(IMP)CRPkdEnableOneShot",
+          "line": 511,
+          "selector": "enableForClient:environment:oneShotUUID:pid:error:",
+          "target_expression": "plugInClass"
+        }
+      ],
+      "source_match_status": "textual_installer_candidate",
+      "test_source_selector_mentions_only": []
+    },
+    {
+      "behavior_verified": false,
+      "ordinal": 149,
+      "original": {
+        "binary": "CraneSupport.dylib",
+        "hook_api": "MSHookMessageEx",
+        "hook_implementation": "sub_FC3C",
+        "registering_function": "_initPkd",
+        "registration_address": "0xf2b4",
+        "target_class_as_indexed": "PKDServer",
+        "target_selector": "enableForClient:environment:"
+      },
+      "original_class_attribution": "indexed_not_runtime_verified",
+      "original_same_selector_api_count": 1,
+      "runtime_verified": false,
+      "source_candidate_count": 1,
+      "source_candidates": [
+        {
+          "api": "MSHookMessageEx",
+          "file": "reconstruction/sources/support/CRPkd.m",
+          "impl_expression": "(IMP)CRPkdEnableBasic",
+          "line": 516,
+          "selector": "enableForClient:environment:",
+          "target_expression": "plugInClass"
+        }
+      ],
+      "source_match_status": "textual_installer_candidate",
+      "test_source_selector_mentions_only": []
+    },
+    {
+      "behavior_verified": false,
+      "ordinal": 150,
+      "original": {
+        "binary": "CraneSupport.dylib",
+        "hook_api": "MSHookMessageEx",
+        "hook_implementation": "sub_FD70",
+        "registering_function": "_initPkd",
+        "registration_address": "0xf2b4",
+        "target_class_as_indexed": "PKDServer",
+        "target_selector": "matchPlugIns"
+      },
+      "original_class_attribution": "indexed_not_runtime_verified",
+      "original_same_selector_api_count": 1,
+      "runtime_verified": false,
+      "source_candidate_count": 1,
+      "source_candidates": [
+        {
+          "api": "MSHookMessageEx",
+          "file": "reconstruction/sources/support/CRPkd.m",
+          "impl_expression": "(IMP)CRPkdMatchPlugIns",
+          "line": 523,
+          "selector": "matchPlugIns",
+          "target_expression": "transactionClass"
+        }
+      ],
+      "source_match_status": "textual_installer_candidate",
+      "test_source_selector_mentions_only": [
+        "reconstruction/tools/check_pkd_query_state_contract.py"
+      ]
+    },
+    {
+      "behavior_verified": false,
+      "ordinal": 151,
+      "original": {
+        "binary": "CraneSupport.dylib",
+        "hook_api": "MSHookMessageEx",
+        "hook_implementation": "sub_FE8C",
+        "registering_function": "_initPkd",
+        "registration_address": "0xf2b4",
+        "target_class_as_indexed": "PKDServer",
+        "target_selector": "findPlugIns:"
+      },
+      "original_class_attribution": "indexed_not_runtime_verified",
+      "original_same_selector_api_count": 1,
+      "runtime_verified": false,
+      "source_candidate_count": 1,
+      "source_candidates": [
+        {
+          "api": "MSHookMessageEx",
+          "file": "reconstruction/sources/support/CRPkd.m",
+          "impl_expression": "(IMP)CRPkdFindPlugIns1",
+          "line": 531,
+          "selector": "findPlugIns:",
+          "target_expression": "databaseClass"
+        }
+      ],
+      "source_match_status": "textual_installer_candidate",
+      "test_source_selector_mentions_only": []
+    },
+    {
+      "behavior_verified": false,
+      "ordinal": 152,
+      "original": {
+        "binary": "CraneSupport.dylib",
+        "hook_api": "MSHookMessageEx",
+        "hook_implementation": "sub_FF24",
+        "registering_function": "_initPkd",
+        "registration_address": "0xf2b4",
+        "target_class_as_indexed": "PKDServer",
+        "target_selector": "findPlugIns:discoveryInstanceUUID:"
+      },
+      "original_class_attribution": "indexed_not_runtime_verified",
+      "original_same_selector_api_count": 1,
+      "runtime_verified": false,
+      "source_candidate_count": 1,
+      "source_candidates": [
+        {
+          "api": "MSHookMessageEx",
+          "file": "reconstruction/sources/support/CRPkd.m",
+          "impl_expression": "(IMP)CRPkdFindPlugIns2",
+          "line": 535,
+          "selector": "findPlugIns:discoveryInstanceUUID:",
+          "target_expression": "databaseClass"
+        }
+      ],
+      "source_match_status": "textual_installer_candidate",
+      "test_source_selector_mentions_only": []
+    },
+    {
+      "behavior_verified": false,
+      "ordinal": 153,
+      "original": {
+        "binary": "CraneSupport.dylib",
+        "hook_api": "MSHookMessageEx",
+        "hook_implementation": "sub_FFFC",
+        "registering_function": "_initPkd",
+        "registration_address": "0xf2b4",
+        "target_class_as_indexed": "PKDServer",
+        "target_selector": "findPlugIns:discoveryInstanceUUID:allVersions:"
+      },
+      "original_class_attribution": "indexed_not_runtime_verified",
+      "original_same_selector_api_count": 1,
+      "runtime_verified": false,
+      "source_candidate_count": 1,
+      "source_candidates": [
+        {
+          "api": "MSHookMessageEx",
+          "file": "reconstruction/sources/support/CRPkd.m",
+          "impl_expression": "(IMP)CRPkdFindPlugIns3",
+          "line": 539,
+          "selector": "findPlugIns:discoveryInstanceUUID:allVersions:",
+          "target_expression": "databaseClass"
+        }
+      ],
+      "source_match_status": "textual_installer_candidate",
+      "test_source_selector_mentions_only": []
+    },
+    {
+      "behavior_verified": false,
+      "ordinal": 154,
+      "original": {
+        "binary": "CraneSupport.dylib",
+        "hook_api": "MSHookMessageEx",
+        "hook_implementation": "sub_100E4",
+        "registering_function": "_initPkd",
+        "registration_address": "0xf2b4",
+        "target_class_as_indexed": "PKDServer",
+        "target_selector": "findPlugInsForQuery:discoveryInstanceUUID:allVersions:"
+      },
+      "original_class_attribution": "indexed_not_runtime_verified",
+      "original_same_selector_api_count": 1,
+      "runtime_verified": false,
+      "source_candidate_count": 1,
+      "source_candidates": [
+        {
+          "api": "MSHookMessageEx",
+          "file": "reconstruction/sources/support/CRPkd.m",
+          "impl_expression": "(IMP)CRPkdFindPlugInsForQuery",
+          "line": 543,
+          "selector": "findPlugInsForQuery:discoveryInstanceUUID:allVersions:",
+          "target_expression": "databaseClass"
+        }
+      ],
+      "source_match_status": "textual_installer_candidate",
+      "test_source_selector_mentions_only": []
+    },
+    {
+      "behavior_verified": false,
+      "ordinal": 155,
+      "original": {
+        "binary": "CraneSupport.dylib",
+        "hook_api": "MSHookMessageEx",
+        "hook_implementation": "sub_101CC",
+        "registering_function": "_initPkd",
+        "registration_address": "0xf2b4",
+        "target_class_as_indexed": "PKDServer",
+        "target_selector": "pluginsMatchingQuery:applyFilter:"
+      },
+      "original_class_attribution": "indexed_not_runtime_verified",
+      "original_same_selector_api_count": 1,
+      "runtime_verified": false,
+      "source_candidate_count": 1,
+      "source_candidates": [
+        {
+          "api": "MSHookMessageEx",
+          "file": "reconstruction/sources/support/CRPkd.m",
+          "impl_expression": "(IMP)CRPkdPluginsMatchingQuery",
+          "line": 551,
+          "selector": "pluginsMatchingQuery:applyFilter:",
+          "target_expression": "workspaceClass"
+        }
+      ],
+      "source_match_status": "textual_installer_candidate",
+      "test_source_selector_mentions_only": []
+    },
+    {
+      "behavior_verified": false,
+      "ordinal": 156,
+      "original": {
+        "binary": "CraneSupport.dylib",
+        "hook_api": "MSHookMessageEx",
+        "hook_implementation": "sub_103F8",
+        "registering_function": "_initPkd",
+        "registration_address": "0xf2b4",
+        "target_class_as_indexed": "PKDServer",
+        "target_selector": "initWithConnection:queue:database:externalProviders:"
+      },
+      "original_class_attribution": "indexed_not_runtime_verified",
+      "original_same_selector_api_count": 1,
+      "runtime_verified": false,
+      "source_candidate_count": 1,
+      "source_candidates": [
+        {
+          "api": "MSHookMessageEx",
+          "file": "reconstruction/sources/support/CRPkd.m",
+          "impl_expression": "(IMP)CRPkdServerInit",
+          "line": 576,
+          "selector": "initWithConnection:queue:database:externalProviders:",
+          "target_expression": "serverClass"
+        }
+      ],
+      "source_match_status": "textual_installer_candidate",
+      "test_source_selector_mentions_only": []
+    },
+    {
+      "behavior_verified": false,
+      "ordinal": 157,
+      "original": {
+        "binary": "CraneSupport.dylib",
+        "hook_api": "class_addMethod",
+        "hook_implementation": "sub_F12C",
+        "registering_function": "_initPkd",
+        "registration_address": "0xf2b4",
+        "target_class_as_indexed": "PKDServer",
+        "target_selector": "crane_activeContainerID"
+      },
+      "original_class_attribution": "indexed_not_runtime_verified",
+      "original_same_selector_api_count": 1,
+      "runtime_verified": false,
+      "source_candidate_count": 1,
+      "source_candidates": [
+        {
+          "api": "class_addMethod",
+          "file": "reconstruction/sources/support/CRPkd.m",
+          "impl_expression": "(IMP)CRPkdActiveContainerID",
+          "line": 488,
+          "selector": "crane_activeContainerID",
+          "target_expression": "plugInClass"
+        }
+      ],
+      "source_match_status": "textual_installer_candidate",
+      "test_source_selector_mentions_only": [
+        "reconstruction/tools/check_pkd_lifecycle_contract.py"
+      ]
+    },
+    {
+      "behavior_verified": false,
+      "ordinal": 158,
+      "original": {
+        "binary": "CraneSupport.dylib",
+        "hook_api": "class_addMethod",
+        "hook_implementation": "sub_F138",
+        "registering_function": "_initPkd",
+        "registration_address": "0xf2b4",
+        "target_class_as_indexed": "PKDServer",
+        "target_selector": "setCrane_activeContainerID:"
+      },
+      "original_class_attribution": "indexed_not_runtime_verified",
+      "original_same_selector_api_count": 1,
+      "runtime_verified": false,
+      "source_candidate_count": 1,
+      "source_candidates": [
+        {
+          "api": "class_addMethod",
+          "file": "reconstruction/sources/support/CRPkd.m",
+          "impl_expression": "(IMP)CRPkdSetActiveContainerID",
+          "line": 492,
+          "selector": "setCrane_activeContainerID:",
+          "target_expression": "plugInClass"
+        }
+      ],
+      "source_match_status": "textual_installer_candidate",
+      "test_source_selector_mentions_only": [
+        "reconstruction/tools/check_pkd_lifecycle_contract.py"
+      ]
+    },
+    {
+      "behavior_verified": false,
+      "ordinal": 159,
+      "original": {
+        "binary": "CranePrefs",
+        "hook_api": "class_addMethod",
+        "hook_implementation": "sub_3F250",
+        "registering_function": "_CRPContainerChoicyOverwriteListController_init",
+        "registration_address": "0x3f108",
+        "target_class_as_indexed": "CHPProcessConfigurationListController",
+        "target_selector": "containerIdentifier"
+      },
+      "original_class_attribution": "indexed_not_runtime_verified",
+      "original_same_selector_api_count": 1,
+      "runtime_verified": false,
+      "source_candidate_count": 1,
+      "source_candidates": [
+        {
+          "api": "class_addMethod",
+          "file": "reconstruction/sources/prefs/CRChoicyEditor.m",
+          "impl_expression": "(IMP)CRChoicyContainerIdentifier",
+          "line": 197,
+          "selector": "containerIdentifier",
+          "target_expression": "editor"
+        }
+      ],
+      "source_match_status": "textual_installer_candidate",
+      "test_source_selector_mentions_only": [
+        "reconstruction/tools/check_activator_contract.py",
+        "reconstruction/tools/check_backup_fixture_writer_contract.py",
+        "reconstruction/tools/check_browse_container_contract.py",
+        "reconstruction/tools/check_choicy_integration_contract.py",
+        "reconstruction/tools/check_container_lifecycle_contract.py",
+        "reconstruction/tools/check_container_size_contract.py",
+        "reconstruction/tools/check_device_identifier_settings_contract.py",
+        "reconstruction/tools/check_disposable_source_diagnostic_contract.py",
+        "reconstruction/tools/check_gamecenter_picker_contract.py",
+        "reconstruction/tools/check_helper_keychain_contract.py",
+        "reconstruction/tools/check_native_manager_bridge_contract.py",
+        "reconstruction/tools/check_native_source_preflight_contract.py",
+        "reconstruction/tools/check_pkd_lifecycle_contract.py",
+        "reconstruction/tools/check_pkd_query_state_contract.py",
+        "reconstruction/tools/check_prefs_notification_contract.py",
+        "reconstruction/tools/check_shortcut_gate_contract.py",
+        "reconstruction/tools/test_crane_backup_fixture_writer.py",
+        "reconstruction/tools/test_crane_backup_inspector.py",
+        "reconstruction/tools/test_crane_backup_payload_parity.py",
+        "reconstruction/tools/test_crane_backup_shape_compare.py",
+        "reconstruction/tools/test_crane_disposable_source_diagnostic.py",
+        "reconstruction/tools/test_crane_native_manager_bridge.py",
+        "reconstruction/tools/test_crane_native_source_preflight.py",
+        "reconstruction/tools/test_crane_original_archive_audit.py",
+        "reconstruction/tools/test_crane_original_metadata_shape.py",
+        "reconstruction/tools/test_crane_restore_fixture_materializer.py",
+        "reconstruction/tools/test_crane_restore_journal_lab.py",
+        "reconstruction/tools/test_crane_restore_preflight.py",
+        "reconstruction/tools/test_crane_restore_transaction_model.py",
+        "reconstruction/tools/test_crane_restore_work_plan.py"
+      ]
+    }
+  ],
+  "schema": "crane_hook_source_audit_v1",
+  "source_match_counts": {
+    "ambiguous_original_duplicate": 10,
+    "no_installer_candidate": 16,
+    "textual_installer_candidate": 133
+  }
+}

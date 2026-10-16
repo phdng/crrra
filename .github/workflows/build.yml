@@ -94,6 +94,12 @@ jobs:
       - name: Verify original shortcut gates and default container
         run: python3 reconstruction/tools/check_shortcut_gate_contract.py
 
+      - name: Verify recovered 159-hook textual coverage matrix
+        run: python3 reconstruction/tools/crane_hook_coverage_audit.py --check
+
+      - name: Test hook registration provenance without claiming runtime parity
+        run: python3 -m unittest discover -s reconstruction/tools -p test_crane_hook_coverage_audit.py -v
+
       - name: Verify native menu badge contracts
         run: python3 reconstruction/tools/check_menu_badge_contract.py
 

@@ -31,6 +31,12 @@ The largest remaining gaps are not in basic injection. They are:
 6. **the missing CraneApplication + Shortcuts extension;**
 7. **remaining notification/badge fidelity and Settings controllers.**
 
+### G-09 full 159-hook source coverage matrix (2026-10-16)
+
+- Tracked original `analysis/hooks_index.csv` contains 159 registrations: CraneSB 113, CraneSupport 45, CranePrefs 1. New `tools/crane_hook_coverage_audit.py` creates `HOOK_COVERAGE_MATRIX.json` with a row for each recovered registration, original address/selector/API, available source installer candidates and confidence limitations. `HOOK_COVERAGE_AUDIT.md` explains reproduction and investigation priorities.
+- Source-only comparison: 133 rows have one textual installer candidate; 10 have original duplicate-selector ambiguity; 16 have no installer candidate under this bounded scanner. **These counts are not implemented/missing functionality counts.** `initNotificationSupport` has 52 original index rows, and its class field was alias-collapsed to one label in extracted CSV, so no class/ABI parity is claimed.
+- CI now fails if the generated matrix becomes stale, and Python tests check comment masking, selector extraction, all 159 original rows, ambiguity preservation and explicit `runtime_verified:false`/`behavior_verified:false`. **No runtime hook/daemon/injection changes**, and notification delivery/device parity still needs targeted testing before modifying private hooks.
+
 ### Registry safety follow-up (2026-10-14)
 
 - Collision checks now enumerate persisted `appSettings_*` keys directly, in addition to supported-app and legacy candidates. They no longer depend on helper discovery for an app whose settings outlive installation.
