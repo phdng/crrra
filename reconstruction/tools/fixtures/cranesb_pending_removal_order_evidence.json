@@ -1,0 +1,79 @@
+{
+  "schema": "crane_pending_notification_removal_order_v1",
+  "scope": "textual_original_evidence_only_not_runtime_parity",
+  "original_explicit": {
+    "source": "Library/MobileSubstrate/DynamicLibraries/CraneSB.dylib_export_for_ai/decompile/C1D4.c",
+    "function": "sub_C1D4",
+    "address": "0xc1d4",
+    "request_outer_loop": "  obj = objc_retain(*(id *)(a1 + 32));",
+    "requested_match": "              v11 = (unsigned __int8)objc_msgSend(v10, \"isEqualToString:\", v4);",
+    "request_append": "                -[NSMutableArray addObject:](v16, \"addObject:\", v4);"
+  },
+  "original_all": {
+    "source": "Library/MobileSubstrate/DynamicLibraries/CraneSB.dylib_export_for_ai/decompile/C5E0.c",
+    "function": "sub_C5E0",
+    "address": "0xc5e0",
+    "pending_outer_loop": "  v4 = objc_retain(v2);",
+    "pending_identifier": "        v9 = objc_retainAutoreleasedReturnValue(objc_msgSend(*(id *)(*((_QWORD *)&v14 + 1) + 8 * i), \"identifier\"));",
+    "pending_append": "        -[NSMutableArray addObject:](v3, \"addObject:\", v9);"
+  },
+  "examples": [
+    {
+      "requested": [
+        "second",
+        "first",
+        "second",
+        "missing"
+      ],
+      "pending": [
+        "first",
+        "second",
+        "unrelated"
+      ],
+      "explicit": [
+        "second",
+        "first",
+        "second"
+      ],
+      "all": [
+        "first",
+        "second",
+        "unrelated"
+      ]
+    },
+    {
+      "requested": [
+        "only",
+        "only"
+      ],
+      "pending": [
+        "only"
+      ],
+      "explicit": [
+        "only",
+        "only"
+      ],
+      "all": [
+        "only"
+      ]
+    },
+    {
+      "requested": [
+        "missing"
+      ],
+      "pending": [
+        "present"
+      ],
+      "explicit": [],
+      "all": [
+        "present"
+      ]
+    },
+    {
+      "requested": [],
+      "pending": [],
+      "explicit": [],
+      "all": []
+    }
+  ]
+}

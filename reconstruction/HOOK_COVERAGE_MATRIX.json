@@ -1427,6 +1427,7 @@
         "reconstruction/tools/test_crane_native_source_preflight.py",
         "reconstruction/tools/test_crane_native_typed_preflight.py",
         "reconstruction/tools/test_crane_native_writer_verify.py",
+        "reconstruction/tools/test_crane_notification_removal_order.py",
         "reconstruction/tools/test_crane_original_archive_audit.py",
         "reconstruction/tools/test_crane_original_metadata_shape.py",
         "reconstruction/tools/test_crane_restore_fixture_materializer.py",
@@ -2029,7 +2030,7 @@
           "api": "MSHookMessageEx",
           "file": "reconstruction/sources/cranesb/CRBadgeStore.m",
           "impl_expression": "(IMP)CRBadgeProxyBundleID",
-          "line": 2302,
+          "line": 2321,
           "selector": "un_applicationBundleIdentifier",
           "target_expression": "proxyClass"
         }
@@ -2061,7 +2062,7 @@
           "api": "MSHookMessageEx",
           "file": "reconstruction/sources/cranesb/CRBadgeStore.m",
           "impl_expression": "(IMP)CRBadgeRequestToken",
-          "line": 2411,
+          "line": 2430,
           "selector": "requestTokenForRemoteNotificationsForBundleIdentifier:withCompletionHandler:",
           "target_expression": "tokenListener"
         }
@@ -2091,7 +2092,7 @@
           "api": "MSHookMessageEx",
           "file": "reconstruction/sources/cranesb/CRBadgeStore.m",
           "impl_expression": "(IMP)CRBadgeInvalidateToken",
-          "line": 2417,
+          "line": 2436,
           "selector": "invalidateTokenForRemoteNotificationsForBundleIdentifier:",
           "target_expression": "tokenListener"
         }
@@ -2123,7 +2124,7 @@
           "api": "MSHookMessageEx",
           "file": "reconstruction/sources/cranesb/CRBadgeStore.m",
           "impl_expression": "(IMP)CRBadgeSourceDescription",
-          "line": 2313,
+          "line": 2332,
           "selector": "sourceDescriptionWithBundleIdentifier:",
           "target_expression": "object_getClass(descriptionClass)"
         }
@@ -2153,7 +2154,7 @@
           "api": "MSHookMessageEx",
           "file": "reconstruction/sources/cranesb/CRBadgeStore.m",
           "impl_expression": "(IMP)CRBadgeRequestToken",
-          "line": 2411,
+          "line": 2430,
           "selector": "requestTokenForRemoteNotificationsForBundleIdentifier:withCompletionHandler:",
           "target_expression": "tokenListener"
         }
@@ -2183,7 +2184,7 @@
           "api": "MSHookMessageEx",
           "file": "reconstruction/sources/cranesb/CRBadgeStore.m",
           "impl_expression": "(IMP)CRBadgeInvalidateToken",
-          "line": 2417,
+          "line": 2436,
           "selector": "invalidateTokenForRemoteNotificationsForBundleIdentifier:",
           "target_expression": "tokenListener"
         }
@@ -2215,7 +2216,7 @@
           "api": "MSHookMessageEx",
           "file": "reconstruction/sources/cranesb/CRBadgeStore.m",
           "impl_expression": "(IMP)CRBadgeReceiveToken",
-          "line": 2395,
+          "line": 2414,
           "selector": "_queue_connection:didReceiveToken:forTopic:identifier:",
           "target_expression": "remoteClass"
         }
@@ -2245,7 +2246,7 @@
           "api": "MSHookMessageEx",
           "file": "reconstruction/sources/cranesb/CRBadgeStore.m",
           "impl_expression": "(IMP)CRBadgeContentAvailable",
-          "line": 2349,
+          "line": 2368,
           "selector": "_queue_isContentAvailableRemoteNotificationSupportedForBundleIdentifier:",
           "target_expression": "remoteClass"
         }
@@ -2275,7 +2276,7 @@
           "api": "MSHookMessageEx",
           "file": "reconstruction/sources/cranesb/CRBadgeStore.m",
           "impl_expression": "(IMP)CRBadgeBackgroundRefresh",
-          "line": 2355,
+          "line": 2374,
           "selector": "_queue_isBackgroundAppRefreshAllowedForBundleIdentifier:",
           "target_expression": "remoteClass"
         }
@@ -2305,7 +2306,7 @@
           "api": "MSHookMessageEx",
           "file": "reconstruction/sources/cranesb/CRBadgeStore.m",
           "impl_expression": "(IMP)CRBadgeUserNotificationEnabled",
-          "line": 2361,
+          "line": 2380,
           "selector": "_queue_isUserNotificationEnabledForApplication:",
           "target_expression": "remoteClass"
         }
@@ -2335,7 +2336,7 @@
           "api": "MSHookMessageEx",
           "file": "reconstruction/sources/cranesb/CRBadgeStore.m",
           "impl_expression": "(IMP)CRBadgeApplicationForeground",
-          "line": 2367,
+          "line": 2386,
           "selector": "_queue_isApplicationForeground:",
           "target_expression": "remoteClass"
         }
@@ -2365,7 +2366,7 @@
           "api": "MSHookMessageEx",
           "file": "reconstruction/sources/cranesb/CRBadgeStore.m",
           "impl_expression": "(IMP)CRBadgeNotificationTitle",
-          "line": 2295,
+          "line": 2314,
           "selector": "title",
           "target_expression": "provider"
         }
@@ -2402,7 +2403,7 @@
         "equivalence_verified": false,
         "file": "reconstruction/sources/cranesb/CRBadgeStore.m",
         "kind": "alternative_class_method",
-        "line": 1376
+        "line": 1395
       },
       "runtime_verified": false,
       "source_candidate_count": 0,
@@ -2422,7 +2423,8 @@
         "reconstruction/tools/check_prefs_settings_contract.py",
         "reconstruction/tools/check_runningboard_contract.py",
         "reconstruction/tools/check_shortcut_gate_contract.py",
-        "reconstruction/tools/test_crane_native_source_preflight.py"
+        "reconstruction/tools/test_crane_native_source_preflight.py",
+        "reconstruction/tools/test_crane_notification_removal_order.py"
       ]
     },
     {
@@ -2447,7 +2449,7 @@
           "api": "MSHookMessageEx",
           "file": "reconstruction/sources/cranesb/CRBadgeStore.m",
           "impl_expression": "(IMP)CRBadgeNotificationPermission",
-          "line": 2215,
+          "line": 2234,
           "selector": "uns_isAllowedToRequestUserNotificationsForBundleIdentifier:",
           "target_expression": "xpcClass"
         }
@@ -2479,7 +2481,7 @@
           "api": "MSHookMessageEx",
           "file": "reconstruction/sources/cranesb/CRBadgeStore.m",
           "impl_expression": "(IMP)CRBadgeAllTopics",
-          "line": 2383,
+          "line": 2402,
           "selector": "_queue_allTopicsForApplication:",
           "target_expression": "remoteClass"
         }
@@ -2509,7 +2511,7 @@
           "api": "MSHookMessageEx",
           "file": "reconstruction/sources/cranesb/CRBadgeStore.m",
           "impl_expression": "(IMP)CRBadgeIncomingMessage",
-          "line": 2342,
+          "line": 2361,
           "selector": "connection:didReceiveIncomingMessage:",
           "target_expression": "remoteClass"
         }
@@ -2539,7 +2541,7 @@
           "api": "MSHookMessageEx",
           "file": "reconstruction/sources/cranesb/CRBadgeStore.m",
           "impl_expression": "(IMP)CRBadgeModifyPush",
-          "line": 2332,
+          "line": 2351,
           "selector": "_queue_tryToModifyNotificationRequest:bundleIdentifier:message:enforcePushType:",
           "target_expression": "remoteClass"
         }
@@ -2569,7 +2571,7 @@
           "api": "MSHookMessageEx",
           "file": "reconstruction/sources/cranesb/CRBadgeStore.m",
           "impl_expression": "(IMP)CRBadgeModifyLegacy",
-          "line": 2337,
+          "line": 2356,
           "selector": "_queue_tryToModifyNotificationRequest:bundleIdentifier:message:",
           "target_expression": "remoteClass"
         }
@@ -2599,7 +2601,7 @@
           "api": "MSHookMessageEx",
           "file": "reconstruction/sources/cranesb/CRBadgeStore.m",
           "impl_expression": "(IMP)CRBadgeSourcesUninstalled",
-          "line": 2372,
+          "line": 2391,
           "selector": "notificationSourcesDidUninstall:",
           "target_expression": "remoteClass"
         }
@@ -2631,7 +2633,7 @@
           "api": "MSHookMessageEx",
           "file": "reconstruction/sources/cranesb/CRBadgeStore.m",
           "impl_expression": "(IMP)CRBadgeApplicationsUninstalled",
-          "line": 2377,
+          "line": 2396,
           "selector": "applicationsDidUninstall:",
           "target_expression": "remoteClass"
         }
@@ -2693,7 +2695,7 @@
           "api": "MSHookMessageEx",
           "file": "reconstruction/sources/cranesb/CRBadgeStore.m",
           "impl_expression": "(IMP)CRBadgeRemoveRecordsPassingTest",
-          "line": 2235,
+          "line": 2254,
           "selector": "removeNotificationRecordsPassingTest:forBundleIdentifier:",
           "target_expression": "repositoryClass"
         }
@@ -2725,7 +2727,7 @@
           "api": "MSHookMessageEx",
           "file": "reconstruction/sources/cranesb/CRBadgeStore.m",
           "impl_expression": "(IMP)CRBadgeRemoveAllRecords",
-          "line": 2229,
+          "line": 2248,
           "selector": "removeAllNotificationRecordsForBundleIdentifier:",
           "target_expression": "repositoryClass"
         }
@@ -2757,7 +2759,7 @@
           "api": "MSHookMessageEx",
           "file": "reconstruction/sources/cranesb/CRBadgeStore.m",
           "impl_expression": "(IMP)CRBadgeRecordLookup",
-          "line": 2240,
+          "line": 2259,
           "selector": "notificationRecordForForIdentifier:bundleIdentifier:",
           "target_expression": "repositoryClass"
         }
@@ -2789,7 +2791,7 @@
           "api": "MSHookMessageEx",
           "file": "reconstruction/sources/cranesb/CRBadgeStore.m",
           "impl_expression": "(IMP)CRBadgeRecordsLookup",
-          "line": 2250,
+          "line": 2269,
           "selector": "notificationRecordsForBundleIdentifier:",
           "target_expression": "repositoryClass"
         }
@@ -2821,7 +2823,7 @@
           "api": "MSHookMessageEx",
           "file": "reconstruction/sources/cranesb/CRBadgeStore.m",
           "impl_expression": "(IMP)CRBadgeRecordsLookupWithReply",
-          "line": 2245,
+          "line": 2264,
           "selector": "notificationRecordsForBundleIdentifier:withCompletionHandler:",
           "target_expression": "repositoryClass"
         }
@@ -3033,7 +3035,7 @@
           "api": "MSHookMessageEx",
           "file": "reconstruction/sources/cranesb/CRBadgeStore.m",
           "impl_expression": "(IMP)CRBadgeSystemForeground",
-          "line": 2277,
+          "line": 2296,
           "selector": "isApplicationForeground:",
           "target_expression": "notificationServer"
         }
@@ -3065,7 +3067,7 @@
           "api": "MSHookMessageEx",
           "file": "reconstruction/sources/cranesb/CRBadgeStore.m",
           "impl_expression": "(IMP)CRBadgeDeliverMessage",
-          "line": 2400,
+          "line": 2419,
           "selector": "_deliverMessage:",
           "target_expression": "apsClass"
         }
@@ -3095,7 +3097,7 @@
           "api": "MSHookMessageEx",
           "file": "reconstruction/sources/cranesb/CRBadgeStore.m",
           "impl_expression": "(IMP)CRBadgeAddRequests",
-          "line": 2438,
+          "line": 2457,
           "selector": "_addNotificationRequests:forBundleIdentifier:withCompletionHandler:",
           "target_expression": "listener"
         }
@@ -3125,7 +3127,7 @@
           "api": "MSHookMessageEx",
           "file": "reconstruction/sources/cranesb/CRBadgeStore.m",
           "impl_expression": "(IMP)CRBadgeSaveRequest",
-          "line": 2427,
+          "line": 2446,
           "selector": "_saveNotificationRequest:shouldRepost:forBundleIdentifier:withCompletionHandler:",
           "target_expression": "listener"
         }
@@ -3155,7 +3157,7 @@
           "api": "MSHookMessageEx",
           "file": "reconstruction/sources/cranesb/CRBadgeStore.m",
           "impl_expression": "(IMP)CRBadgeSaveDatedRequest",
-          "line": 2432,
+          "line": 2451,
           "selector": "_saveNotificationRequest:shouldRepost:deliveredDate:forBundleIdentifier:withCompletionHandler:",
           "target_expression": "listener"
         }
@@ -3187,7 +3189,7 @@
           "api": "MSHookMessageEx",
           "file": "reconstruction/sources/cranesb/CRBadgeStore.m",
           "impl_expression": "(IMP)CRBadgePendingRequests",
-          "line": 2442,
+          "line": 2461,
           "selector": "getPendingNotificationRequestsForBundleIdentifier:withCompletionHandler:",
           "target_expression": "listener"
         }
@@ -3219,7 +3221,7 @@
           "api": "MSHookMessageEx",
           "file": "reconstruction/sources/cranesb/CRBadgeStore.m",
           "impl_expression": "(IMP)CRBadgeRemovePendingWithReply",
-          "line": 2447,
+          "line": 2466,
           "selector": "removePendingNotificationRequestsWithIdentifiers:forBundleIdentifier:completionHandler:",
           "target_expression": "listener"
         }
@@ -3251,7 +3253,7 @@
           "api": "MSHookMessageEx",
           "file": "reconstruction/sources/cranesb/CRBadgeStore.m",
           "impl_expression": "(IMP)CRBadgeRemovePending",
-          "line": 2453,
+          "line": 2472,
           "selector": "removePendingNotificationRequestsWithIdentifiers:forBundleIdentifier:",
           "target_expression": "listener"
         }
@@ -3283,7 +3285,7 @@
           "api": "MSHookMessageEx",
           "file": "reconstruction/sources/cranesb/CRBadgeStore.m",
           "impl_expression": "(IMP)CRBadgeRemoveAllPendingWithReply",
-          "line": 2459,
+          "line": 2478,
           "selector": "removeAllPendingNotificationRequestsForBundleIdentifier:completionHandler:",
           "target_expression": "listener"
         }
@@ -3315,7 +3317,7 @@
           "api": "MSHookMessageEx",
           "file": "reconstruction/sources/cranesb/CRBadgeStore.m",
           "impl_expression": "(IMP)CRBadgeRemoveAllPending",
-          "line": 2465,
+          "line": 2484,
           "selector": "removeAllPendingNotificationRequestsForBundleIdentifier:",
           "target_expression": "listener"
         }
@@ -3347,7 +3349,7 @@
           "api": "MSHookMessageEx",
           "file": "reconstruction/sources/cranesb/CRBadgeStore.m",
           "impl_expression": "(IMP)CRBadgeBulletinForNotification",
-          "line": 2286,
+          "line": 2305,
           "selector": "_queue_bulletinForNotification:",
           "target_expression": "dataProvider"
         }
@@ -3379,7 +3381,7 @@
           "api": "MSHookMessageEx",
           "file": "reconstruction/sources/cranesb/CRBadgeStore.m",
           "impl_expression": "(IMP)CRBadgeBulletinAction",
-          "line": 2282,
+          "line": 2301,
           "selector": "handleBulletinActionResponse:withCompletion:",
           "target_expression": "dataProvider"
         }
@@ -3411,7 +3413,7 @@
           "api": "MSHookMessageEx",
           "file": "reconstruction/sources/cranesb/CRBadgeStore.m",
           "impl_expression": "(IMP)CRBadgeMutateContent",
-          "line": 2272,
+          "line": 2291,
           "selector": "mutateContentForNotificationRequest:error:",
           "target_expression": "extension"
         }
@@ -3443,7 +3445,7 @@
           "api": "MSHookMessageEx",
           "file": "reconstruction/sources/cranesb/CRBadgeStore.m",
           "impl_expression": "(IMP)CRBadgeRecordIsSimilar",
-          "line": 2259,
+          "line": 2278,
           "selector": "isSimilar:",
           "target_expression": "recordClass"
         }
@@ -3475,7 +3477,7 @@
           "api": "MSHookMessageEx",
           "file": "reconstruction/sources/cranesb/CRBadgeStore.m",
           "impl_expression": "(IMP)CRBadgeXPCSetProtocol",
-          "line": 2221,
+          "line": 2240,
           "selector": "setProtocol:",
           "target_expression": "xpcInterface"
         }
@@ -3507,7 +3509,7 @@
           "api": "class_addMethod",
           "file": "reconstruction/sources/cranesb/CRBadgeStore.m",
           "impl_expression": "(IMP)CRBadgeUnregisterNotifications",
-          "line": 2468,
+          "line": 2487,
           "selector": "crane_unregisterFromNotificationsIfNeededForContainerIdentifier:ofApplicationWithIdentifier:",
           "target_expression": "listener"
         }
@@ -3537,7 +3539,7 @@
           "api": "class_addMethod",
           "file": "reconstruction/sources/cranesb/CRBadgeStore.m",
           "impl_expression": "(IMP)CRSwitchContainerBadges",
-          "line": 2471,
+          "line": 2490,
           "selector": "crane_switchBadgesOfContainerWithIdentifier:andContainerWithIdentifier:ofApplicationWithIdentifier:",
           "target_expression": "listener"
         }
@@ -3567,7 +3569,7 @@
           "api": "class_addMethod",
           "file": "reconstruction/sources/cranesb/CRBadgeStore.m",
           "impl_expression": "(IMP)CRResetContainerBadge",
-          "line": 2474,
+          "line": 2493,
           "selector": "crane_resetBadgeOfContainerWithIdentifier:ofApplicationWithIdentifier:",
           "target_expression": "listener"
         }
@@ -3597,7 +3599,7 @@
           "api": "class_addMethod",
           "file": "reconstruction/sources/cranesb/CRBadgeStore.m",
           "impl_expression": "(IMP)CRBadgeRecordCopyWithoutContainer",
-          "line": 2255,
+          "line": 2274,
           "selector": "crane_copyWithoutContainerID",
           "target_expression": "recordClass"
         },
@@ -3605,7 +3607,7 @@
           "api": "class_addMethod",
           "file": "reconstruction/sources/cranesb/CRBadgeStore.m",
           "impl_expression": "(IMP)CRBadgeRequestCopyWithoutContainer",
-          "line": 2265,
+          "line": 2284,
           "selector": "crane_copyWithoutContainerID",
           "target_expression": "requestClass"
         }
@@ -3637,7 +3639,7 @@
           "api": "class_addMethod",
           "file": "reconstruction/sources/cranesb/CRBadgeStore.m",
           "impl_expression": "(IMP)CRBadgeRecordCopyWithoutContainer",
-          "line": 2255,
+          "line": 2274,
           "selector": "crane_copyWithoutContainerID",
           "target_expression": "recordClass"
         },
@@ -3645,7 +3647,7 @@
           "api": "class_addMethod",
           "file": "reconstruction/sources/cranesb/CRBadgeStore.m",
           "impl_expression": "(IMP)CRBadgeRequestCopyWithoutContainer",
-          "line": 2265,
+          "line": 2284,
           "selector": "crane_copyWithoutContainerID",
           "target_expression": "requestClass"
         }

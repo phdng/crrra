@@ -901,13 +901,32 @@ static void CRBadgeResolveRemovalIdentifiers(id self, NSString *appID,
     ((void (*)(id, SEL, id, id))objc_msgSend)(self, pendingSEL, appID,
         ^(NSArray *pending) {
             NSMutableArray *identifiers = [NSMutableArray array];
-            for (id request in pending) {
-                id identifier = [request respondsToSelector:@selector(identifier)]
-                    ? ((id (*)(id, SEL))objc_msgSend)(request, @selector(identifier)) : nil;
-                if (!identifier)
-                    continue;
-                if (removeAll || [requested containsObject:identifier])
-                    [identifiers addObject:identifier];
+            if (removeAll) {
+                /* Original 0xC5E0 enumerates pending requests in order
+                 * and forwards every valid identifier. */
+                for (id request in pending) {
+                    id identifier = [request respondsToSelector:@selector(identifier)]
+                        ? ((id (*)(id, SEL))objc_msgSend)(
+                            request, @selector(identifier)) : nil;
+                    if (identifier)
+                        [identifiers addObject:identifier];
+                }
+            } else {
+                /* Original 0xC1D4 enumerates requested IDs FIRST and
+                 * searches the caller-scoped pending list for each one.
+                 * Preserve original order and repeated requested IDs:
+                 * iterating pending first silently dropped duplicates. */
+                for (id requestedIdentifier in requested) {
+                    for (id request in pending) {
+                        id identifier = [request respondsToSelector:@selector(identifier)]
+                            ? ((id (*)(id, SEL))objc_msgSend)(
+                                request, @selector(identifier)) : nil;
+                        if ([identifier isEqualToString:requestedIdentifier]) {
+                            [identifiers addObject:requestedIdentifier];
+                            break;
+                        }
+                    }
+                }
             }
             reply([identifiers copy]);
         });
