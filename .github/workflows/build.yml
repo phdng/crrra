@@ -220,6 +220,12 @@ jobs:
       - name: Test native CRC fixture data and tamper cases
         run: python3 -m unittest discover -s reconstruction/tools -p test_crane_native_crc_verification.py -v
 
+      - name: Verify N4 native disposable source collector contract
+        run: python3 reconstruction/tools/check_native_fixture_collector_contract.py
+
+      - name: Test fail-closed N4 native fixture verifier and source guard
+        run: python3 -m unittest discover -s reconstruction/tools -p test_crane_native_fixture_collector.py -v
+
       - name: Verify native disposable ZIP writer contract
         run: python3 reconstruction/tools/check_native_backup_writer_contract.py
 
@@ -383,6 +389,23 @@ jobs:
           ARCHIVE="$("$RUNNER_TEMP/native_backup_fixture_writer_smoke" | sed -n 's/^CRANE_N2_FIXTURE=//p')"
           test -n "$ARCHIVE"
           python3 tools/crane_native_writer_verify.py --archive "$ARCHIVE"
+
+      - name: Smoke-test native disposable file/metadata collector end-to-end
+        working-directory: reconstruction
+        run: |
+          set -euo pipefail
+          clang -fobjc-arc -fblocks -Wall -Wextra -Werror \
+            -I sources/prefs \
+            sources/prefs/CRBackupNativeCore.m \
+            sources/prefs/CRBackupArchiveSurvey.m \
+            sources/prefs/CRBackupNativeFixtureWriter.m \
+            sources/prefs/CRBackupNativeFixtureCollector.m \
+            tools/native_backup_fixture_collector_smoke.m \
+            -framework Foundation -framework CoreFoundation -lz \
+            -o "$RUNNER_TEMP/native_backup_fixture_collector_smoke"
+          ROOT="$("$RUNNER_TEMP/native_backup_fixture_collector_smoke" | sed -n 's/^CRANE_N4_FIXTURE=//p')"
+          test -n "$ROOT"
+          python3 tools/crane_native_collector_verify.py --fixture-root "$ROOT"
 
       - name: Smoke-test Clang XPC protocol metadata with Foundation
         working-directory: reconstruction
