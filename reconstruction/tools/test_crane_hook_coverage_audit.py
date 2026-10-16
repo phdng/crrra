@@ -17,6 +17,12 @@ class HookCoverageAuditTests(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
         cls.report = audit.build()
+        # Library/ is gitignored and absent in a clean GitHub Actions checkout.
+        # Require tracked, minimal original-code evidence on every platform;
+        # optionally corroborate it against the full workstation export.
+        evidence_path = (REPO / "reconstruction/tools/fixtures/"
+                         "cranesb_legacy_force_touch_init_evidence.json")
+        cls.legacy_evidence = json.loads(evidence_path.read_text(encoding="utf-8"))
 
     def test_159_rows_preserved_with_binary_origins_and_source_status(self):
         rows = self.report["rows"]
@@ -158,19 +164,25 @@ class HookCoverageAuditTests(unittest.TestCase):
         self.assertFalse(row["behavior_verified"])
 
     def test_init_original_and_reconstruction_have_the_same_legacy_intent(self):
-        original = (REPO / "Library/MobileSubstrate/DynamicLibraries/"
-                    "CraneSB.dylib_export_for_ai/decompile/14D18.c").read_text(
-                        encoding="utf-8")
-        implementation = (REPO / "Library/MobileSubstrate/DynamicLibraries/"
-                          "CraneSB.dylib_export_for_ai/decompile/15204.c").read_text(
-                              encoding="utf-8")
+        evidence = self.legacy_evidence
+        self.assertEqual(evidence["schema"],
+                         "crane_original_legacy_force_touch_init_evidence_v1")
+        self.assertEqual(evidence["provenance"]["binary"], "CraneSB.dylib")
+        self.assertEqual(evidence["provenance"]["original_registration"], "sub_14D18")
+        self.assertEqual(evidence["provenance"]["original_hook"], "sub_15204")
+        registration = evidence["original_registration"]
+        self.assertEqual(registration["legacy_class"].strip(),
+                         'v3 = objc_getClass("SBUIAppIconForceTouchController");')
+        self.assertEqual(registration["legacy_installer"].strip(),
+                         'MSHookMessageEx(v3, "init", sub_15204, &off_2D410);')
+        body = evidence["original_hook_body"]
+        self.assertIn("v0 = (void *)off_2D410();", body)
+        self.assertIn('objc_msgSend(v0, "setCrane_provideContainerOptions:", 0);',
+                      body)
+        self.assertIn("return v0;", body)
+
         current = (REPO / "reconstruction/sources/cranesb/CRMenuHooks.m").read_text(
             encoding="utf-8")
-        for marker in ('objc_getClass("SBUIAppIconForceTouchController")',
-                       'MSHookMessageEx(v3, "init", sub_15204, &off_2D410)'):
-            self.assertIn(marker, original)
-        for marker in ('off_2D410()', '"setCrane_provideContainerOptions:", 0'):
-            self.assertIn(marker, implementation)
         for marker in ('Class controllerClass =',
                        'NSClassFromString(@"SBUIAppIconForceTouchController")',
                        'SEL initSelector = @selector(init);',
@@ -182,12 +194,13 @@ class HookCoverageAuditTests(unittest.TestCase):
             self.assertIn(marker, current)
 
     def test_legacy_init_installation_keeps_original_cf_version_gate(self):
-        original = (REPO / "Library/MobileSubstrate/DynamicLibraries/"
-                    "CraneSB.dylib_export_for_ai/decompile/14D18.c").read_text(
-                        encoding="utf-8")
+        registration = self.legacy_evidence["original_registration"]
+        self.assertEqual(registration["corefoundation_modern_branch"].strip(),
+                         "if ( kCFCoreFoundationVersionNumber >= 1665.15 )")
+        self.assertIn('class_addProperty(v3, "crane_provideContainerOptions",',
+                      registration["legacy_property"])
         current = (REPO / "reconstruction/sources/cranesb/CRMenuHooks.m").read_text(
             encoding="utf-8")
-        self.assertIn("if ( kCFCoreFoundationVersionNumber >= 1665.15 )", original)
         self.assertIn('void CRInitApplicationShortcutHooks(void)', current)
         modern_gate = current[current.index("void CRInitApplicationShortcutHooks(void)"):]
         self.assertIn("if (kCFCoreFoundationVersionNumber < 1665.15) {", modern_gate)
@@ -197,6 +210,53 @@ class HookCoverageAuditTests(unittest.TestCase):
         self.assertIn('NSClassFromString(@"SBUIAppIconForceTouchController")', legacy)
         self.assertEqual(legacy.count("(IMP)CRLegacyForceTouchControllerInit,"), 1)
         self.assertIn("instancesRespondToSelector:initSelector", legacy)
+
+    def test_tracked_legacy_evidence_matches_full_export_when_present(self):
+        # The complete IDA exports live under gitignored Library/. On the
+        # development workstation check each existing export against the
+        # checked-in excerpt, without requiring either export in CI.
+        evidence = self.legacy_evidence
+        provenance = evidence["provenance"]
+        sources = (
+            (provenance["original_registration_path"],
+             tuple(evidence["original_registration"].values())),
+            (provenance["original_hook_path"],
+             (evidence["original_hook_body"],)),
+        )
+        for relative_path, excerpts in sources:
+            with self.subTest(source=relative_path):
+                path = REPO / relative_path
+                if path.is_file():
+                    original = path.read_text(encoding="utf-8")
+                    for excerpt in excerpts:
+                        self.assertIn(excerpt, original)
+
+    def test_clean_ci_checkout_without_gitignored_decompile_export(self):
+        # Reproduce the macOS runner: both full 14D18.c and 15204.c are
+        # missing. The two original regression cases must still execute
+        # (not skip); mandatory evidence is the tracked fixture.
+        source_files = {
+            (REPO / self.legacy_evidence["provenance"][field]).resolve()
+            for field in ("original_registration_path", "original_hook_path")
+        }
+        real_read_text = Path.read_text
+        real_is_file = Path.is_file
+
+        def ci_read_text(path, *args, **kwargs):
+            if path.resolve() in source_files:
+                raise FileNotFoundError(str(path))
+            return real_read_text(path, *args, **kwargs)
+
+        def ci_is_file(path):
+            if path.resolve() in source_files:
+                return False
+            return real_is_file(path)
+
+        with patch.object(Path, "read_text", ci_read_text):
+            with patch.object(Path, "is_file", ci_is_file):
+                self.test_init_original_and_reconstruction_have_the_same_legacy_intent()
+                self.test_legacy_init_installation_keeps_original_cf_version_gate()
+                self.test_tracked_legacy_evidence_matches_full_export_when_present()
 
     def test_local_selector_parser_ignores_comments_and_nearby_fake_names(self):
         source = (

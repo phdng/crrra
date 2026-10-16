@@ -1,0 +1,19 @@
+{
+  "schema": "crane_original_legacy_force_touch_init_evidence_v1",
+  "provenance": {
+    "binary": "CraneSB.dylib",
+    "original_registration": "sub_14D18",
+    "registration_address": "0x14d18",
+    "original_hook": "sub_15204",
+    "hook_address": "0x15204",
+    "original_registration_path": "Library/MobileSubstrate/DynamicLibraries/CraneSB.dylib_export_for_ai/decompile/14D18.c",
+    "original_hook_path": "Library/MobileSubstrate/DynamicLibraries/CraneSB.dylib_export_for_ai/decompile/15204.c"
+  },
+  "original_registration": {
+    "corefoundation_modern_branch": "  if ( kCFCoreFoundationVersionNumber >= 1665.15 )",
+    "legacy_class": "    v3 = objc_getClass(\"SBUIAppIconForceTouchController\");",
+    "legacy_property": "    class_addProperty(v3, \"crane_provideContainerOptions\", &v16, 2u);",
+    "legacy_installer": "    MSHookMessageEx(v3, \"init\", sub_15204, &off_2D410);"
+  },
+  "original_hook_body": "  v0 = (void *)off_2D410();\n  objc_msgSend(v0, \"setCrane_provideContainerOptions:\", 0);\n  return v0;"
+}

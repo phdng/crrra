@@ -32,6 +32,36 @@ hook. It also records original duplicate-selector ambiguity, whether the
 class field is reliable, and explicit `false` runtime/behavior
 verification flags.
 
+### CI-safe legacy Force Touch evidence (2026-10-16)
+
+The recovered decompiles at
+`Library/MobileSubstrate/DynamicLibraries/CraneSB.dylib_export_for_ai/decompile/14D18.c`
+and `15204.c` are under the Git-ignored `Library/` tree and are **not**
+present in a clean GitHub Actions checkout. The earlier version of
+`test_crane_hook_coverage_audit.py` incorrectly required those files
+and raised `FileNotFoundError` in two tests, although the native build
+was unrelated.
+
+The tests now require the small, tracked
+`reconstruction/tools/fixtures/cranesb_legacy_force_touch_init_evidence.json`.
+It stores literal registration, CoreFoundation version gate and original
+initializer excerpts with precise decompile provenance. The tests still
+check these excerpts against the current legacy Force Touch hook and
+the tracked 159-row matrix. On a workstation where the full IDA exports
+exist, an additional test cross-checks each excerpt against them; on CI
+the fixture remains **mandatory** and the optional full-export comparison
+does not access missing files. This is source-level evidence, not a
+native runtime parity claim.
+
+**Local fix verification:** all **18/18** hook-audit Python tests pass,
+including an explicit simulated checkout where both ignored decompile
+files raise `FileNotFoundError` if accessed. Full reconstruction Python
+suite **296 tests, 295 pass, one Windows-specific skip, zero errors**.
+`crane_hook_coverage_audit.py --check`, menu/badge contract,
+`compileall` and `git diff --check` also pass. The tracked fixture
+must be included in the next commit/push for GitHub Actions to use it;
+the macOS runner has not yet been rerun on this fix.
+
 ## Findings, not parity claims
 
 | Evidence state | Registration rows | Meaning |
@@ -112,9 +142,10 @@ verification has been performed by this audit.
 G-09 build PASS before this follow-up. The previous nine hook-audit tests
 and 287-test reconstruction Python suite passed (one platform skip).
 This follow-up added selector-literal parser tests and reviewed evidence.
-**Local follow-up verification:** 16/16 hook-audit tests PASS, including
-original decompile comparisons for legacy Force Touch `init`, its
-CoreFoundation version gate and existing hook implementation; full Python
+**Prior local verification:** 16/16 hook-audit tests PASS on a workstation
+containing full original decompiles. The new CI-safe fixture preserves the
+same legacy Force Touch `init` and CoreFoundation gate checks without
+requiring the full ignored export. The prior full Python
 suite **294 tests, 293 PASS, one Windows/POSIX SKIP, zero failures**;
 regenerated matrix --check PASS, menu badge contract PASS, Python compileall
 PASS and git diff --check PASS (only Windows LF/CRLF warnings).
