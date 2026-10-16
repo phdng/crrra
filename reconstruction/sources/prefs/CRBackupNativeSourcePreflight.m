@@ -72,7 +72,7 @@ static BOOL CR5CanonicalAllowed(const char *canonical)
  * All other intermediate symlinks are rejected by this comparison.
  * No child of the source root is ever opened by this preflight.
  */
-static NSString *CR5RootPath(id value)
+static NSString *CR5RootPath(id value, struct stat *rootIdentity)
 {
     if (![value isKindOfClass:NSString.class]) return nil;
     NSString *original = value;
@@ -119,11 +119,68 @@ static NSString *CR5RootPath(id value)
                        first.st_ino == opened.st_ino &&
                        after.st_dev == opened.st_dev &&
                        after.st_ino == opened.st_ino);
+    if (acceptable && rootIdentity)
+        *rootIdentity = opened;
     close(fd);
     return acceptable ? canonical : nil;
 }
 
+/* No public properties: a token is transient, opaque and never serialized.
+ * The snapshot is strictly diagnostic metadata, NOT a filesystem lock. */
+@interface CRBackupNativeRootIdentitySnapshot ()
+@property (nonatomic, copy) NSDictionary<NSString *, NSDictionary<NSString *, id> *> *identityByID;
+@end
+@implementation CRBackupNativeRootIdentitySnapshot
+@end
+
 @implementation CRBackupNativeSourcePreflight
+
++ (CRBackupNativeRootIdentitySnapshot *)captureRootIdentityForMapping:
+    (NSDictionary<NSString *, NSString *> *)mapping
+{
+    if (![mapping isKindOfClass:NSDictionary.class] ||
+        !mapping.count || mapping.count > CR5MaxRoots)
+        return nil;
+
+    NSMutableDictionary<NSString *, NSDictionary<NSString *, id> *> *identities =
+        [NSMutableDictionary dictionaryWithCapacity:mapping.count];
+    NSMutableSet<NSString *> *seenPaths = [NSMutableSet set];
+    for (id identifier in mapping) {
+        if (!CR5SafeID(identifier))
+            return nil;
+        struct stat identity;
+        NSString *canonical = CR5RootPath(mapping[identifier], &identity);
+        if (!canonical || [seenPaths containsObject:canonical])
+            return nil;
+        for (NSString *previous in seenPaths) {
+            if (CR5Ancestor(previous, canonical) ||
+                CR5Ancestor(canonical, previous))
+                return nil;
+        }
+        [seenPaths addObject:canonical];
+        identities[identifier] = @{
+            @"canonical":canonical,
+            @"device":@((unsigned long long)identity.st_dev),
+            @"inode":@((unsigned long long)identity.st_ino),
+        };
+    }
+    CRBackupNativeRootIdentitySnapshot *token =
+        [CRBackupNativeRootIdentitySnapshot new];
+    token.identityByID = [identities copy];
+    return token;
+}
+
++ (BOOL)isRootIdentityUnchangedFromSnapshot:(CRBackupNativeRootIdentitySnapshot *)snapshot
+                                   mapping:(NSDictionary<NSString *, NSString *> *)mapping
+{
+    if (![snapshot isKindOfClass:CRBackupNativeRootIdentitySnapshot.class] ||
+        !snapshot.identityByID.count)
+        return NO;
+    CRBackupNativeRootIdentitySnapshot *current =
+        [self captureRootIdentityForMapping:mapping];
+    return current && [snapshot.identityByID isEqualToDictionary:current.identityByID];
+}
+
 + (NSDictionary<NSString *, id> *)preflightApplicationIdentifier:(NSString *)applicationID
                                               containerIdentifier:(NSString *)containerID
                                                          resolver:(id<CRBackupSourceResolver>)resolver
@@ -176,7 +233,7 @@ static NSString *CR5RootPath(id value)
             CR5Fail(error, 6);
             return nil;
         }
-        NSString *canonical = CR5RootPath(mapping[identifier]);
+        NSString *canonical = CR5RootPath(mapping[identifier], NULL);
         if (!canonical || [roots containsObject:canonical]) {
             CR5Fail(error, 7);
             return nil;

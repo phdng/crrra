@@ -90,6 +90,31 @@ CR7TypedSnapshot(id<CRBackupTypedSourceResolver> resolver,
         CR7Fail(error, 2);
         return nil;
     }
+
+    /* N10: record root device/inode identity immediately after initial N5.
+     * Keep this opaque token ONLY on the stack of this diagnostic call.
+     * This still cannot pin or lock the directories for any later backup. */
+    NSDictionary *initialMapping = nil;
+    @try {
+        initialMapping = [[resolver pathsAssociatedToContainerWithIdentifier:containerID
+                                                 ofApplicationWithIdentifier:applicationID] copy];
+    } @catch (NSException *exception) {
+        (void)exception;
+        CR7Fail(error, 10);
+        return nil;
+    }
+    if (![initialMapping isKindOfClass:NSDictionary.class] ||
+        initialMapping.count != [n5[@"rootCount"] unsignedIntegerValue]) {
+        CR7Fail(error, 10);
+        return nil;
+    }
+    CRBackupNativeRootIdentitySnapshot *rootIdentity =
+        [CRBackupNativeSourcePreflight captureRootIdentityForMapping:initialMapping];
+    if (!rootIdentity) {
+        CR7Fail(error, 10);
+        return nil;
+    }
+
     BOOL firstValid = NO, secondValid = NO;
     NSDictionary *first = CR7TypedSnapshot(resolver, applicationID,
                                            containerID, &firstValid);
@@ -177,6 +202,15 @@ CR7TypedSnapshot(id<CRBackupTypedSourceResolver> resolver,
     if (![lastMapping isKindOfClass:NSDictionary.class] ||
         ![mapping isEqualToDictionary:lastMapping]) {
         CR7Fail(error, 9);
+        return nil;
+    }
+
+    /* A directory may have been replaced in-place between N5 scans.
+     * Canonical mapping strings remain identical, but st_dev/st_ino do not.
+     * Refuse a misleading diagnostic result if root identity has drifted. */
+    if (![CRBackupNativeSourcePreflight
+            isRootIdentityUnchangedFromSnapshot:rootIdentity mapping:lastMapping]) {
+        CR7Fail(error, 11);
         return nil;
     }
 

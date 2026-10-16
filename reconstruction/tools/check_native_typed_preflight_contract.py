@@ -48,6 +48,11 @@ for required in (
     '[lastRoots[@"associatedGroupCount"] unsignedIntegerValue] != groups + plugins',
     "CR7Fail(error, 8)",
     "NSDictionary *lastMapping = nil",
+    "NSDictionary *initialMapping = nil",
+    "CRBackupNativeRootIdentitySnapshot *rootIdentity",
+    "captureRootIdentityForMapping:initialMapping",
+    "isRootIdentityUnchangedFromSnapshot:rootIdentity mapping:lastMapping",
+    "CR7Fail(error, 10)", "CR7Fail(error, 11)",
     "![mapping isEqualToDictionary:lastMapping]",
     "CR7Fail(error, 9)",
     '@"sourceFilesEnumerated":@NO',
@@ -72,11 +77,16 @@ assert "CR6MockTypedEnumerate" in n6smoke
 assert "resolver.mode = 1; Reject(resolver, 3)" in smoke
 assert "resolver.mode = 5; resolver.passes = 0;" in smoke
 assert source.count("preflightApplicationIdentifier:applicationID") == 2
+assert source.index("NSDictionary *initialMapping") < source.index("BOOL firstValid")
+assert source.index("NSDictionary *lastMapping") < source.index("isRootIdentityUnchangedFromSnapshot")
+assert "resolver.mode = 10; resolver.passes = 0;" in smoke
+assert "Reject(resolver, 11)" in smoke
 assert source.index("NSDictionary *lastRoots") < source.index("NSDictionary *lastMapping")
 for marker in (
     "resolver.mode = 7; resolver.supportCalls = 0;",
     "resolver.mode = 8; resolver.mapReads = 0;",
     "resolver.mode = 9; resolver.mapReads = 0;",
+    "resolver.mode = 10; resolver.passes = 0;",
     "Reject(resolver, 8)", "Reject(resolver, 9)",
 ):
     assert marker in smoke, marker
@@ -90,4 +100,4 @@ assert "probeTypedRegisteredApplication:" not in prefs
 assert '[self presentUnavailableBackupAction:@"CREATE_MULTI_CONTAINER_BACKUP"]' in prefs
 assert '[self presentUnavailableBackupAction:@"RESTORE_MULTI_CONTAINER_BACKUP"]' in prefs
 
-print("G-11 N7/N9 typed root stability and terminal validation contract: PASS")
+print("G-11 N7/N9/N10 typed root and inode identity diagnostic contract: PASS")

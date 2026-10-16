@@ -15,7 +15,17 @@ NS_ASSUME_NONNULL_BEGIN
                                                      ofApplicationWithIdentifier:(NSString *)applicationID;
 @end
 
+/* N10: private in-memory identity token. Carries root path and dev/inode
+ * metadata only while an explicit preflight is running; never return it in
+ * a public diagnostic report, log, persist or use it for authorization. */
+@interface CRBackupNativeRootIdentitySnapshot : NSObject
+@end
+
 @interface CRBackupNativeSourcePreflight : NSObject
++ (nullable CRBackupNativeRootIdentitySnapshot *)captureRootIdentityForMapping:
+    (NSDictionary<NSString *, NSString *> *)mapping;
++ (BOOL)isRootIdentityUnchangedFromSnapshot:(CRBackupNativeRootIdentitySnapshot *)snapshot
+                                   mapping:(NSDictionary<NSString *, NSString *> *)mapping;
 + (nullable NSDictionary<NSString *, id> *)preflightApplicationIdentifier:(NSString *)applicationID
                                                        containerIdentifier:(NSString *)containerID
                                                                   resolver:(id<CRBackupSourceResolver>)resolver

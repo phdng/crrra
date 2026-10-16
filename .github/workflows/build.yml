@@ -226,10 +226,10 @@ jobs:
       - name: Test fail-closed N4 native fixture verifier and source guard
         run: python3 -m unittest discover -s reconstruction/tools -p test_crane_native_fixture_collector.py -v
 
-      - name: Verify native N5 CraneManager source resolver preflight contract
+      - name: Verify native N5-N10 source resolver and opaque inode identity contract
         run: python3 reconstruction/tools/check_native_source_preflight_contract.py
 
-      - name: Test N5 read-only source-map preflight regression
+      - name: Test N5-N10 root-only preflight and inode identity regression
         run: python3 -m unittest discover -s reconstruction/tools -p test_crane_native_source_preflight.py -v
 
       - name: Verify N6 read-only CraneManager bridge contract
@@ -238,10 +238,10 @@ jobs:
       - name: Test N6 native CraneManager bridge safety regression
         run: python3 -m unittest discover -s reconstruction/tools -p test_crane_native_manager_bridge.py -v
 
-      - name: Verify N7-N9 typed roots, terminal registry and mapping contract
+      - name: Verify N7-N10 typed roots, late mapping and inode continuity contract
         run: python3 reconstruction/tools/check_native_typed_preflight_contract.py
 
-      - name: Test N7-N9 typed source and terminal mapping regression
+      - name: Test N7-N10 typed sources and in-place root replacement regression
         run: python3 -m unittest discover -s reconstruction/tools -p test_crane_native_typed_preflight.py -v
 
       - name: Verify N8 opt-in disposable source diagnostic contract
@@ -443,7 +443,7 @@ jobs:
             -o "$RUNNER_TEMP/native_backup_source_preflight_smoke"
           "$RUNNER_TEMP/native_backup_source_preflight_smoke"
 
-      - name: Smoke-test typed roots and late mapping or registry mutation rejection
+      - name: Smoke-test typed root remap, registry revocation and inode replacement rejection
         working-directory: reconstruction
         run: |
           set -euo pipefail

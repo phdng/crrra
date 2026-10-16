@@ -91,6 +91,24 @@ class NativeSourcePreflightTests(unittest.TestCase):
         ):
             self.assertIn(marker, self.smoke)
 
+    def test_n10_root_identity_token_is_private_and_only_metadata(self):
+        self.assertIn("@interface CRBackupNativeRootIdentitySnapshot : NSObject", self.header)
+        self.assertIn("captureRootIdentityForMapping:", self.header)
+        self.assertIn("isRootIdentityUnchangedFromSnapshot:", self.header)
+        self.assertIn("CR5RootPath(mapping[identifier], &identity)", self.native)
+        self.assertIn('@"device":@((unsigned long long)identity.st_dev)', self.native)
+        self.assertIn('@"inode":@((unsigned long long)identity.st_ino)', self.native)
+        self.assertIn("snapshot.identityByID isEqualToDictionary:current.identityByID",
+                      self.native)
+        self.assertNotIn("identityByID", self.header)
+
+    def test_n10_cannot_expose_token_in_normal_preflight_report(self):
+        returned = self.native.rsplit("return @{", 1)[1]
+        self.assertNotIn("identityByID", returned)
+        self.assertNotIn("rootIdentity", returned)
+        self.assertIn('@"backupReady":@NO', returned)
+        self.assertIn('@"restoreExecutable":@NO', returned)
+
     def test_no_root_ui_activation(self):
         prefs = (REPO / "reconstruction/sources/prefs/"
                  "CRPreferences.m").read_text(encoding="utf8")

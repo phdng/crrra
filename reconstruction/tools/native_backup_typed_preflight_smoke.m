@@ -42,8 +42,8 @@ static NSString * const ContainerID = @"00000000-0000-4000-8000-000000000001";
     /* N9: swap two different, still-readable root directories so the
      * late N5 check passes its path safety gate. Re-read comparison MUST
      * still catch that the mapping no longer matches typed enumeration. */
-    if ((self.mode == 8 && self.mapReads >= 3) ||
-        (self.mode == 9 && self.mapReads >= 4)) {
+    if ((self.mode == 8 && self.mapReads >= 4) ||
+        (self.mode == 9 && self.mapReads >= 5)) {
         return @{AppID:self.mapping[AppID],
                  @"group.com.example.crane.native":
                     self.mapping[@"com.example.crane.extension"],
@@ -76,6 +76,19 @@ static NSString * const ContainerID = @"00000000-0000-4000-8000-000000000001";
         BOOL stop = NO;
         block(type, key, path, &stop);
         if (stop) break;
+    }
+
+    /* N10: replace the same path with a different directory inode only
+     * after both enumerations. All directories are disposable OS-TEMP
+     * fixtures; do not open or delete any child data. */
+    if (self.mode == 10 && self.passes == 2) {
+        NSString *path = self.mapping[AppID];
+        NSString *prior = [path stringByAppendingString:@".n10-original"];
+        NSFileManager *fm = NSFileManager.defaultManager;
+        if (![fm moveItemAtPath:path toPath:prior error:NULL] ||
+            ![fm createDirectoryAtPath:path withIntermediateDirectories:NO
+                            attributes:nil error:NULL])
+            abort();
     }
 }
 @end
@@ -165,6 +178,8 @@ int main(void)
         Reject(resolver, 9); /* root mapping swaps at late N5 */
         resolver.mode = 9; resolver.mapReads = 0;
         Reject(resolver, 9); /* map swaps after late root validation */
+        resolver.mode = 10; resolver.passes = 0;
+        Reject(resolver, 11); /* same path, replacement directory inode */
 
         resolver.mode = 0;
         resolver.mapping = @{AppID:mapping[AppID], ids[1]:mapping[ids[1]],

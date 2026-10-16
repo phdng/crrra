@@ -113,8 +113,31 @@ class TypedPreflightTests(unittest.TestCase):
             "resolver.mode = 8; resolver.mapReads = 0;",
             "resolver.mode = 9; resolver.mapReads = 0;",
             "Reject(resolver, 8)", "Reject(resolver, 9)",
-            "self.supportCalls >= 2", "self.mapReads >= 3",
-            "self.mapReads >= 4",
+            "self.supportCalls >= 2", "self.mapReads >= 4",
+            "self.mapReads >= 5",
+        ):
+            self.assertIn(marker, self.smoke)
+
+    def test_n10_records_inode_baseline_before_typed_enumeration(self):
+        self.assertIn("CRBackupNativeRootIdentitySnapshot *rootIdentity", self.code)
+        self.assertIn("captureRootIdentityForMapping:initialMapping", self.code)
+        self.assertLess(self.code.index("NSDictionary *initialMapping"),
+                        self.code.index("BOOL firstValid"))
+        self.assertIn("CR7Fail(error, 10)", self.code)
+
+    def test_n10_requires_same_identity_after_terminal_root_map(self):
+        self.assertIn("isRootIdentityUnchangedFromSnapshot:rootIdentity mapping:lastMapping",
+                      self.code)
+        self.assertLess(self.code.index("NSDictionary *lastMapping"),
+                        self.code.index("isRootIdentityUnchangedFromSnapshot"))
+        self.assertIn("CR7Fail(error, 11)", self.code)
+
+    def test_n10_native_fixture_replaces_same_path_not_payload(self):
+        for marker in (
+            "resolver.mode = 10; resolver.passes = 0;",
+            "Reject(resolver, 11)",
+            "moveItemAtPath:path toPath:prior",
+            "createDirectoryAtPath:path withIntermediateDirectories:NO",
         ):
             self.assertIn(marker, self.smoke)
 
