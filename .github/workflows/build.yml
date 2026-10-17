@@ -103,6 +103,9 @@ jobs:
       - name: Test original notification removal callback identifier order
         run: python3 -m unittest discover -s reconstruction/tools -p test_crane_notification_removal_order.py -v
 
+      - name: Test notification action and foreground callback lifecycle
+        run: python3 -m unittest discover -s reconstruction/tools -p test_crane_notification_callback_lifecycle.py -v
+
       - name: Verify native menu badge contracts
         run: python3 reconstruction/tools/check_menu_badge_contract.py
 

@@ -1,0 +1,55 @@
+{
+  "schema": "cranesb_notification_callback_lifecycle_source_v1",
+  "claim": "original_static_evidence_only_not_runtime_parity",
+  "original": [
+    {
+      "path": "Library/MobileSubstrate/DynamicLibraries/CraneSB.dylib_export_for_ai/decompile/11420.c",
+      "address": "0x11420",
+      "markers": [
+        "objc_msgSend(v7, \"actionType\") == &dword_8",
+        "objc_msgSend(v7, \"bulletinContext\")",
+        "\"setActiveContainerIdentifier:forApplicationWithIdentifier:reloadApplication:usingBiometricsIfNeededWithSuccessHandler:\"",
+        "v13[2] = sub_126D0;",
+        "off_2D3B0(a1, a2, v7, v8);"
+      ]
+    },
+    {
+      "path": "Library/MobileSubstrate/DynamicLibraries/CraneSB.dylib_export_for_ai/decompile/126D0.c",
+      "address": "0x126d0",
+      "markers": [
+        "return off_2D3B0(a1[6], a1[7], a1[4], a1[5]);"
+      ]
+    },
+    {
+      "path": "Library/MobileSubstrate/DynamicLibraries/CraneSB.dylib_export_for_ai/decompile/F254.c",
+      "address": "0xf254",
+      "markers": [
+        "g_containerIDForForegroundCheck = (__int64)v15;",
+        "off_2D2F8(a1, a2, v11, a4, v12, v13);",
+        "dispatch_async(v17, &stru_286B8);"
+      ]
+    },
+    {
+      "path": "Library/MobileSubstrate/DynamicLibraries/CraneSB.dylib_export_for_ai/decompile/10218.c",
+      "address": "0x10218",
+      "markers": [
+        "v6 = (id)off_2D358(a1, a2, v5);",
+        "g_containerIDForForegroundCheck == 0",
+        "\"processesForBundleIdentifier:\"",
+        "\"crane_containerIdentifier\""
+      ]
+    },
+    {
+      "path": "Library/MobileSubstrate/DynamicLibraries/CraneSB.dylib_export_for_ai/decompile/11FB0.c",
+      "address": "0x11fb0",
+      "markers": [
+        "g_containerIDForForegroundCheck = 0;"
+      ]
+    }
+  ],
+  "limitations": [
+    "source-only; no runtime class/ABI verification",
+    "original foreground cleanup is unconditional; reconstruction generation guard intentionally differs for race safety",
+    "do not infer authenticated=true requirement; original completion handler ignores parameter"
+  ]
+}

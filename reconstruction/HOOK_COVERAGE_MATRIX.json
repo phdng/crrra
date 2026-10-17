@@ -1427,6 +1427,7 @@
         "reconstruction/tools/test_crane_native_source_preflight.py",
         "reconstruction/tools/test_crane_native_typed_preflight.py",
         "reconstruction/tools/test_crane_native_writer_verify.py",
+        "reconstruction/tools/test_crane_notification_callback_lifecycle.py",
         "reconstruction/tools/test_crane_notification_removal_order.py",
         "reconstruction/tools/test_crane_original_archive_audit.py",
         "reconstruction/tools/test_crane_original_metadata_shape.py",
